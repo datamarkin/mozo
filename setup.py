@@ -28,4 +28,9 @@ setup(
     packages=find_packages(),
     python_requires=">=3.9",
     license="MIT",
+    entry_points={
+        "console_scripts": [
+            "mozo=mozo.cli:cli",
+        ],
+    },
 )
