@@ -2,7 +2,7 @@
 
 Universal computer vision model server with automatic memory management and multi-framework support.
 
-Mozo provides HTTP access to 25+ pre-configured models from Detectron2, HuggingFace Transformers, and other frameworks. Models load on-demand and clean up automatically.
+Mozo provides HTTP access to 21 pre-configured models from Detectron2, HuggingFace Transformers, and other frameworks. Models load on-demand and clean up automatically.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **25+ Pre-configured Models** - Detectron2, HuggingFace Transformers, custom adapters
+- **21 Pre-configured Models** - Detectron2, HuggingFace Transformers, custom adapters
 - **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
 - **Multi-Framework Support** - Unified API across different ML frameworks
 - **PixelFlow Integration** - Detection models return unified format for filtering and annotation
@@ -60,7 +60,7 @@ pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
 ## Available Models
 
-### Detectron2 (22 variants)
+### Detectron2 (17 variants)
 Object detection, instance segmentation, keypoint detection trained on COCO dataset.
 
 Popular variants:
