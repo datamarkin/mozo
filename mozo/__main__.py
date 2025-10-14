@@ -1,13 +1,24 @@
-import uvicorn
+"""
+Entry point for running `python -m mozo`.
+
+This delegates to the CLI start command for consistency.
+"""
+
+from mozo.cli import cli
+import sys
+
 
 def main():
     """
-    This is the main entry point when running `python -m mozo`.
-    It launches the Uvicorn server.
+    Entry point when running `python -m mozo`.
+    Defaults to the start command for backward compatibility.
     """
-    print("Starting Mozo server via `python -m mozo`...")
-    # Uvicorn will look for the 'app' instance in the 'mozo.server' module.
-    uvicorn.run("mozo.server:app", host="0.0.0.0", port=8000, reload=True)
+    # If no arguments, default to 'start --reload'
+    if len(sys.argv) == 1:
+        sys.argv.extend(['start', '--reload'])
+
+    cli()
+
 
 if __name__ == "__main__":
     main()

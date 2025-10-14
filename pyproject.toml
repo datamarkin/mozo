@@ -36,7 +36,11 @@ dependencies = [
     "numpy",
     "scipy",
     "pixelflow",
+    "click",
 ]
+
+[project.scripts]
+mozo = "mozo.cli:cli"
 
 [project.urls]
 "Homepage" = "https://github.com/datamarkin/mozo"

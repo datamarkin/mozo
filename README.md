@@ -63,9 +63,9 @@ manager.unload_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
 
 ```bash
 # Start server
-python -m mozo
-# or
-uvicorn mozo.server:app --reload --port 8000
+mozo start
+# or with custom options
+mozo start --port 8080 --workers 4
 
 # Run prediction
 curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
@@ -123,8 +123,14 @@ Client → ModelManager → ModelFactory → MODEL_REGISTRY → Adapter Classes
 # Install in development mode
 pip install -e .
 
-# Start server with auto-reload
-uvicorn mozo.server:app --reload --port 8000
+# Start server with auto-reload (development)
+mozo start
+
+# Production mode with multiple workers
+mozo start --workers 4
+
+# Check version
+mozo version
 
 # Test model loading
 python -c "from mozo.manager import ModelManager; import cv2; \
