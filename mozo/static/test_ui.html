@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mozo Model Testing Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .panel {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+        }
+
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .image-section {
+            text-align: center;
+        }
+
+        #imagePreview {
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: white;
+            border: 2px dashed #dee2e6;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 600;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #results {
+            margin-top: 30px;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            min-height: 200px;
+        }
+
+        #results h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        #resultsContent {
+            position: relative;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fff5f5;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #fc8181;
+        }
+
+        .success {
+            background: #f0fff4;
+            color: #22543d;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #68d391;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        canvas {
+            border-radius: 8px;
+            max-width: 100%;
+        }
+
+        .result-image {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .info-badge {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #495057;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Mozo Model Testing Interface</h1>
+            <p>Interactive testing for dynamic model management system</p>
+        </header>
+
+        <div class="content">
+            <!-- Image Upload Section -->
+            <div class="panel image-section">
+                <h2>📸 Image Input</h2>
+                <img id="imagePreview" src="/static/pexels-fauxels-3182795.jpg" alt="Preview">
+                <div class="file-input-wrapper">
+                    <label for="imageInput" class="btn" style="width: 100%; cursor: pointer;">
+                        📁 Choose Image
+                    </label>
+                    <input type="file" id="imageInput" accept="image/*">
+                </div>
+                <div class="info-badge" id="imageInfo">Using default image</div>
+            </div>
+
+            <!-- Model Selection Section -->
+            <div class="panel">
+                <h2>🤖 Model Selection</h2>
+                <div class="form-group">
+                    <label for="familySelect">Model Family</label>
+                    <select id="familySelect">
+                        <option value="">Loading models...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="variantSelect">Model Variant</label>
+                    <select id="variantSelect">
+                        <option value="">Select a family first</option>
+                    </select>
+                </div>
+                <div class="form-group" id="promptGroup" style="display: none;">
+                    <label for="promptInput">Prompt (for vision-language models)</label>
+                    <input type="text" id="promptInput" placeholder="Describe this image in detail."
+                           value="Describe this image in detail.">
+                </div>
+                <button id="predictBtn" class="btn" style="width: 100%;">
+                    ▶️ Run Prediction
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" style="display: none;">
+            <h2>📊 Results</h2>
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let availableModels = {};
+        let currentImage = null;
+
+        // Fetch available models on page load
+        async function loadModels() {
+            try {
+                const response = await fetch('/models');
+                availableModels = await response.json();
+
+                const familySelect = document.getElementById('familySelect');
+                familySelect.innerHTML = '<option value="">Select a model family</option>';
+
+                for (const [family, info] of Object.entries(availableModels)) {
+                    const option = document.createElement('option');
+                    option.value = family;
+                    option.textContent = `${family} (${info.task_type}) - ${info.num_variants} variants`;
+                    familySelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('Failed to load models:', error);
+                document.getElementById('familySelect').innerHTML =
+                    '<option value="">Error loading models</option>';
+            }
+        }
+
+        // Handle family selection change
+        document.getElementById('familySelect').addEventListener('change', function() {
+            const family = this.value;
+            const variantSelect = document.getElementById('variantSelect');
+            const promptGroup = document.getElementById('promptGroup');
+
+            if (!family) {
+                variantSelect.innerHTML = '<option value="">Select a family first</option>';
+                promptGroup.style.display = 'none';
+                return;
+            }
+
+            const variants = availableModels[family].variants;
+            variantSelect.innerHTML = '<option value="">Select a variant</option>';
+
+            variants.forEach(variant => {
+                const option = document.createElement('option');
+                option.value = variant;
+                option.textContent = variant;
+                variantSelect.appendChild(option);
+            });
+
+            // Show prompt input for vision-language models
+            if (family === 'qwen2.5_vl') {
+                promptGroup.style.display = 'block';
+            } else {
+                promptGroup.style.display = 'none';
+            }
+        });
+
+        // Handle image upload
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = document.getElementById('imagePreview');
+                    img.src = event.target.result;
+                    currentImage = file;
+                    document.getElementById('imageInfo').textContent = `Loaded: ${file.name}`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Run prediction
+        document.getElementById('predictBtn').addEventListener('click', async function() {
+            const family = document.getElementById('familySelect').value;
+            const variant = document.getElementById('variantSelect').value;
+
+            if (!family || !variant) {
+                showError('Please select both model family and variant');
+                return;
+            }
+
+            // Get image (either uploaded or default)
+            let imageBlob;
+            if (currentImage) {
+                imageBlob = currentImage;
+            } else {
+                // Fetch default image
+                try {
+                    const response = await fetch('/static/pexels-fauxels-3182795.jpg');
+                    imageBlob = await response.blob();
+                } catch (error) {
+                    showError('Failed to load default image');
+                    return;
+                }
+            }
+
+            // Show loading
+            showLoading();
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', imageBlob);
+
+            // Build URL with prompt parameter for vision-language models
+            let url = `/predict/${family}/${variant}`;
+            if (family === 'qwen2.5_vl') {
+                const prompt = document.getElementById('promptInput').value || 'Describe this image in detail.';
+                url += `?prompt=${encodeURIComponent(prompt)}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Prediction failed');
+                }
+
+                // Check response type
+                const contentType = response.headers.get('content-type');
+
+                if (contentType && contentType.includes('image')) {
+                    // Depth estimation - display image
+                    const blob = await response.blob();
+                    const imageUrl = URL.createObjectURL(blob);
+                    showImageResult(imageUrl, family, variant);
+                } else {
+                    // Detection - display JSON
+                    const data = await response.json();
+                    showJsonResult(data, family, variant);
+                }
+
+            } catch (error) {
+                showError(`Prediction failed: ${error.message}`);
+            }
+        });
+
+        function showLoading() {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            results.style.display = 'block';
+            content.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Running prediction...</p>
+                </div>
+            `;
+            results.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showError(message) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            results.style.display = 'block';
+            content.innerHTML = `
+                <div class="error">
+                    <strong>❌ Error:</strong> ${message}
+                </div>
+            `;
+            results.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showImageResult(imageUrl, family, variant) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+            content.innerHTML = `
+                <div class="success">
+                    <strong>✅ Success:</strong> Depth map generated using ${family}/${variant}
+                </div>
+                <img src="${imageUrl}" class="result-image" alt="Depth Map">
+            `;
+        }
+
+        function showJsonResult(data, family, variant) {
+            const results = document.getElementById('results');
+            const content = document.getElementById('resultsContent');
+
+            let html = `
+                <div class="success">
+                    <strong>✅ Success:</strong> Prediction completed using ${family}/${variant}
+                </div>
+            `;
+
+            // Handle vision-language model responses
+            if (data.text) {
+                html += `<h3 style="margin-top: 20px;">Response:</h3>`;
+                html += `<div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-top: 10px;">`;
+                html += `<p style="margin: 0; white-space: pre-wrap;">${data.text}</p>`;
+                html += `</div>`;
+                if (data.prompt) {
+                    html += `<p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;"><strong>Prompt:</strong> ${data.prompt}</p>`;
+                }
+            }
+            // Display predictions for object detection models
+            else if (data.predictions && data.predictions.length > 0) {
+                html += `<h3 style="margin-top: 20px;">Detected Objects: ${data.predictions.length}</h3>`;
+                html += '<pre>' + JSON.stringify(data.predictions, null, 2) + '</pre>';
+
+                // Draw bounding boxes on image if applicable
+                if (data.predictions[0].box) {
+                    html += '<h3 style="margin-top: 20px;">Annotated Image:</h3>';
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const img = document.getElementById('imagePreview');
+
+                    canvas.width = img.naturalWidth || img.width;
+                    canvas.height = img.naturalHeight || img.height;
+
+                    ctx.drawImage(img, 0, 0);
+
+                    // Draw bounding boxes
+                    data.predictions.forEach((pred, idx) => {
+                        const box = pred.box;
+                        const color = `hsl(${(idx * 360) / data.predictions.length}, 70%, 50%)`;
+
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(box.x1, box.y1, box.x2 - box.x1, box.y2 - box.y1);
+
+                        // Draw label
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 16px Arial';
+                        const label = `${pred.class_name} (${(pred.confidence * 100).toFixed(1)}%)`;
+                        const textWidth = ctx.measureText(label).width;
+                        ctx.fillRect(box.x1, box.y1 - 25, textWidth + 10, 25);
+                        ctx.fillStyle = 'white';
+                        ctx.fillText(label, box.x1 + 5, box.y1 - 7);
+                    });
+
+                    html += canvas.outerHTML;
+                }
+            } else {
+                html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            }
+
+            content.innerHTML = html;
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', loadModels);
+    </script>
+</body>
+</html>
