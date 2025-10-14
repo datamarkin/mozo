@@ -5,8 +5,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="mozo",
-    version="0.1.0",
-    description="A Python library named mozo",
+    version="0.2.0",
+    description="Universal computer vision model serving library with dynamic model management and PixelFlow integration",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Emrah NAZIF",
@@ -20,14 +20,12 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     packages=find_packages(),
-    python_requires=">=3.6",
+    python_requires=">=3.9",
     license="MIT",
 )
