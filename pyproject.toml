@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mozo"
+version = "0.2.0"
+description = "Universal computer vision model serving library with dynamic model management and PixelFlow integration"
+readme = "README.md"
+authors = [
+    { name = "Emrah NAZIF", email = "emrah@datamarkin.com" },
+    {name = "Datamarkin", email = "support@datamarkin.com"}
+]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "opencv-python",
+    "transformers",
+    "torch",
+    "torchvision",
+    "Pillow",
+    "numpy",
+    "scipy",
+    "pixelflow",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/datamarkin/mozo"
+"Bug Tracker" = "https://github.com/datamarkin/mozo/issues"
