@@ -70,10 +70,10 @@ def serve_test_ui():
 @app.get("/static/example.jpg", summary="Example Image", description="Serve example test image.")
 def serve_example_image():
     """Serve the default example image for testing."""
-    image_path = Path(__file__).parent.parent / "vision" / "example.jpg"
+    image_path = Path(__file__).parent / "static" / "example.jpg"
 
     if not image_path.exists():
-        raise HTTPException(status_code=404, detail="Example image not found at vision/example.jpg")
+        raise HTTPException(status_code=404, detail="Example image not found at mozo/static/example.jpg")
 
     return FileResponse(image_path, media_type="image/jpeg")
 
