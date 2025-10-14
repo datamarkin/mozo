@@ -1,16 +1,33 @@
 """
-Mozo - Universal Computer Vision Model Serving Library
+Mozo - Universal Computer Vision Model Server
 
-Mozo provides a unified interface for deploying and managing computer vision models
-from multiple ML frameworks (Detectron2, HuggingFace Transformers) with intelligent
-lifecycle management, lazy loading, and automatic memory cleanup.
+25+ pre-configured models ready to use. No deployment, no configuration.
+Just `mozo start` and make HTTP requests.
 
-Key Features:
-    - Multi-framework support (Detectron2, Transformers, custom adapters)
-    - Lazy loading with thread-safe concurrent access
-    - Automatic cleanup of inactive models
-    - REST API server with FastAPI
-    - Registry-Factory-Manager pattern for clean architecture
+Quick Start:
+    >>> # From terminal:
+    >>> mozo start
+    >>>
+    >>> # Then use any model via HTTP:
+    >>> curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \\
+    >>>   -F "file=@image.jpg"
+
+Advanced Usage (Python SDK):
+    >>> from mozo import ModelManager
+    >>> import cv2
+    >>>
+    >>> manager = ModelManager()
+    >>> model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+    >>> image = cv2.imread('example.jpg')
+    >>> detections = model.predict(image)  # Returns PixelFlow Detections
+    >>> print(f"Found {len(detections)} objects")
+
+Features:
+    - 25+ models from Detectron2, HuggingFace Transformers
+    - Zero deployment - no Docker, Kubernetes, or cloud needed
+    - Automatic memory management with lazy loading
+    - PixelFlow integration for unified detection format
+    - Thread-safe concurrent access
 
 For more information, see:
     - Documentation: https://github.com/datamarkin/mozo
