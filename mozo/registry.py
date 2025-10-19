@@ -160,6 +160,99 @@ MODEL_REGISTRY = {
             },
         }
     },
+
+    'paddleocr': {
+        'adapter_class': 'PaddleOCRPredictor',
+        'module': 'mozo.adapters.paddleocr',
+        'task_type': 'ocr',
+        'description': 'PaddleOCR PP-OCRv5 - Universal scene text recognition supporting 80+ languages with mobile and server variants',
+        'variants': {
+            'mobile': {
+                'variant': 'mobile',
+                'language': 'en',
+                'device': 'cpu'
+            },
+            'server': {
+                'variant': 'server',
+                'language': 'en',
+                'device': 'cpu'
+            },
+            'mobile-chinese': {
+                'variant': 'mobile-chinese',
+                'language': 'ch',
+                'device': 'cpu'
+            },
+            'server-chinese': {
+                'variant': 'server-chinese',
+                'language': 'ch',
+                'device': 'cpu'
+            },
+            'mobile-multilingual': {
+                'variant': 'mobile-multilingual',
+                'language': 'en',
+                'device': 'cpu'
+            },
+        }
+    },
+
+    'ppstructure': {
+        'adapter_class': 'PPStructurePredictor',
+        'module': 'mozo.adapters.ppstructure',
+        'task_type': 'document_analysis',
+        'description': 'PP-StructureV3 - Document structure analysis with layout detection, table recognition, and formula extraction',
+        'variants': {
+            'layout-only': {
+                'variant': 'layout-only',
+                'language': 'en',
+                'device': 'cpu'
+            },
+            'full': {
+                'variant': 'full',
+                'language': 'en',
+                'device': 'cpu'
+            },
+            'table-analysis': {
+                'variant': 'table-analysis',
+                'language': 'en',
+                'device': 'cpu'
+            },
+            'formula-analysis': {
+                'variant': 'formula-analysis',
+                'language': 'en',
+                'device': 'cpu'
+            },
+        }
+    },
+
+    'easyocr': {
+        'adapter_class': 'EasyOCRPredictor',
+        'module': 'mozo.adapters.easyocr',
+        'task_type': 'ocr',
+        'description': 'EasyOCR - User-friendly OCR with 80+ languages, easy setup, and good general-purpose accuracy',
+        'variants': {
+            'english-light': {
+                'variant': 'english-light',
+                'device': 'cpu'
+            },
+            'english-full': {
+                'variant': 'english-full',
+                'device': 'cpu'
+            },
+            'multilingual': {
+                'variant': 'multilingual',
+                'device': 'cpu'
+            },
+            'chinese': {
+                'variant': 'chinese',
+                'device': 'cpu'
+            },
+            'custom': {
+                'variant': 'custom',
+                'languages': ['en'],  # Default, user should override
+                'device': 'cpu'
+            },
+        }
+    },
 }
 
 
