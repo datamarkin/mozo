@@ -174,12 +174,13 @@ class EasyOCRPredictor:
             return pf.detections.Detections()
 
         # Determine primary language for metadata
+        # EasyOCR supports multiple languages (list), but PixelFlow expects a single string
         if not self.languages:
             language = 'en'
         elif len(self.languages) == 1:
             language = self.languages[0]
         else:
-            language = 'multi'
+            language = 'multi'  # Multi-language mode
 
         # Use PixelFlow's built-in converter for consistent OCRData structure
         detections = pf.detections.from_easyocr(results, language=language)
