@@ -1,15 +1,25 @@
-import torch
-from PIL import Image
-from transformers import AutoModelForCausalLM, AutoProcessor
-import io
 import numpy as np
 import cv2
+from PIL import Image
 
-# Assuming pixelflow is available and has these classes
+try:
+    from transformers import AutoModelForCausalLM, AutoProcessor
+    import torch
+except ImportError:
+    print("="*50)
+    print("ERROR: Transformers and PyTorch are not installed.")
+    print("Please install them with: pip install transformers torch")
+    print("="*50)
+    raise
+
 try:
     import pixelflow as pf
 except ImportError:
-    pf = None
+    print("="*50)
+    print("ERROR: PixelFlow is not installed.")
+    print("Please install it with: pip install pixelflow")
+    print("="*50)
+    raise
 
 from ..utils import create_openai_response
 
@@ -19,37 +29,64 @@ class Florence2Predictor:
     Supports multiple tasks like object detection, captioning, and OCR.
     """
 
+    SUPPORTED_VARIANTS = {
+        'detection': {
+            'description': 'Object detection with bounding boxes',
+            'task_prompt': '<OD>',
+        },
+        'segmentation': {
+            'description': 'Instance segmentation (currently unimplemented)',
+            'task_prompt': '<SEG>',
+        },
+        'captioning': {
+            'description': 'Generate image captions',
+            'task_prompt': '<CAPTION>',
+        },
+        'detailed_captioning': {
+            'description': 'Generate detailed image captions',
+            'task_prompt': '<DETAILED_CAPTION>',
+        },
+        'more_detailed_captioning': {
+            'description': 'Generate very detailed image captions',
+            'task_prompt': '<MORE_DETAILED_CAPTION>',
+        },
+        'ocr': {
+            'description': 'Optical character recognition',
+            'task_prompt': '<OCR>',
+        },
+        'ocr_with_region': {
+            'description': 'OCR with region detection',
+            'task_prompt': '<OCR_WITH_REGION>',
+        },
+    }
+
     def __init__(self, variant='detection', device='cpu', **kwargs):
         """
         Initialize the Florence-2 model from Hugging Face.
 
         Args:
-            variant (str): The task to perform (e.g., 'detection', 'captioning').
-            device (str): Device to run on - 'cpu' or 'gpu'.
+            variant: Task variant to perform (e.g., 'detection', 'captioning')
+            device: Device to run on - 'cpu' or 'gpu'
+
+        Raises:
+            ValueError: If variant is not supported
         """
+        if variant not in self.SUPPORTED_VARIANTS:
+            raise ValueError(
+                f"Unsupported variant: '{variant}'. "
+                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+            )
+
+        self.variant = variant
         model_id = 'microsoft/Florence-2-large'
-        
+
         print(f"Loading Florence-2 model (variant: {variant})...")
 
         self.model = AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True)
         self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-        
+
         self.device = 'cuda' if device == 'gpu' else 'cpu'
         self.model.to(self.device)
-        
-        self.variant = variant
-        self.task_prompts = {
-            'detection': '<OD>',
-            'segmentation': '<SEG>',
-            'captioning': '<CAPTION>',
-            'detailed_captioning': '<DETAILED_CAPTION>',
-            'more_detailed_captioning': '<MORE_DETAILED_CAPTION>',
-            'ocr': '<OCR>',
-            'ocr_with_region': '<OCR_WITH_REGION>',
-        }
-        
-        if variant not in self.task_prompts:
-            raise ValueError(f"Unsupported variant for Florence-2: '{variant}'. Choose from: {list(self.task_prompts.keys())}")
 
         print(f"Florence-2 model loaded successfully on device '{self.device}'.")
 
@@ -57,34 +94,15 @@ class Florence2Predictor:
         """
         Parses the object detection output from Florence-2 into PixelFlow detections.
         Expected format: <OD> ... <box_1><box_2>...<box_n>
+
+        NOTE: This method is not yet implemented. Florence-2 detection output parsing
+        requires complex string parsing of the model's specific format.
         """
-        if not pf:
-            raise ImportError("PixelFlow is not installed. Cannot process object detection output.")
-
-        # Placeholder parsing logic - this will need to be very robust
-        # This is a simplified example. Real parsing is complex.
-        try:
-            bboxes = []
-            labels = []
-            # A real implementation would need to parse the specific format Florence-2 outputs,
-            # which includes bounding box coordinates and labels within the string.
-            # For now, we return an empty detection object as a placeholder.
-            # Example of what would be needed:
-            # for bbox_str, label_str in parse_florence_string(result_text):
-            #     x1, y1, x2, y2 = bbox_str
-            #     bboxes.append([x1, y1, x2, y2])
-            #     labels.append(label_str)
-
-            if not bboxes:
-                return pf.detections.Detections()
-
-            return pf.detections.Detections(
-                xyxy=np.array(bboxes),
-                class_name=np.array(labels)
-            )
-        except Exception as e:
-            print(f"Error parsing Florence-2 detection output: {e}")
-            return pf.detections.Detections()
+        raise NotImplementedError(
+            "Florence-2 object detection parsing is not yet implemented. "
+            "The detection output format is complex and requires custom parsing logic. "
+            "Use 'captioning', 'ocr', or other text-based variants instead."
+        )
 
 
     def predict(self, image: np.ndarray, prompt: str = None):
@@ -92,22 +110,24 @@ class Florence2Predictor:
         Run inference with the Florence-2 model.
 
         Args:
-            image (np.ndarray): The input image in BGR format (from OpenCV).
-            prompt (str, optional): An optional user prompt. If not provided, the default
-                                    task prompt for the variant is used.
+            image: Input image as numpy array (H, W, 3) in BGR format (OpenCV standard)
+            prompt: Optional user prompt. If not provided, uses default task prompt for variant
 
         Returns:
-            dict or pixelflow.Detections or PIL.Image.Image
+            dict: OpenAI-compatible response for text tasks (captioning, OCR)
+            pf.detections.Detections: For detection/segmentation tasks (if implemented)
         """
-        task_prompt = self.task_prompts[self.variant]
-        
+        task_prompt = self.SUPPORTED_VARIANTS[self.variant]['task_prompt']
+
         # Use user prompt if provided, otherwise use the default task prompt
         final_prompt = prompt if prompt else task_prompt
 
         print(f"Running Florence-2 prediction (variant: {self.variant})...")
 
-        # Convert image from BGR (OpenCV) to RGB (PIL)
-        pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # Florence-2 processor expects RGB format
+        # Convert from BGR (OpenCV standard) to RGB for PIL
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(image_rgb)
 
         inputs = self.processor(text=final_prompt, images=pil_image, return_tensors="pt").to(self.device)
         
@@ -129,7 +149,7 @@ class Florence2Predictor:
         # Handle different output types based on the variant
         if self.variant in ['detection', 'segmentation']:
             # For vision tasks, parse the output and return Detections
-            # Note: Segmentation would require more complex parsing for masks
+            # NOTE: Both detection and segmentation are currently unimplemented
             return self._parse_od_output(parsed_text, pil_image.size)
         else:
             # For text tasks, return the OpenAI-compatible dictionary
