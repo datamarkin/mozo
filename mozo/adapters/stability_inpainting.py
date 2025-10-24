@@ -17,11 +17,14 @@ class StabilityInpaintingPredictor:
     Adapter for the Stability AI Stable Diffusion 2 Inpainting model.
     """
 
+    # Variant configurations (valid __init__ parameters only)
     SUPPORTED_VARIANTS = {
-        'default': {
-            'description': 'Stable Diffusion 2 Inpainting - Default model',
-            'model_id': 'stabilityai/stable-diffusion-2-inpainting',
-        },
+        'default': {'variant': 'default', 'device': 'cpu'},
+    }
+
+    # Model IDs mapped to variants (used internally by __init__)
+    _MODEL_IDS = {
+        'default': 'stabilityai/stable-diffusion-2-inpainting',
     }
 
     def __init__(self, variant='default', device='cpu', **kwargs):
@@ -42,7 +45,7 @@ class StabilityInpaintingPredictor:
             )
 
         self.variant = variant
-        model_id = self.SUPPORTED_VARIANTS[variant]['model_id']
+        model_id = self._MODEL_IDS[variant]
 
         print(f"Loading Stability AI Inpainting model (variant: {variant})...")
         
