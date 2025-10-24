@@ -27,10 +27,46 @@ class Detectron2Predictor:
     """
     Universal Detectron2 adapter - handles ALL detectron2 model variants.
     Supports multiple model families: Mask R-CNN, Faster R-CNN, RetinaNet, Keypoint R-CNN, etc.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Registry of all supported detectron2 model variants
-    SUPPORTED_CONFIGS = {
+    # Complete variant configuration (single source of truth)
+    SUPPORTED_VARIANTS = {
+        'mask_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_50_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_50_DC5_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_50_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_101_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_101_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'mask_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_DC5_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_101_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_101_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'faster_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'retinanet_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'retinanet_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'retinanet_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'keypoint_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'keypoint_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'keypoint_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'keypoint_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'rpn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'rpn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+        'fast_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
+    }
+
+    # Mapping of variant names to Detectron2 model zoo config files (implementation detail)
+    _CONFIG_MAP = {
         # Mask R-CNN (Instance Segmentation)
         'mask_rcnn_R_50_FPN_3x': 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml',
         'mask_rcnn_R_50_C4_1x': 'COCO-InstanceSegmentation/mask_rcnn_R_50_C4_1x.yaml',
@@ -42,7 +78,6 @@ class Detectron2Predictor:
         'mask_rcnn_R_101_DC5_3x': 'COCO-InstanceSegmentation/mask_rcnn_R_101_DC5_3x.yaml',
         'mask_rcnn_R_101_FPN_3x': 'COCO-InstanceSegmentation/mask_rcnn_R_101_FPN_3x.yaml',
         'mask_rcnn_X_101_32x8d_FPN_3x': 'COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml',
-
         # Faster R-CNN (Object Detection)
         'faster_rcnn_R_50_C4_1x': 'COCO-Detection/faster_rcnn_R_50_C4_1x.yaml',
         'faster_rcnn_R_50_C4_3x': 'COCO-Detection/faster_rcnn_R_50_C4_3x.yaml',
@@ -54,46 +89,46 @@ class Detectron2Predictor:
         'faster_rcnn_R_101_DC5_3x': 'COCO-Detection/faster_rcnn_R_101_DC5_3x.yaml',
         'faster_rcnn_R_101_FPN_3x': 'COCO-Detection/faster_rcnn_R_101_FPN_3x.yaml',
         'faster_rcnn_X_101_32x8d_FPN_3x': 'COCO-Detection/faster_rcnn_X_101_32x8d_FPN_3x.yaml',
-
         # RetinaNet (Object Detection)
         'retinanet_R_50_FPN_1x': 'COCO-Detection/retinanet_R_50_FPN_1x.yaml',
         'retinanet_R_50_FPN_3x': 'COCO-Detection/retinanet_R_50_FPN_3x.yaml',
         'retinanet_R_101_FPN_3x': 'COCO-Detection/retinanet_R_101_FPN_3x.yaml',
-
         # Keypoint R-CNN (Keypoint Detection)
         'keypoint_rcnn_R_50_FPN_1x': 'COCO-Keypoints/keypoint_rcnn_R_50_FPN_1x.yaml',
         'keypoint_rcnn_R_50_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml',
         'keypoint_rcnn_R_101_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_R_101_FPN_3x.yaml',
         'keypoint_rcnn_X_101_32x8d_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_X_101_32x8d_FPN_3x.yaml',
-
         # RPN (Region Proposal Network)
         'rpn_R_50_C4_1x': 'COCO-Detection/rpn_R_50_C4_1x.yaml',
         'rpn_R_50_FPN_1x': 'COCO-Detection/rpn_R_50_FPN_1x.yaml',
-
         # Fast R-CNN
         'fast_rcnn_R_50_FPN_1x': 'COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml',
     }
 
-    def __init__(self, variant="mask_rcnn_R_50_FPN_3x", confidence_threshold=0.5, device="cpu"):
+    def __init__(self, variant="mask_rcnn_R_50_FPN_3x", **kwargs):
         """
         Initialize Detectron2 predictor with specific model variant.
 
         Args:
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'faster_rcnn_X_101_32x8d_FPN_3x')
-            confidence_threshold: Detection confidence threshold (0.0-1.0)
-            device: Device to run on - 'cpu' or 'cuda'
+            **kwargs: Override default parameters (confidence_threshold, device)
 
         Raises:
             ValueError: If variant is not supported
         """
-        if variant not in self.SUPPORTED_CONFIGS:
+        if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_CONFIGS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        confidence_threshold = config.get('confidence_threshold', 0.5)
+        device = config.get('device', 'cpu')
+
         self.variant = variant
-        config_file = self.SUPPORTED_CONFIGS[variant]
+        config_file = self._CONFIG_MAP[variant]
 
         print(f"Loading Detectron2 model (variant: {variant})...")
         cfg = get_cfg()

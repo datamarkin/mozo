@@ -15,16 +15,25 @@ class DepthAnythingPredictor:
     """
     Universal Depth Anything adapter - handles all model size variants.
     Supports small, base, and large variants of Depth Anything V2.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Registry of all supported Depth Anything model variants
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
+        'small': {},
+        'base': {},
+        'large': {},
+    }
+
+    # Mapping of variant names to HuggingFace model IDs (implementation detail)
+    _MODEL_IDS = {
         'small': 'depth-anything/Depth-Anything-V2-Small-hf',
         'base': 'depth-anything/Depth-Anything-V2-Base-hf',
         'large': 'depth-anything/Depth-Anything-V2-Large-hf',
     }
 
-    def __init__(self, variant="small"):
+    def __init__(self, variant="small", **kwargs):
         """
         Initialize Depth Anything predictor with specific model size variant.
 
@@ -33,6 +42,7 @@ class DepthAnythingPredictor:
                     small:  Fastest, lowest memory, good for real-time applications
                     base:   Balanced speed and accuracy
                     large:  Best accuracy, slower, higher memory usage
+            **kwargs: Override parameters (reserved for future use)
 
         Raises:
             ValueError: If variant is not supported
@@ -40,11 +50,11 @@ class DepthAnythingPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
         self.variant = variant
-        model_name = self.SUPPORTED_VARIANTS[variant]
+        model_name = self._MODEL_IDS[variant]
 
         print(f"Loading Depth Anything model (variant: {variant}, model: {model_name})...")
         self.pipe = pipeline(task="depth-estimation", model=model_name)

@@ -28,28 +28,33 @@ class Qwen3VLPredictor:
     - Text extraction (OCR) with context
     - Chart and diagram analysis with step-by-step breakdown
     - Visual reasoning with transparent thought process
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Registry of all supported Qwen3-VL model variants
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        '2b-thinking': 'Qwen/Qwen3-VL-2B-Thinking',
-        # Future variants can be added here:
-        # '7b-thinking': 'Qwen/Qwen3-VL-7B-Thinking',
-        # '14b-thinking': 'Qwen/Qwen3-VL-14B-Thinking',
+        '2b-thinking': {'device': 'cpu', 'torch_dtype': 'auto'},
     }
 
-    def __init__(self, variant="2b-thinking", device="cpu", torch_dtype="auto"):
+    # Mapping of variant names to HuggingFace model IDs (implementation detail)
+    _MODEL_IDS = {
+        '2b-thinking': 'Qwen/Qwen3-VL-2B-Thinking',
+    }
+
+    def __init__(self, variant="2b-thinking", **kwargs):
         """
         Initialize Qwen3-VL predictor with specific model variant.
 
         Args:
             variant: Model size variant - '2b-thinking'
                     2b-thinking: 2 billion parameters, compact with reasoning
-            device: Device placement - 'auto', 'cpu', 'cuda', 'mps'
-                   'auto' will automatically use best available device
-                   Note: 'cpu' recommended for stability with 2B model
-            torch_dtype: Precision - 'auto', 'float16', 'bfloat16', 'float32'
-                        'auto' will choose based on device capabilities
+            **kwargs: Override parameters (device, torch_dtype)
+                     device: Device placement - 'auto', 'cpu', 'cuda', 'mps'
+                            'auto' will automatically use best available device
+                            Note: 'cpu' recommended for stability with 2B model
+                     torch_dtype: Precision - 'auto', 'float16', 'bfloat16', 'float32'
+                                 'auto' will choose based on device capabilities
 
         Raises:
             ValueError: If variant is not supported
@@ -62,11 +67,16 @@ class Qwen3VLPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        device = config.get('device', 'cpu')
+        torch_dtype = config.get('torch_dtype', 'auto')
+
         self.variant = variant
-        model_name = self.SUPPORTED_VARIANTS[variant]
+        model_name = self._MODEL_IDS[variant]
 
         print(f"Loading Qwen3-VL model (variant: {variant}, model: {model_name})...")
         print("Note: This is a 2B thinking model. First load may download ~4-8GB...")

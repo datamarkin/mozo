@@ -25,27 +25,32 @@ class Qwen2_5VLPredictor:
     - Text extraction (OCR)
     - Chart and diagram analysis
     - Visual reasoning
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Registry of all supported Qwen2.5-VL model variants
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        '7b-instruct': 'Qwen/Qwen2.5-VL-7B-Instruct',
-        # Future variants can be added here:
-        # '2b-instruct': 'Qwen/Qwen2.5-VL-2B-Instruct',
-        # '72b-instruct': 'Qwen/Qwen2.5-VL-72B-Instruct',
+        '7b-instruct': {'device': 'auto', 'torch_dtype': 'auto'},
     }
 
-    def __init__(self, variant="7b-instruct", device="auto", torch_dtype="auto"):
+    # Mapping of variant names to HuggingFace model IDs (implementation detail)
+    _MODEL_IDS = {
+        '7b-instruct': 'Qwen/Qwen2.5-VL-7B-Instruct',
+    }
+
+    def __init__(self, variant="7b-instruct", **kwargs):
         """
         Initialize Qwen2.5-VL predictor with specific model variant.
 
         Args:
             variant: Model size variant - '7b-instruct'
                     7b-instruct: 7 billion parameters, balanced performance
-            device: Device placement - 'auto', 'cpu', 'cuda', 'mps'
-                   'auto' will automatically use best available device
-            torch_dtype: Precision - 'auto', 'float16', 'bfloat16', 'float32'
-                        'auto' will choose based on device capabilities
+            **kwargs: Override parameters (device, torch_dtype)
+                     device: Device placement - 'auto', 'cpu', 'cuda', 'mps'
+                            'auto' will automatically use best available device
+                     torch_dtype: Precision - 'auto', 'float16', 'bfloat16', 'float32'
+                                 'auto' will choose based on device capabilities
 
         Raises:
             ValueError: If variant is not supported
@@ -57,11 +62,16 @@ class Qwen2_5VLPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        device = config.get('device', 'auto')
+        torch_dtype = config.get('torch_dtype', 'auto')
+
         self.variant = variant
-        model_name = self.SUPPORTED_VARIANTS[variant]
+        model_name = self._MODEL_IDS[variant]
 
         print(f"Loading Qwen2.5-VL model (variant: {variant}, model: {model_name})...")
         print("Note: This is a 7B model and may take time to load on first run...")

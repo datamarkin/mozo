@@ -42,25 +42,23 @@ class Florence2Predictor:
 
     Returns PixelFlow Detections for detection/segmentation tasks and
     OpenAI-compatible dict for text-based tasks.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations (valid __init__ parameters only)
-    # Task prompts are stored separately in _TASK_PROMPTS
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        # Detection variants
-        'detection': {'variant': 'detection', 'device': 'cpu'},
-        'detection_with_caption': {'variant': 'detection_with_caption', 'device': 'cpu'},
-        # Segmentation variant (requires prompt)
-        'segmentation': {'variant': 'segmentation', 'device': 'cpu'},
-        # Text-based variants
-        'captioning': {'variant': 'captioning', 'device': 'cpu'},
-        'detailed_captioning': {'variant': 'detailed_captioning', 'device': 'cpu'},
-        'more_detailed_captioning': {'variant': 'more_detailed_captioning', 'device': 'cpu'},
-        'ocr': {'variant': 'ocr', 'device': 'cpu'},
-        'ocr_with_region': {'variant': 'ocr_with_region', 'device': 'cpu'},
+        'detection': {'device': 'cpu'},
+        'detection_with_caption': {'device': 'cpu'},
+        'segmentation': {'device': 'cpu'},
+        'captioning': {'device': 'cpu'},
+        'detailed_captioning': {'device': 'cpu'},
+        'more_detailed_captioning': {'device': 'cpu'},
+        'ocr': {'device': 'cpu'},
+        'ocr_with_region': {'device': 'cpu'},
     }
 
-    # Task prompts mapped to variants (used internally by predict())
+    # Task prompts mapped to variants (implementation detail)
     _TASK_PROMPTS = {
         # Detection prompts
         'detection': '<OD>',
@@ -75,7 +73,7 @@ class Florence2Predictor:
         'ocr_with_region': '<OCR_WITH_REGION>',
     }
 
-    def __init__(self, variant='captioning', device='cpu', **kwargs):
+    def __init__(self, variant='captioning', **kwargs):
         """
         Initialize the Florence-2 model from Hugging Face.
 
@@ -85,7 +83,7 @@ class Florence2Predictor:
                     - Segmentation: 'segmentation' (requires prompt in predict())
                     - Captioning: 'captioning', 'detailed_captioning', 'more_detailed_captioning'
                     - OCR: 'ocr', 'ocr_with_region'
-            device: Device to run on - 'cpu' or 'gpu'
+            **kwargs: Override parameters (device)
 
         Raises:
             ValueError: If variant is not supported
@@ -93,8 +91,12 @@ class Florence2Predictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
+
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        device = config.get('device', 'cpu')
 
         self.variant = variant
         model_id = 'microsoft/Florence-2-large'

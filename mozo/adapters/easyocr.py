@@ -24,55 +24,50 @@ class EasyOCRPredictor:
     """
     Universal EasyOCR adapter for text recognition.
     Supports 80+ languages with easy setup and good general-purpose accuracy.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations
-    # Note: These configs contain both __init__ parameters (variant, device)
-    # and internal settings (languages, recog_network)
-    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
         'english-light': {
-            'variant': 'english-light',
-            'device': 'cpu',
             'languages': ['en'],
-            'recog_network': None,  # Use default
+            'recog_network': None,
+            'device': 'cpu',
         },
         'english-full': {
-            'variant': 'english-full',
-            'device': 'cpu',
             'languages': ['en'],
             'recog_network': 'english_g2',  # Higher accuracy model
+            'device': 'cpu',
         },
         'multilingual': {
-            'variant': 'multilingual',
-            'device': 'cpu',
             'languages': ['en', 'ch_sim', 'fr', 'de', 'es'],
             'recog_network': None,
+            'device': 'cpu',
         },
         'chinese': {
-            'variant': 'chinese',
-            'device': 'cpu',
             'languages': ['ch_sim', 'en'],
             'recog_network': None,
+            'device': 'cpu',
         },
         'custom': {
-            'variant': 'custom',
-            'device': 'cpu',
-            'languages': None,  # User must provide via languages parameter
+            'languages': None,  # User must provide
             'recog_network': None,
+            'device': 'cpu',
         },
     }
 
-    def __init__(self, variant='english-light', languages=None, device='cpu', **kwargs):
+    def __init__(self, variant='english-light', **kwargs):
         """
         Initialize EasyOCR predictor with specific variant.
 
         Args:
             variant: Model variant name ('english-light', 'english-full', 'multilingual', 'chinese', 'custom')
-            languages: Language code list override (e.g., ['en'], ['ch_sim', 'en'])
-                      Required for 'custom' variant, optional for others
-            device: Device to run on - 'cpu' or 'gpu'
-            **kwargs: Additional parameters for easyocr.Reader (download_enabled, model_storage_directory, etc.)
+            **kwargs: Override parameters (languages, device, recog_network)
+                     languages: Language code list override (e.g., ['en'], ['ch_sim', 'en'])
+                               Required for 'custom' variant, optional for others
+                     device: Device to run on - 'cpu' or 'gpu'
+                     Additional parameters for easyocr.Reader (download_enabled, model_storage_directory, etc.)
 
         Raises:
             ValueError: If variant is not supported or custom variant without languages
@@ -80,25 +75,28 @@ class EasyOCRPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+
         self.variant = variant
-        variant_config = self.SUPPORTED_VARIANTS[variant]
 
         # Determine language list
         if variant == 'custom':
-            if languages is None:
+            if 'languages' not in config or config['languages'] is None:
                 raise ValueError(
                     "Custom variant requires 'languages' parameter. "
                     "Example: languages=['en', 'fr', 'de']"
                 )
-            self.languages = languages
+            self.languages = config['languages']
         else:
-            # Use variant's default languages, but allow override
-            self.languages = languages if languages is not None else variant_config['languages']
+            # Use variant's default languages, but allow override from kwargs
+            self.languages = config.get('languages')
 
         # Determine device (EasyOCR uses gpu=True/False)
+        device = config.get('device', 'cpu')
         self.use_gpu = (device == 'gpu')
 
         print(f"Loading EasyOCR (variant: {variant}, languages: {self.languages}, gpu: {self.use_gpu})...")
@@ -110,12 +108,13 @@ class EasyOCRPredictor:
         }
 
         # Add recog_network if specified
-        if variant_config.get('recog_network'):
-            reader_params['recog_network'] = variant_config['recog_network']
+        if config.get('recog_network'):
+            reader_params['recog_network'] = config['recog_network']
 
-        # Add any additional parameters from kwargs
+        # Add any additional parameters from kwargs (excluding our known params)
         # Common params: download_enabled, model_storage_directory, quantize, cudnn_benchmark
-        reader_params.update(kwargs)
+        extra_params = {k: v for k, v in kwargs.items() if k not in ['languages', 'device', 'recog_network']}
+        reader_params.update(extra_params)
 
         # Try to initialize with progressive parameter removal for compatibility
         init_attempts = [

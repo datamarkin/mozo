@@ -17,27 +17,29 @@ from ..utils import create_openai_response
 class BlipVqaPredictor:
     """
     Adapter for the Salesforce BLIP model for Visual Question Answering.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations (valid __init__ parameters only)
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        'base': {'variant': 'base', 'device': 'cpu'},
-        'capfilt-large': {'variant': 'capfilt-large', 'device': 'cpu'},
+        'base': {'device': 'cpu'},
+        'capfilt-large': {'device': 'cpu'},
     }
 
-    # Model IDs mapped to variants (used internally by __init__)
+    # Model IDs mapped to variants (implementation detail)
     _MODEL_IDS = {
         'base': 'Salesforce/blip-vqa-base',
         'capfilt-large': 'Salesforce/blip-vqa-capfilt-large',
     }
 
-    def __init__(self, variant='base', device='cpu', **kwargs):
+    def __init__(self, variant='base', **kwargs):
         """
         Initialize the BLIP VQA model from Hugging Face.
 
         Args:
             variant: Model variant to use ('base', 'capfilt-large')
-            device: Device to run on - 'cpu' or 'gpu'
+            **kwargs: Override parameters (device)
 
         Raises:
             ValueError: If variant is not supported
@@ -45,8 +47,12 @@ class BlipVqaPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
+
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        device = config.get('device', 'cpu')
 
         self.variant = variant
         model_id = self._MODEL_IDS[variant]
