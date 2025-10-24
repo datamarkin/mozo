@@ -19,15 +19,16 @@ class BlipVqaPredictor:
     Adapter for the Salesforce BLIP model for Visual Question Answering.
     """
 
+    # Variant configurations (valid __init__ parameters only)
     SUPPORTED_VARIANTS = {
-        'base': {
-            'description': 'BLIP VQA base model - General-purpose visual question answering',
-            'model_id': 'Salesforce/blip-vqa-base',
-        },
-        'capfilt-large': {
-            'description': 'BLIP VQA large model with caption filtering - Higher accuracy',
-            'model_id': 'Salesforce/blip-vqa-capfilt-large',
-        },
+        'base': {'variant': 'base', 'device': 'cpu'},
+        'capfilt-large': {'variant': 'capfilt-large', 'device': 'cpu'},
+    }
+
+    # Model IDs mapped to variants (used internally by __init__)
+    _MODEL_IDS = {
+        'base': 'Salesforce/blip-vqa-base',
+        'capfilt-large': 'Salesforce/blip-vqa-capfilt-large',
     }
 
     def __init__(self, variant='base', device='cpu', **kwargs):
@@ -48,7 +49,7 @@ class BlipVqaPredictor:
             )
 
         self.variant = variant
-        model_id = self.SUPPORTED_VARIANTS[variant]['model_id']
+        model_id = self._MODEL_IDS[variant]
 
         print(f"Loading BLIP VQA model (variant: {variant})...")
         
