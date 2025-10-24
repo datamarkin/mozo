@@ -1,8 +1,16 @@
-import torch
-from PIL import Image
-from transformers import BlipProcessor, BlipForQuestionAnswering
-import cv2
 import numpy as np
+import cv2
+from PIL import Image
+
+try:
+    from transformers import BlipProcessor, BlipForQuestionAnswering
+    import torch
+except ImportError:
+    print("="*50)
+    print("ERROR: Transformers and PyTorch are not installed.")
+    print("Please install them with: pip install transformers torch")
+    print("="*50)
+    raise
 
 from ..utils import create_openai_response
 
@@ -11,16 +19,37 @@ class BlipVqaPredictor:
     Adapter for the Salesforce BLIP model for Visual Question Answering.
     """
 
+    SUPPORTED_VARIANTS = {
+        'base': {
+            'description': 'BLIP VQA base model - General-purpose visual question answering',
+            'model_id': 'Salesforce/blip-vqa-base',
+        },
+        'capfilt-large': {
+            'description': 'BLIP VQA large model with caption filtering - Higher accuracy',
+            'model_id': 'Salesforce/blip-vqa-capfilt-large',
+        },
+    }
+
     def __init__(self, variant='base', device='cpu', **kwargs):
         """
         Initialize the BLIP VQA model from Hugging Face.
 
         Args:
-            variant (str): The model variant to use (e.g., 'base').
-            device (str): Device to run on - 'cpu' or 'gpu'.
+            variant: Model variant to use ('base', 'capfilt-large')
+            device: Device to run on - 'cpu' or 'gpu'
+
+        Raises:
+            ValueError: If variant is not supported
         """
-        model_id = f"Salesforce/blip-vqa-{variant}"
-        
+        if variant not in self.SUPPORTED_VARIANTS:
+            raise ValueError(
+                f"Unsupported variant: '{variant}'. "
+                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+            )
+
+        self.variant = variant
+        model_id = self.SUPPORTED_VARIANTS[variant]['model_id']
+
         print(f"Loading BLIP VQA model (variant: {variant})...")
         
         self.processor = BlipProcessor.from_pretrained(model_id)
@@ -28,9 +57,7 @@ class BlipVqaPredictor:
         
         self.device = 'cuda' if device == 'gpu' else 'cpu'
         self.model.to(self.device)
-        
-        self.variant = variant
-        
+
         print(f"BLIP VQA model loaded successfully on device '{self.device}'.")
 
     def predict(self, image: np.ndarray, prompt: str):
