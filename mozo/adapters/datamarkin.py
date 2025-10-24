@@ -42,6 +42,10 @@ class DatamarkinPredictor:
     - PixelFlow converter → standardized output format
     """
 
+    # Empty SUPPORTED_VARIANTS - all variants are dynamic (any training_id works)
+    # The factory will handle creating variant configs on-the-fly
+    SUPPORTED_VARIANTS = {}
+
     def __init__(self, variant, bearer_token=None,
                  base_url='https://vision.datamarkin.com',
                  timeout=30, **kwargs):
