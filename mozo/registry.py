@@ -50,10 +50,6 @@ MODEL_REGISTRY = {
             # Keypoint R-CNN (Keypoint Detection)
             'keypoint_rcnn_R_50_FPN_1x', 'keypoint_rcnn_R_50_FPN_3x', 'keypoint_rcnn_R_101_FPN_3x',
             'keypoint_rcnn_X_101_32x8d_FPN_3x',
-            # RPN (Region Proposal Network)
-            'rpn_R_50_C4_1x', 'rpn_R_50_FPN_1x',
-            # Fast R-CNN
-            'fast_rcnn_R_50_FPN_1x',
         ],
     },
 
@@ -102,14 +98,14 @@ MODEL_REGISTRY = {
         'module': 'mozo.adapters.easyocr',
         'task_type': 'ocr',
         'description': 'EasyOCR - User-friendly OCR with 80+ languages, easy setup, and good general-purpose accuracy',
-        'variants': ['english-light', 'english-full', 'multilingual', 'chinese', 'custom'],
+        'variants': ['english-light', 'english-full', 'multilingual', 'chinese'],
     },
 
     'stability_inpainting': {
         'adapter_class': 'StabilityInpaintingPredictor',
         'module': 'mozo.adapters.stability_inpainting',
         'task_type': 'image_generation',
-        'description': 'Stability AI Stable Diffusion 2 Inpainting - Generate and modify image content using text prompts and masks',
+        'description': 'Stability AI Stable Diffusion 2 Inpainting - Generate and modify image content using text prompts (REQUIRES: mask image parameter)',
         'variants': ['default'],
     },
 
