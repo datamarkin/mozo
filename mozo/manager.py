@@ -72,7 +72,7 @@ class ModelManager:
         parts = model_id.split('/', 1)
         return parts[0], parts[1]
 
-    def get_model(self, family: str, variant: str):
+    def get_model(self, family: str, variant: str, **kwargs):
         """
         Get a model instance, loading it if necessary (lazy loading).
 
@@ -80,8 +80,10 @@ class ModelManager:
         simultaneously, only one will load it while others wait.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
+            family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
+            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
+                    For datamarkin, variant is the training_id
+            **kwargs: Additional parameters to pass to the model (e.g., bearer_token)
 
         Returns:
             Model predictor instance
@@ -92,7 +94,10 @@ class ModelManager:
 
         Example:
             >>> manager = ModelManager()
+            >>> # Standard model
             >>> model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            >>> # Datamarkin with bearer_token
+            >>> model = manager.get_model('datamarkin', 'wings-v4', bearer_token='xxx')
             >>> predictions = model.predict(image)
         """
         model_id = self._get_model_id(family, variant)
@@ -108,7 +113,7 @@ class ModelManager:
             if model_id not in self._models:
                 print(f"[ModelManager] Loading model: {model_id} (family={family}, variant={variant})...")
                 try:
-                    self._models[model_id] = self._factory.create_model(family, variant)
+                    self._models[model_id] = self._factory.create_model(family, variant, **kwargs)
                     print(f"[ModelManager] Model {model_id} loaded successfully.")
                 except Exception as e:
                     print(f"[ModelManager] ERROR: Failed to load model {model_id}: {e}")

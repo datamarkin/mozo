@@ -161,6 +161,20 @@ MODEL_REGISTRY = {
         }
     },
 
+    'qwen3_vl': {
+        'adapter_class': 'Qwen3VLPredictor',
+        'module': 'mozo.adapters.qwen3_vl',
+        'task_type': 'visual_question_answering_with_reasoning',
+        'description': 'Qwen3-VL models with chain-of-thought reasoning for explainable vision-language understanding',
+        'variants': {
+            '2b-thinking': {
+                'variant': '2b-thinking',
+                'device': 'cpu',  # CPU recommended for 2B model - stable and efficient
+                'torch_dtype': 'auto'
+            },
+        }
+    },
+
     'paddleocr': {
         'adapter_class': 'PaddleOCRPredictor',
         'module': 'mozo.adapters.paddleocr',
@@ -251,6 +265,92 @@ MODEL_REGISTRY = {
                 'languages': ['en'],  # Default, user should override
                 'device': 'cpu'
             },
+        }
+    },
+
+    'stability_inpainting': {
+        'adapter_class': 'StabilityInpaintingPredictor',
+        'module': 'mozo.adapters.stability_inpainting',
+        'task_type': 'image_generation',
+        'description': 'Stability AI Stable Diffusion 2 for inpainting, generating new image content based on a mask and prompt.',
+        'variants': {
+            'default': {
+                'variant': 'default',
+                'device': 'cpu'
+            },
+        }
+    },
+
+    'florence2': {
+        'adapter_class': 'Florence2Predictor',
+        'module': 'mozo.adapters.florence2',
+        'task_type': 'multi_task_vision',
+        'description': 'Microsoft Florence-2 for a variety of vision tasks including object detection, segmentation, captioning, and OCR.',
+        'variants': {
+            'detection': {
+                'variant': 'detection',
+                'device': 'cpu'
+            },
+            'segmentation': {
+                'variant': 'segmentation',
+                'device': 'cpu'
+            },
+            'captioning': {
+                'variant': 'captioning',
+                'device': 'cpu'
+            },
+            'detailed_captioning': {
+                'variant': 'detailed_captioning',
+                'device': 'cpu'
+            },
+            'more_detailed_captioning': {
+                'variant': 'more_detailed_captioning',
+                'device': 'cpu'
+            },
+            'ocr': {
+                'variant': 'ocr',
+                'device': 'cpu'
+            },
+            'ocr_with_region': {
+                'variant': 'ocr_with_region',
+                'device': 'cpu'
+            },
+        }
+    },
+
+    'blip_vqa': {
+        'adapter_class': 'BlipVqaPredictor',
+        'module': 'mozo.adapters.blip_vqa',
+        'task_type': 'visual_question_answering',
+        'description': 'Salesforce BLIP for Visual Question Answering.',
+        'variants': {
+            'base': {
+                'variant': 'base',
+                'device': 'cpu'
+            },
+            'large': {
+                'variant': 'large',
+                'device': 'cpu'
+            },
+        }
+    },
+
+    'datamarkin': {
+        'adapter_class': 'DatamarkinPredictor',
+        'module': 'mozo.adapters.datamarkin',
+        'task_type': 'online_inference',
+        'description': 'Datamarkin Vision Service - Cloud-based model inference for keypoint detection, object detection, and segmentation. Variant name is the training_id.',
+        'variants': {
+            # Dynamic variants: Any variant name becomes a training_id automatically
+            # No predefined variants needed by default
+            #
+            # Users can optionally add predefined variants here for convenience:
+            # 'wings-v4': {
+            #     'variant': 'wings-v4',
+            #     'bearer_token': None,  # From env or param
+            #     'base_url': 'https://vision.datamarkin.com',
+            #     'timeout': 30,
+            # },
         }
     },
 }

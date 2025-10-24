@@ -62,13 +62,16 @@ class ModelFactory:
                 f"Module '{module_path}' does not have class '{class_name}': {e}"
             ) from e
 
-    def create_model(self, family, variant):
+    def create_model(self, family, variant, **override_params):
         """
         Create a model instance from family and variant identifiers.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
+            family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
+            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
+                    For datamarkin family, variant becomes the training_id
+            **override_params: Additional parameters to override variant defaults
+                             (e.g., bearer_token for datamarkin)
 
         Returns:
             Instantiated model predictor object
@@ -79,8 +82,10 @@ class ModelFactory:
 
         Example:
             >>> factory = ModelFactory()
+            >>> # Standard model
             >>> model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
-            >>> predictions = model.predict(image)
+            >>> # Datamarkin with dynamic variant
+            >>> model = factory.create_model('datamarkin', 'wings-v4', bearer_token='xxx')
         """
         # Validate family exists
         if family not in MODEL_REGISTRY:
@@ -92,31 +97,48 @@ class ModelFactory:
 
         family_config = MODEL_REGISTRY[family]
 
-        # Validate variant exists for this family
-        if variant not in family_config['variants']:
-            available_variants = list(family_config['variants'].keys())
-            raise ValueError(
-                f"Unknown variant '{variant}' for family '{family}'. "
-                f"Available variants: {available_variants}"
-            )
+        # Special handling for datamarkin: dynamic variants
+        if family == 'datamarkin':
+            # If variant not in registry, create it dynamically
+            if variant not in family_config['variants']:
+                # Variant name IS the training_id for datamarkin
+                variant_params = {
+                    'variant': variant,  # training_id
+                    'bearer_token': None,
+                    'base_url': 'https://vision.datamarkin.com',
+                    'timeout': 30,
+                }
+                print(f"[ModelFactory] Creating dynamic datamarkin variant: {variant}")
+            else:
+                # Use predefined variant config from registry
+                variant_params = family_config['variants'][variant].copy()
+        else:
+            # Standard behavior: variant must exist in registry
+            if variant not in family_config['variants']:
+                available_variants = list(family_config['variants'].keys())
+                raise ValueError(
+                    f"Unknown variant '{variant}' for family '{family}'. "
+                    f"Available variants: {available_variants}"
+                )
+            variant_params = family_config['variants'][variant].copy()
 
         # Get adapter class information
         module_path = family_config['module']
         class_name = family_config['adapter_class']
 
-        # Get variant-specific parameters
-        variant_params = family_config['variants'][variant]
+        # Merge variant params with override params (override takes precedence)
+        final_params = {**variant_params, **override_params}
 
         # Load the adapter class
         adapter_class = self._get_adapter_class(module_path, class_name)
 
-        # Instantiate the adapter with variant parameters
+        # Instantiate the adapter with final parameters
         try:
-            model_instance = adapter_class(**variant_params)
+            model_instance = adapter_class(**final_params)
             return model_instance
         except Exception as e:
             raise RuntimeError(
-                f"Failed to instantiate {class_name} with parameters {variant_params}: {e}"
+                f"Failed to instantiate {class_name} with parameters {final_params}: {e}"
             ) from e
 
     def get_available_families(self):

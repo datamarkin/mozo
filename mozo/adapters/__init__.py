@@ -17,6 +17,12 @@ __all__ = [
     'Detectron2Predictor',
     'DepthAnythingPredictor',
     'Qwen2_5VLPredictor',
+    'Qwen3VLPredictor',
     'PaddleOCRPredictor',
     'PPStructurePredictor',
+    'EasyOCRPredictor',
+    'StabilityInpaintingPredictor',
+    'Florence2Predictor',
+    'BlipVqaPredictor',
+    'DatamarkinPredictor',
 ]
