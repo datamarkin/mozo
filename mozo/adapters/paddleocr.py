@@ -120,29 +120,18 @@ class PaddleOCRPredictor:
         print(f"Running PaddleOCR prediction (variant: {self.variant})...")
 
         # PaddleOCR expects BGR format (OpenCV standard) - no conversion needed
-        # Try running OCR with different parameter combinations for compatibility
-        try:
-            # Attempt 1: Try with cls parameter (angle classification)
-            ocr_output = self.ocr.ocr(image, cls=True)
-        except TypeError:
-            try:
-                # Attempt 2: Try without cls parameter
-                ocr_output = self.ocr.ocr(image)
-            except Exception as e:
-                raise RuntimeError(f"Prediction failed: {e}")
+        # Use PaddleOCR 3.x predict() API
+        ocr_output = self.ocr.predict(image)
 
-        # The result is a list containing results for each image. Since we process
-        # one image, we extract the first element.
-        # It can be [None] or [[]] if no text is found.
-        if not ocr_output or not ocr_output[0]:
+        # The result is a list of OCRResult objects. Since we process one image,
+        # we get one Result object.
+        if not ocr_output or len(ocr_output) == 0:
             print("No text detected in image.")
             return pf.detections.Detections()
 
-        results = ocr_output[0]
-
-        # Use PixelFlow's built-in converter for consistent OCRData structure
+        # Use PixelFlow's from_paddleocr3() converter for PaddleOCR 3.x API
         try:
-            detections = pf.detections.from_paddleocr(results, language=self.language)
+            detections = pf.detections.from_paddleocr3(ocr_output, language=self.language)
         except Exception as e:
             raise RuntimeError(f"PixelFlow conversion failed: {e}")
 
