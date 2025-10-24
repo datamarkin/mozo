@@ -25,30 +25,38 @@ class PPStructurePredictor:
     Supports layout detection, table recognition, and formula recognition.
     """
 
+    # Variant configurations
+    # Note: These configs contain both __init__ parameters (variant, device)
+    # and internal settings (use_doc_orientation_classify, etc.)
+    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
     SUPPORTED_VARIANTS = {
         'layout-only': {
-            'description': 'Layout detection only - Fast region identification',
+            'variant': 'layout-only',
+            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': False,
             'use_formula_recognition': False,
         },
         'full': {
-            'description': 'Full analysis - Layout, text, tables, and formulas',
+            'variant': 'full',
+            'device': 'cpu',
             'use_doc_orientation_classify': True,
             'use_doc_unwarping': True,
             'use_table_recognition': True,
             'use_formula_recognition': True,
         },
         'table-analysis': {
-            'description': 'Focus on tables - Layout and table structure recognition',
+            'variant': 'table-analysis',
+            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': True,
             'use_formula_recognition': False,
         },
         'formula-analysis': {
-            'description': 'Focus on formulas - Layout and mathematical formulas',
+            'variant': 'formula-analysis',
+            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': False,
