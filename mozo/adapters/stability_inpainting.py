@@ -3,7 +3,7 @@ import cv2
 from PIL import Image
 
 try:
-    from diffusers import StableDiffusionInpaintingPipeline
+    from diffusers import StableDiffusionInpaintPipeline
     import torch
 except ImportError:
     print("="*50)
@@ -15,6 +15,9 @@ except ImportError:
 class StabilityInpaintingPredictor:
     """
     Adapter for the Stability AI Stable Diffusion 2 Inpainting model.
+
+    IMPORTANT: This model requires both an image and a mask as input.
+    The mask should be a grayscale image where white areas indicate regions to inpaint.
 
     Self-contained adapter with complete configuration.
     """
@@ -54,8 +57,8 @@ class StabilityInpaintingPredictor:
         model_id = self._MODEL_IDS[variant]
 
         print(f"Loading Stability AI Inpainting model (variant: {variant})...")
-        
-        self.pipeline = StableDiffusionInpaintingPipeline.from_pretrained(
+
+        self.pipeline = StableDiffusionInpaintPipeline.from_pretrained(
             model_id,
             torch_dtype=torch.float16 if device == 'gpu' else torch.float32,
         )
