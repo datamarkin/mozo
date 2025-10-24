@@ -26,29 +26,38 @@ class EasyOCRPredictor:
     Supports 80+ languages with easy setup and good general-purpose accuracy.
     """
 
+    # Variant configurations
+    # Note: These configs contain both __init__ parameters (variant, device)
+    # and internal settings (languages, recog_network)
+    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
     SUPPORTED_VARIANTS = {
         'english-light': {
-            'description': 'English only - Fastest variant with good accuracy',
+            'variant': 'english-light',
+            'device': 'cpu',
             'languages': ['en'],
             'recog_network': None,  # Use default
         },
         'english-full': {
-            'description': 'English with enhanced accuracy - Better for complex text',
+            'variant': 'english-full',
+            'device': 'cpu',
             'languages': ['en'],
             'recog_network': 'english_g2',  # Higher accuracy model
         },
         'multilingual': {
-            'description': 'Multi-language support - English, Chinese, French, German, Spanish',
+            'variant': 'multilingual',
+            'device': 'cpu',
             'languages': ['en', 'ch_sim', 'fr', 'de', 'es'],
             'recog_network': None,
         },
         'chinese': {
-            'description': 'Chinese + English - Optimized for Chinese text recognition',
+            'variant': 'chinese',
+            'device': 'cpu',
             'languages': ['ch_sim', 'en'],
             'recog_network': None,
         },
         'custom': {
-            'description': 'Custom language list - User-specified languages',
+            'variant': 'custom',
+            'device': 'cpu',
             'languages': None,  # User must provide via languages parameter
             'recog_network': None,
         },
