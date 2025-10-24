@@ -138,7 +138,7 @@ class ModelFactory:
         elif hasattr(adapter_class, 'SUPPORTED_CONFIGS'):
             supported_variants = adapter_class.SUPPORTED_CONFIGS
 
-        if supported_variants:
+        if supported_variants is not None:
             # Special handling for datamarkin: dynamic variants
             if family == 'datamarkin':
                 if variant not in supported_variants:

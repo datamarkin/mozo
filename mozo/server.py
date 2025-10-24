@@ -150,7 +150,11 @@ async def predict(
 
     # Run prediction
     try:
-        if family in ['qwen2.5_vl', 'qwen3_vl']:
+        if family in ['qwen2.5_vl', 'qwen3_vl', 'blip_vqa']:
+            # Vision-language models that require prompts
+            results = model.predict(image, prompt=prompt)
+        elif family == 'florence2':
+            # Florence-2 accepts optional prompt
             results = model.predict(image, prompt=prompt)
         elif family == 'stability_inpainting':
             if mask_image is None:
