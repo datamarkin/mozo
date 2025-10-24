@@ -60,9 +60,6 @@ class Detectron2Predictor:
         'keypoint_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
         'keypoint_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
         'keypoint_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'rpn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'rpn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'fast_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
     }
 
     # Mapping of variant names to Detectron2 model zoo config files (implementation detail)
@@ -98,11 +95,6 @@ class Detectron2Predictor:
         'keypoint_rcnn_R_50_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_R_50_FPN_3x.yaml',
         'keypoint_rcnn_R_101_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_R_101_FPN_3x.yaml',
         'keypoint_rcnn_X_101_32x8d_FPN_3x': 'COCO-Keypoints/keypoint_rcnn_X_101_32x8d_FPN_3x.yaml',
-        # RPN (Region Proposal Network)
-        'rpn_R_50_C4_1x': 'COCO-Detection/rpn_R_50_C4_1x.yaml',
-        'rpn_R_50_FPN_1x': 'COCO-Detection/rpn_R_50_FPN_1x.yaml',
-        # Fast R-CNN
-        'fast_rcnn_R_50_FPN_1x': 'COCO-Detection/fast_rcnn_R_50_FPN_1x.yaml',
     }
 
     def __init__(self, variant="mask_rcnn_R_50_FPN_3x", **kwargs):
