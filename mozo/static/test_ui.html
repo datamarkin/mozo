@@ -250,6 +250,75 @@
             margin-top: 10px;
         }
 
+        /* Thinking section styles */
+        .thinking-container {
+            margin-top: 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .thinking-toggle {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+
+        .thinking-toggle:hover {
+            background: #e9ecef;
+        }
+
+        .thinking-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .thinking-arrow {
+            transition: transform 0.2s;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .thinking-arrow.expanded {
+            transform: rotate(180deg);
+        }
+
+        .thinking-content {
+            display: none;
+            padding: 15px;
+            background: #fafbfc;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .thinking-content.expanded {
+            display: block;
+        }
+
+        .thinking-text {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #495057;
+            margin: 0;
+        }
+
+        .answer-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            margin-top: 10px;
+        }
+
         @media (max-width: 768px) {
             .content {
                 grid-template-columns: 1fr;
@@ -288,15 +357,24 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="variantSelect">Model Variant</label>
+                    <label for="variantSelect" id="variantLabel">Model Variant</label>
+                    <!-- Standard variant select (for most models) -->
                     <select id="variantSelect">
                         <option value="">Select a family first</option>
                     </select>
+                    <!-- Datamarkin variant input (for training_id) -->
+                    <input type="text" id="variantInput" style="display: none;"
+                           placeholder="Enter your training_id (e.g., wings-v4, my-custom-model)">
                 </div>
                 <div class="form-group" id="promptGroup" style="display: none;">
                     <label for="promptInput">Prompt (for vision-language models)</label>
                     <input type="text" id="promptInput" placeholder="Describe this image in detail."
                            value="Describe this image in detail.">
+                </div>
+                <div class="form-group" id="datamarkinGroup" style="display: none;">
+                    <label for="datamarkinTokenInput">Bearer Token (optional)</label>
+                    <input type="text" id="datamarkinTokenInput"
+                           placeholder="Leave empty for public models or if using DATAMARKIN_TOKEN env var">
                 </div>
                 <button id="predictBtn" class="btn" style="width: 100%;">
                     ▶️ Run Prediction
@@ -341,29 +419,54 @@
         document.getElementById('familySelect').addEventListener('change', function() {
             const family = this.value;
             const variantSelect = document.getElementById('variantSelect');
+            const variantInput = document.getElementById('variantInput');
+            const variantLabel = document.getElementById('variantLabel');
             const promptGroup = document.getElementById('promptGroup');
+            const datamarkinGroup = document.getElementById('datamarkinGroup');
 
             if (!family) {
                 variantSelect.innerHTML = '<option value="">Select a family first</option>';
+                variantSelect.style.display = 'block';
+                variantInput.style.display = 'none';
                 promptGroup.style.display = 'none';
+                datamarkinGroup.style.display = 'none';
                 return;
             }
 
-            const variants = availableModels[family].variants;
-            variantSelect.innerHTML = '<option value="">Select a variant</option>';
-
-            variants.forEach(variant => {
-                const option = document.createElement('option');
-                option.value = variant;
-                option.textContent = variant;
-                variantSelect.appendChild(option);
-            });
-
-            // Show prompt input for vision-language models
-            if (family === 'qwen2.5_vl') {
-                promptGroup.style.display = 'block';
-            } else {
+            // For datamarkin: show text input for training_id
+            if (family === 'datamarkin') {
+                variantSelect.style.display = 'none';
+                variantInput.style.display = 'block';
+                variantInput.value = '';  // Clear previous value
+                variantLabel.textContent = 'Training ID';
                 promptGroup.style.display = 'none';
+                datamarkinGroup.style.display = 'block';
+            }
+            // For other families: show dropdown
+            else {
+                variantSelect.style.display = 'block';
+                variantInput.style.display = 'none';
+                variantLabel.textContent = 'Model Variant';
+
+                const variants = availableModels[family].variants;
+                variantSelect.innerHTML = '<option value="">Select a variant</option>';
+
+                variants.forEach(variant => {
+                    const option = document.createElement('option');
+                    option.value = variant;
+                    option.textContent = variant;
+                    variantSelect.appendChild(option);
+                });
+
+                // Show prompt input for vision-language models
+                if (family === 'qwen2.5_vl' || family === 'qwen3_vl') {
+                    promptGroup.style.display = 'block';
+                    datamarkinGroup.style.display = 'none';
+                }
+                else {
+                    promptGroup.style.display = 'none';
+                    datamarkinGroup.style.display = 'none';
+                }
             }
         });
 
@@ -385,10 +488,21 @@
         // Run prediction
         document.getElementById('predictBtn').addEventListener('click', async function() {
             const family = document.getElementById('familySelect').value;
-            const variant = document.getElementById('variantSelect').value;
+
+            // Get variant from appropriate source based on family
+            let variant;
+            if (family === 'datamarkin') {
+                variant = document.getElementById('variantInput').value.trim();
+            } else {
+                variant = document.getElementById('variantSelect').value;
+            }
 
             if (!family || !variant) {
-                showError('Please select both model family and variant');
+                if (family === 'datamarkin') {
+                    showError('Please enter a training_id');
+                } else {
+                    showError('Please select both model family and variant');
+                }
                 return;
             }
 
@@ -414,11 +528,19 @@
             const formData = new FormData();
             formData.append('file', imageBlob);
 
-            // Build URL with prompt parameter for vision-language models
+            // Build URL with parameters for specific model families
             let url = `/predict/${family}/${variant}`;
-            if (family === 'qwen2.5_vl') {
+
+            if (family === 'qwen2.5_vl' || family === 'qwen3_vl') {
+                // Add prompt parameter for vision-language models
                 const prompt = document.getElementById('promptInput').value || 'Describe this image in detail.';
                 url += `?prompt=${encodeURIComponent(prompt)}`;
+            } else if (family === 'datamarkin') {
+                // Add bearer_token parameter for datamarkin models
+                const token = document.getElementById('datamarkinTokenInput').value;
+                if (token) {
+                    url += `?bearer_token=${encodeURIComponent(token)}`;
+                }
             }
 
             try {
@@ -499,12 +621,38 @@
 
             // Handle vision-language model responses
             if (data.text) {
-                html += `<h3 style="margin-top: 20px;">Response:</h3>`;
-                html += `<div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-top: 10px;">`;
-                html += `<p style="margin: 0; white-space: pre-wrap;">${data.text}</p>`;
+                // Show thinking steps if available (for qwen3_vl models)
+                if (data.thinking) {
+                    html += `<h3 style="margin-top: 20px;">💭 Reasoning with Thinking</h3>`;
+
+                    // Add expandable thinking section
+                    html += `
+                        <div class="thinking-container">
+                            <div class="thinking-toggle" onclick="toggleThinking()">
+                                <div class="thinking-toggle-label">
+                                    <span>💭</span>
+                                    <span>Show Reasoning Steps</span>
+                                </div>
+                                <span class="thinking-arrow">▼</span>
+                            </div>
+                            <div class="thinking-content">
+                                <pre class="thinking-text">${escapeHtml(data.thinking)}</pre>
+                            </div>
+                        </div>
+                    `;
+
+                    // Show final answer
+                    html += `<h3 style="margin-top: 20px;">Final Answer:</h3>`;
+                } else {
+                    html += `<h3 style="margin-top: 20px;">Response:</h3>`;
+                }
+
+                html += `<div class="answer-section">`;
+                html += `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.text)}</p>`;
                 html += `</div>`;
+
                 if (data.prompt) {
-                    html += `<p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;"><strong>Prompt:</strong> ${data.prompt}</p>`;
+                    html += `<p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;"><strong>Prompt:</strong> ${escapeHtml(data.prompt)}</p>`;
                 }
             }
             // Display predictions for object detection models
@@ -550,6 +698,32 @@
             }
 
             content.innerHTML = html;
+        }
+
+        // Toggle thinking section expansion
+        function toggleThinking() {
+            const thinkingContent = document.querySelector('.thinking-content');
+            const thinkingArrow = document.querySelector('.thinking-arrow');
+
+            if (thinkingContent && thinkingArrow) {
+                thinkingContent.classList.toggle('expanded');
+                thinkingArrow.classList.toggle('expanded');
+
+                // Update label text
+                const label = document.querySelector('.thinking-toggle-label span:last-child');
+                if (label) {
+                    label.textContent = thinkingContent.classList.contains('expanded')
+                        ? 'Hide Reasoning Steps'
+                        : 'Show Reasoning Steps';
+                }
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Initialize on page load
