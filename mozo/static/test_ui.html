@@ -459,7 +459,7 @@
                 });
 
                 // Show prompt input for vision-language models
-                if (family === 'qwen2.5_vl' || family === 'qwen3_vl') {
+                if (family === 'qwen2.5_vl' || family === 'qwen3_vl' || family === 'blip_vqa' || family === 'florence2') {
                     promptGroup.style.display = 'block';
                     datamarkinGroup.style.display = 'none';
                 }
@@ -531,7 +531,7 @@
             // Build URL with parameters for specific model families
             let url = `/predict/${family}/${variant}`;
 
-            if (family === 'qwen2.5_vl' || family === 'qwen3_vl') {
+            if (family === 'qwen2.5_vl' || family === 'qwen3_vl' || family === 'blip_vqa' || family === 'florence2') {
                 // Add prompt parameter for vision-language models
                 const prompt = document.getElementById('promptInput').value || 'Describe this image in detail.';
                 url += `?prompt=${encodeURIComponent(prompt)}`;
