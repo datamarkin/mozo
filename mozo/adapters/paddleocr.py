@@ -149,21 +149,28 @@ class PaddleOCRPredictor:
         # Try running OCR with different parameter combinations for compatibility
         try:
             # Attempt 1: Try with cls parameter (angle classification)
-            results = self.ocr.ocr(image, cls=True)
+            ocr_output = self.ocr.ocr(image, cls=True)
         except TypeError:
             try:
                 # Attempt 2: Try without cls parameter
-                results = self.ocr.ocr(image)
+                ocr_output = self.ocr.ocr(image)
             except Exception as e:
                 raise RuntimeError(f"Prediction failed: {e}")
 
-        # Handle empty results
-        if not results or results[0] is None:
+        # The result is a list containing results for each image. Since we process
+        # one image, we extract the first element.
+        # It can be [None] or [[]] if no text is found.
+        if not ocr_output or not ocr_output[0]:
             print("No text detected in image.")
             return pf.detections.Detections()
 
+        results = ocr_output[0]
+
         # Use PixelFlow's built-in converter for consistent OCRData structure
-        detections = pf.detections.from_paddleocr(results, language=self.language)
+        try:
+            detections = pf.detections.from_paddleocr(results, language=self.language)
+        except Exception as e:
+            raise RuntimeError(f"PixelFlow conversion failed: {e}")
 
         print(f"Found {len(detections)} text regions.")
         return detections
