@@ -147,6 +147,7 @@ class PPStructurePredictor:
         print(f"Running PP-StructureV3 prediction (variant: {self.variant})...")
 
         # PPStructureV3 expects BGR format (OpenCV standard) - no conversion needed
+        # Unlike EasyOCR which requires RGB, PP-Structure works directly with OpenCV images
         # Run structure analysis - try different invocation methods for compatibility
         try:
             # Attempt 1: Try with predict() method
