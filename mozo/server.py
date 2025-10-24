@@ -5,10 +5,13 @@ import numpy as np
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from typing import Optional
+from PIL import Image
 
-# Import model manager and registry utilities
+# Import model manager, factory, and registry utilities
 from .manager import ModelManager
-from .registry import get_available_families, get_available_variants, get_model_info
+from .factory import ModelFactory
+from .registry import get_available_families, get_model_info
 
 import os
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -24,14 +27,15 @@ app = FastAPI(
 @app.on_event("startup")
 def setup_manager():
     """
-    Initialize model manager (no models loaded yet - they load on-demand).
+    Initialize model manager and factory (no models loaded yet - they load on-demand).
 
     This is much faster than the old approach which loaded all models at startup.
     Models will be loaded automatically when first requested.
     """
-    print("[Server] Initializing model manager...")
+    print("[Server] Initializing model manager and factory...")
     app.state.model_manager = ModelManager()
-    print("[Server] Model manager ready. Models will be loaded on-demand.")
+    app.state.model_factory = ModelFactory()
+    print("[Server] Model manager and factory ready. Models will be loaded on-demand.")
 
 # --- API Endpoints ---
 @app.get("/", summary="Health Check", description="Check if the API server is ready.")
@@ -87,26 +91,29 @@ async def predict(
     family: str,
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
-    prompt: str = "Describe this image in detail."
+    mask: Optional[UploadFile] = File(None, description="Mask file for inpainting models."),
+    prompt: str = "Describe this image in detail.",
+    bearer_token: Optional[str] = None
 ):
     """
     Universal prediction endpoint supporting all model families and variants.
 
     Args:
-        family: Model family (e.g., 'detectron2', 'depth_anything', 'qwen2.5_vl')
-        variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'small', '7b-instruct')
+        family: Model family (e.g., 'detectron2', 'datamarkin', 'stability_inpainting')
+        variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
+                For datamarkin, variant is the training_id
         file: Image file to process
-        prompt: Text prompt for vision-language models (used by qwen2.5_vl)
+        mask: Mask file for inpainting models
+        prompt: Text prompt for generative models
+        bearer_token: Authentication token for datamarkin models (optional)
 
     Returns:
-        JSON response with predictions (format depends on model type)
+        JSON response with predictions or an image
 
     Examples:
         POST /predict/detectron2/mask_rcnn_R_50_FPN_3x
-        POST /predict/detectron2/faster_rcnn_X_101_32x8d_FPN_3x
-        POST /predict/depth_anything/small
-        POST /predict/depth_anything/large
-        POST /predict/qwen2.5_vl/7b-instruct?prompt=What objects are in this image?
+        POST /predict/datamarkin/wings-v4?bearer_token=xxx
+        POST /predict/qwen3_vl/2b-thinking?prompt=What is in this image?
     """
     if not hasattr(app.state, "model_manager"):
         raise HTTPException(status_code=503, detail="Server is starting up, model manager not initialized.")
@@ -120,9 +127,22 @@ async def predict(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read or decode the image file: {e}")
 
+    # Read and decode mask if provided
+    mask_image = None
+    if mask:
+        try:
+            mask_contents = await mask.read()
+            mask_image = Image.open(io.BytesIO(mask_contents))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read or decode the mask file: {e}")
+
     # Get or load model (lazy loading happens here)
     try:
-        model = app.state.model_manager.get_model(family, variant)
+        if family == 'datamarkin':
+            # Pass bearer_token for datamarkin models
+            model = app.state.model_manager.get_model(family, variant, bearer_token=bearer_token)
+        else:
+            model = app.state.model_manager.get_model(family, variant)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -130,26 +150,26 @@ async def predict(
 
     # Run prediction
     try:
-        # Vision-language models need prompt parameter
-        if family == 'qwen2.5_vl':
+        if family in ['qwen2.5_vl', 'qwen3_vl']:
             results = model.predict(image, prompt=prompt)
+        elif family == 'stability_inpainting':
+            if mask_image is None:
+                raise HTTPException(status_code=400, detail="Inpainting model requires a mask file.")
+            pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            results = model.predict(image=pil_image, mask=mask_image, prompt=prompt)
         else:
             results = model.predict(image)
 
         # Handle different return types
-        if hasattr(results, 'save'):  # It's a PIL Image (depth map)
+        if hasattr(results, 'save'):  # It's a PIL Image
             buffer = io.BytesIO()
             results.save(buffer, format="PNG")
             buffer.seek(0)
             return StreamingResponse(buffer, media_type="image/png")
-
         elif hasattr(results, 'to_dict'):  # It's a PixelFlow Detections object
-            # PixelFlow's to_dict() now properly serializes numpy arrays to base64/lists
             return JSONResponse(content=results.to_dict())
-
         else:  # It's a dict (VLM results)
             return JSONResponse(content=results)
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
@@ -158,28 +178,87 @@ async def predict(
 
 @app.get("/models",
          summary="List Available Models",
-         description="Get all available model families and their variants.")
+         description="Get all available model families with their variants and loaded status.")
 def list_available_models():
     """
-    List all available model families and their variants.
+    List all available model families with their variants.
+
+    Variants are discovered from adapters (single source of truth).
+    Also returns which variants are currently loaded in memory.
 
     Returns:
-        dict: Available models organized by family, with variant lists and descriptions
+        dict: Available models organized by family, with variant lists, descriptions, and loaded status
     """
+    if not hasattr(app.state, "model_factory"):
+        raise HTTPException(status_code=503, detail="Server is starting up, model factory not initialized.")
+
     families = get_available_families()
+    loaded_models = app.state.model_manager.list_loaded_models() if hasattr(app.state, "model_manager") else []
     result = {}
 
     for family in families:
-        variants = get_available_variants(family)
-        info = get_model_info(family)
-        result[family] = {
-            'task_type': info['task_type'],
-            'description': info['description'],
-            'num_variants': len(variants),
-            'variants': variants
-        }
+        try:
+            # Get variants from adapter (single source of truth)
+            variants = app.state.model_factory.get_available_variants(family)
+
+            # Get family info from registry
+            info = get_model_info(family)
+
+            # Find which variants are loaded
+            loaded_variants = [
+                variant for variant in variants
+                if f"{family}/{variant}" in loaded_models
+            ]
+
+            result[family] = {
+                'task_type': info['task_type'],
+                'description': info['description'],
+                'num_variants': len(variants),
+                'variants': variants,
+                'loaded': loaded_variants,
+            }
+        except Exception as e:
+            # If adapter fails to load, return error state
+            result[family] = {
+                'error': str(e),
+                'variants': [],
+                'loaded': [],
+            }
 
     return result
+
+
+@app.get("/models/{family}/variants",
+         summary="Get Model Variants",
+         description="Get available variants for a specific model family.")
+def get_family_variants(family: str):
+    """
+    Get available variants for a specific model family.
+
+    Variants are discovered from the adapter's SUPPORTED_VARIANTS (single source of truth).
+
+    Args:
+        family: Model family name (e.g., 'detectron2', 'paddleocr')
+
+    Returns:
+        dict: Family name and list of available variants
+
+    Example:
+        GET /models/detectron2/variants
+        Returns: {"family": "detectron2", "variants": ["mask_rcnn_R_50_FPN_3x", ...]}
+    """
+    if not hasattr(app.state, "model_factory"):
+        raise HTTPException(status_code=503, detail="Server is starting up, model factory not initialized.")
+
+    try:
+        variants = app.state.model_factory.get_available_variants(family)
+        return {
+            "family": family,
+            "variants": variants,
+            "num_variants": len(variants)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/models/loaded",

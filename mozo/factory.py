@@ -62,9 +62,35 @@ class ModelFactory:
                 f"Module '{module_path}' does not have class '{class_name}': {e}"
             ) from e
 
+    def _normalize_variant_params(self, variant_value, variant_name):
+        """
+        Normalize variant parameters to a dictionary.
+
+        Some adapters have SUPPORTED_VARIANTS with dict values (full config),
+        others have string values (model IDs). This normalizes both to dicts.
+
+        Args:
+            variant_value: Either a dict or a string from SUPPORTED_VARIANTS
+            variant_name: The variant name (for creating dict from string)
+
+        Returns:
+            dict: Normalized parameters dictionary
+        """
+        if isinstance(variant_value, dict):
+            # Already a dict - make a copy to avoid mutation
+            return variant_value.copy()
+        elif isinstance(variant_value, str):
+            # String value (model ID) - convert to dict with variant parameter
+            return {'variant': variant_name}
+        else:
+            # Unknown type - return minimal dict
+            return {'variant': variant_name}
+
     def create_model(self, family, variant, **override_params):
         """
         Create a model instance from family and variant identifiers.
+
+        Variants are discovered from the adapter's SUPPORTED_VARIANTS (single source of truth).
 
         Args:
             family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
@@ -77,7 +103,7 @@ class ModelFactory:
             Instantiated model predictor object
 
         Raises:
-            ValueError: If family or variant is not found in registry
+            ValueError: If family or variant is not found
             ImportError: If adapter class cannot be loaded
 
         Example:
@@ -97,40 +123,53 @@ class ModelFactory:
 
         family_config = MODEL_REGISTRY[family]
 
-        # Special handling for datamarkin: dynamic variants
-        if family == 'datamarkin':
-            # If variant not in registry, create it dynamically
-            if variant not in family_config['variants']:
-                # Variant name IS the training_id for datamarkin
-                variant_params = {
-                    'variant': variant,  # training_id
-                    'bearer_token': None,
-                    'base_url': 'https://vision.datamarkin.com',
-                    'timeout': 30,
-                }
-                print(f"[ModelFactory] Creating dynamic datamarkin variant: {variant}")
-            else:
-                # Use predefined variant config from registry
-                variant_params = family_config['variants'][variant].copy()
-        else:
-            # Standard behavior: variant must exist in registry
-            if variant not in family_config['variants']:
-                available_variants = list(family_config['variants'].keys())
-                raise ValueError(
-                    f"Unknown variant '{variant}' for family '{family}'. "
-                    f"Available variants: {available_variants}"
-                )
-            variant_params = family_config['variants'][variant].copy()
-
         # Get adapter class information
         module_path = family_config['module']
         class_name = family_config['adapter_class']
 
+        # Load the adapter class (needed to check SUPPORTED_VARIANTS)
+        adapter_class = self._get_adapter_class(module_path, class_name)
+
+        # Determine variant parameters from adapter's SUPPORTED_VARIANTS or SUPPORTED_CONFIGS
+        # Some adapters use SUPPORTED_VARIANTS, some use SUPPORTED_CONFIGS (detectron2)
+        supported_variants = None
+        if hasattr(adapter_class, 'SUPPORTED_VARIANTS'):
+            supported_variants = adapter_class.SUPPORTED_VARIANTS
+        elif hasattr(adapter_class, 'SUPPORTED_CONFIGS'):
+            supported_variants = adapter_class.SUPPORTED_CONFIGS
+
+        if supported_variants:
+            # Special handling for datamarkin: dynamic variants
+            if family == 'datamarkin':
+                if variant not in supported_variants:
+                    # Create dynamic variant - variant name IS the training_id
+                    variant_params = {
+                        'variant': variant,  # training_id
+                        'bearer_token': None,
+                        'base_url': 'https://vision.datamarkin.com',
+                        'timeout': 30,
+                    }
+                    print(f"[ModelFactory] Creating dynamic datamarkin variant: {variant}")
+                else:
+                    # Use predefined variant from adapter
+                    variant_params = self._normalize_variant_params(supported_variants[variant], variant)
+            else:
+                # Standard behavior: variant must exist in adapter's SUPPORTED_VARIANTS
+                if variant not in supported_variants:
+                    available_variants = list(supported_variants.keys())
+                    raise ValueError(
+                        f"Unknown variant '{variant}' for family '{family}'. "
+                        f"Available variants: {available_variants}"
+                    )
+                # Normalize variant params (handle both string and dict values)
+                variant_params = self._normalize_variant_params(supported_variants[variant], variant)
+        else:
+            # Adapter has no SUPPORTED_VARIANTS or SUPPORTED_CONFIGS - use empty config
+            variant_params = {}
+            print(f"[ModelFactory] Warning: {class_name} has no variant registry, using empty config")
+
         # Merge variant params with override params (override takes precedence)
         final_params = {**variant_params, **override_params}
-
-        # Load the adapter class
-        adapter_class = self._get_adapter_class(module_path, class_name)
 
         # Instantiate the adapter with final parameters
         try:
@@ -154,6 +193,8 @@ class ModelFactory:
         """
         Get list of all available variants for a model family.
 
+        Variants are discovered from the adapter's SUPPORTED_VARIANTS or SUPPORTED_CONFIGS.
+
         Args:
             family: Model family name
 
@@ -165,7 +206,22 @@ class ModelFactory:
         """
         if family not in MODEL_REGISTRY:
             raise ValueError(f"Unknown model family: '{family}'")
-        return list(MODEL_REGISTRY[family]['variants'].keys())
+
+        family_config = MODEL_REGISTRY[family]
+        module_path = family_config['module']
+        class_name = family_config['adapter_class']
+
+        # Load adapter class to read SUPPORTED_VARIANTS or SUPPORTED_CONFIGS
+        adapter_class = self._get_adapter_class(module_path, class_name)
+
+        # Check for SUPPORTED_VARIANTS first, then SUPPORTED_CONFIGS (detectron2)
+        if hasattr(adapter_class, 'SUPPORTED_VARIANTS'):
+            return list(adapter_class.SUPPORTED_VARIANTS.keys())
+        elif hasattr(adapter_class, 'SUPPORTED_CONFIGS'):
+            return list(adapter_class.SUPPORTED_CONFIGS.keys())
+        else:
+            # No variant registry - return empty list
+            return []
 
     def clear_cache(self):
         """Clear the adapter class cache."""
