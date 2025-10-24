@@ -25,37 +25,46 @@ class PaddleOCRPredictor:
     Supports mobile and server variants with multi-language capabilities.
     """
 
+    # Variant configurations
+    # Note: These configs contain both __init__ parameters (variant, device)
+    # and internal settings (det_model, rec_model, use_angle_cls, lang)
+    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
     SUPPORTED_VARIANTS = {
         'mobile': {
-            'description': 'Mobile model - Fast inference for edge devices',
+            'variant': 'mobile',
+            'device': 'cpu',
             'det_model': None,  # Use default PP-OCRv5_mobile_det
             'rec_model': None,  # Use default PP-OCRv5_mobile_rec
             'use_angle_cls': True,
             'lang': 'en',
         },
         'server': {
-            'description': 'Server model - High accuracy for server-side processing',
+            'variant': 'server',
+            'device': 'cpu',
             'det_model': None,  # Use default PP-OCRv5_server_det
             'rec_model': None,  # Use default PP-OCRv5_server_rec
             'use_angle_cls': True,
             'lang': 'en',
         },
         'mobile-chinese': {
-            'description': 'Mobile model - Chinese text recognition',
+            'variant': 'mobile-chinese',
+            'device': 'cpu',
             'det_model': None,
             'rec_model': None,
             'use_angle_cls': True,
             'lang': 'ch',  # Simplified Chinese
         },
         'server-chinese': {
-            'description': 'Server model - High accuracy Chinese recognition',
+            'variant': 'server-chinese',
+            'device': 'cpu',
             'det_model': None,
             'rec_model': None,
             'use_angle_cls': True,
             'lang': 'ch',
         },
         'mobile-multilingual': {
-            'description': 'Mobile model - Multi-language support',
+            'variant': 'mobile-multilingual',
+            'device': 'cpu',
             'det_model': None,
             'rec_model': None,
             'use_angle_cls': True,
