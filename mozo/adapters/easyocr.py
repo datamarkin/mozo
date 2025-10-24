@@ -41,17 +41,12 @@ class EasyOCRPredictor:
             'device': 'cpu',
         },
         'multilingual': {
-            'languages': ['en', 'ch_sim', 'fr', 'de', 'es'],
+            'languages': ['en', 'fr', 'de', 'es'],  # Latin-script languages only (compatible with each other)
             'recog_network': None,
             'device': 'cpu',
         },
         'chinese': {
             'languages': ['ch_sim', 'en'],
-            'recog_network': None,
-            'device': 'cpu',
-        },
-        'custom': {
-            'languages': None,  # User must provide
             'recog_network': None,
             'device': 'cpu',
         },
@@ -62,15 +57,14 @@ class EasyOCRPredictor:
         Initialize EasyOCR predictor with specific variant.
 
         Args:
-            variant: Model variant name ('english-light', 'english-full', 'multilingual', 'chinese', 'custom')
+            variant: Model variant name ('english-light', 'english-full', 'multilingual', 'chinese')
             **kwargs: Override parameters (languages, device, recog_network)
                      languages: Language code list override (e.g., ['en'], ['ch_sim', 'en'])
-                               Required for 'custom' variant, optional for others
                      device: Device to run on - 'cpu' or 'gpu'
                      Additional parameters for easyocr.Reader (download_enabled, model_storage_directory, etc.)
 
         Raises:
-            ValueError: If variant is not supported or custom variant without languages
+            ValueError: If variant is not supported
         """
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
@@ -83,17 +77,8 @@ class EasyOCRPredictor:
 
         self.variant = variant
 
-        # Determine language list
-        if variant == 'custom':
-            if 'languages' not in config or config['languages'] is None:
-                raise ValueError(
-                    "Custom variant requires 'languages' parameter. "
-                    "Example: languages=['en', 'fr', 'de']"
-                )
-            self.languages = config['languages']
-        else:
-            # Use variant's default languages, but allow override from kwargs
-            self.languages = config.get('languages')
+        # Determine language list - use variant's default languages, but allow override from kwargs
+        self.languages = config.get('languages')
 
         # Determine device (EasyOCR uses gpu=True/False)
         device = config.get('device', 'cpu')
