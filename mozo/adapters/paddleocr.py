@@ -23,64 +23,29 @@ class PaddleOCRPredictor:
     """
     Universal PaddleOCR adapter for PP-OCRv5 text recognition.
     Supports mobile and server variants with multi-language capabilities.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations
-    # Note: These configs contain both __init__ parameters (variant, device)
-    # and internal settings (det_model, rec_model, use_angle_cls, lang)
-    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        'mobile': {
-            'variant': 'mobile',
-            'device': 'cpu',
-            'det_model': None,  # Use default PP-OCRv5_mobile_det
-            'rec_model': None,  # Use default PP-OCRv5_mobile_rec
-            'use_angle_cls': True,
-            'lang': 'en',
-        },
-        'server': {
-            'variant': 'server',
-            'device': 'cpu',
-            'det_model': None,  # Use default PP-OCRv5_server_det
-            'rec_model': None,  # Use default PP-OCRv5_server_rec
-            'use_angle_cls': True,
-            'lang': 'en',
-        },
-        'mobile-chinese': {
-            'variant': 'mobile-chinese',
-            'device': 'cpu',
-            'det_model': None,
-            'rec_model': None,
-            'use_angle_cls': True,
-            'lang': 'ch',  # Simplified Chinese
-        },
-        'server-chinese': {
-            'variant': 'server-chinese',
-            'device': 'cpu',
-            'det_model': None,
-            'rec_model': None,
-            'use_angle_cls': True,
-            'lang': 'ch',
-        },
-        'mobile-multilingual': {
-            'variant': 'mobile-multilingual',
-            'device': 'cpu',
-            'det_model': None,
-            'rec_model': None,
-            'use_angle_cls': True,
-            'lang': 'en',  # Can be changed via language parameter
-        },
+        'mobile': {'language': 'en', 'device': 'cpu', 'use_angle_cls': True},
+        'server': {'language': 'en', 'device': 'cpu', 'use_angle_cls': True},
+        'mobile-chinese': {'language': 'ch', 'device': 'cpu', 'use_angle_cls': True},
+        'server-chinese': {'language': 'ch', 'device': 'cpu', 'use_angle_cls': True},
+        'mobile-multilingual': {'language': 'en', 'device': 'cpu', 'use_angle_cls': True},
     }
 
-    def __init__(self, variant='mobile', language=None, device='cpu', **kwargs):
+    def __init__(self, variant='mobile', **kwargs):
         """
         Initialize PaddleOCR predictor with specific variant.
 
         Args:
-            variant: Model variant name ('mobile', 'server', 'mobile-chinese', 'server-chinese')
-            language: Language code override (e.g., 'en', 'ch', 'fr', 'german', 'korean', 'japan')
-                     If None, uses variant's default language
-            device: Device to run on - 'cpu' or 'gpu'
+            variant: Model variant name ('mobile', 'server', 'mobile-chinese', 'server-chinese', 'mobile-multilingual')
+            **kwargs: Override parameters (language, device, use_angle_cls, det_model, rec_model)
+                     language: Language code override (e.g., 'en', 'ch', 'fr', 'german', 'korean', 'japan')
+                              If None, uses variant's default language
+                     device: Device to run on - 'cpu' or 'gpu'
 
         Raises:
             ValueError: If variant is not supported
@@ -88,29 +53,29 @@ class PaddleOCRPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
-        self.variant = variant
-        variant_config = self.SUPPORTED_VARIANTS[variant]
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
 
-        # Override language if provided
-        self.language = language if language is not None else variant_config['lang']
+        self.variant = variant
+        self.language = config.get('language', 'en')
 
         print(f"Loading PaddleOCR PP-OCRv5 (variant: {variant}, language: {self.language})...")
 
         # Build initialization parameters with only essential params
         # Note: PaddleOCR API varies across versions, so we use minimal params
         ocr_params = {
-            'use_angle_cls': variant_config['use_angle_cls'],
+            'use_angle_cls': config.get('use_angle_cls', True),
             'lang': self.language,
         }
 
         # Add custom model paths if specified (for advanced users)
-        if variant_config.get('det_model'):
-            ocr_params['det_model_dir'] = variant_config['det_model']
-        if variant_config.get('rec_model'):
-            ocr_params['rec_model_dir'] = variant_config['rec_model']
+        if config.get('det_model'):
+            ocr_params['det_model_dir'] = config['det_model']
+        if config.get('rec_model'):
+            ocr_params['rec_model_dir'] = config['rec_model']
 
         # Try to initialize with progressive parameter removal for compatibility
         init_attempts = [

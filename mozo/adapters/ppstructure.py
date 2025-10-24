@@ -23,56 +23,54 @@ class PPStructurePredictor:
     """
     Universal PP-StructureV3 adapter for document structure analysis.
     Supports layout detection, table recognition, and formula recognition.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations
-    # Note: These configs contain both __init__ parameters (variant, device)
-    # and internal settings (use_doc_orientation_classify, etc.)
-    # The internal settings are read by __init__ from SUPPORTED_VARIANTS
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
         'layout-only': {
-            'variant': 'layout-only',
-            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': False,
             'use_formula_recognition': False,
+            'language': 'en',
+            'device': 'cpu',
         },
         'full': {
-            'variant': 'full',
-            'device': 'cpu',
             'use_doc_orientation_classify': True,
             'use_doc_unwarping': True,
             'use_table_recognition': True,
             'use_formula_recognition': True,
+            'language': 'en',
+            'device': 'cpu',
         },
         'table-analysis': {
-            'variant': 'table-analysis',
-            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': True,
             'use_formula_recognition': False,
+            'language': 'en',
+            'device': 'cpu',
         },
         'formula-analysis': {
-            'variant': 'formula-analysis',
-            'device': 'cpu',
             'use_doc_orientation_classify': False,
             'use_doc_unwarping': False,
             'use_table_recognition': False,
             'use_formula_recognition': True,
+            'language': 'en',
+            'device': 'cpu',
         },
     }
 
-    def __init__(self, variant='full', language='en', device='cpu', **kwargs):
+    def __init__(self, variant='full', **kwargs):
         """
         Initialize PP-StructureV3 predictor with specific variant.
 
         Args:
             variant: Model variant name ('layout-only', 'full', 'table-analysis', 'formula-analysis')
-            language: Language code (e.g., 'en', 'ch', 'fr')
-            device: Device to run on - 'cpu' or 'gpu'
-            **kwargs: Additional parameters to override variant defaults
+            **kwargs: Override parameters (language, device, use_doc_orientation_classify,
+                     use_doc_unwarping, use_table_recognition, use_formula_recognition)
 
         Raises:
             ValueError: If variant is not supported
@@ -80,25 +78,24 @@ class PPStructurePredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
 
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+
         self.variant = variant
-        self.language = language
-        variant_config = self.SUPPORTED_VARIANTS[variant]
+        self.language = config.get('language', 'en')
 
         print(f"Loading PP-StructureV3 (variant: {variant}, language: {self.language})...")
 
         # Build initialization parameters
         pipeline_params = {
-            'use_doc_orientation_classify': variant_config.get('use_doc_orientation_classify', False),
-            'use_doc_unwarping': variant_config.get('use_doc_unwarping', False),
-            'use_table_recognition': variant_config.get('use_table_recognition', False),
-            'use_formula_recognition': variant_config.get('use_formula_recognition', False),
+            'use_doc_orientation_classify': config.get('use_doc_orientation_classify', False),
+            'use_doc_unwarping': config.get('use_doc_unwarping', False),
+            'use_table_recognition': config.get('use_table_recognition', False),
+            'use_formula_recognition': config.get('use_formula_recognition', False),
         }
-
-        # Allow kwargs to override variant defaults
-        pipeline_params.update(kwargs)
 
         # Try to initialize with progressive parameter removal for compatibility
         init_attempts = [

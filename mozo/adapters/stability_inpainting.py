@@ -15,25 +15,27 @@ except ImportError:
 class StabilityInpaintingPredictor:
     """
     Adapter for the Stability AI Stable Diffusion 2 Inpainting model.
+
+    Self-contained adapter with complete configuration.
     """
 
-    # Variant configurations (valid __init__ parameters only)
+    # Complete variant configuration (single source of truth)
     SUPPORTED_VARIANTS = {
-        'default': {'variant': 'default', 'device': 'cpu'},
+        'default': {'device': 'cpu'},
     }
 
-    # Model IDs mapped to variants (used internally by __init__)
+    # Model IDs mapped to variants (implementation detail)
     _MODEL_IDS = {
         'default': 'stabilityai/stable-diffusion-2-inpainting',
     }
 
-    def __init__(self, variant='default', device='cpu', **kwargs):
+    def __init__(self, variant='default', **kwargs):
         """
         Initialize the inpainting pipeline from Hugging Face.
 
         Args:
             variant: Model variant ('default')
-            device: Device to run on - 'cpu' or 'gpu'.
+            **kwargs: Override parameters (device)
 
         Raises:
             ValueError: If variant is not supported
@@ -41,8 +43,12 @@ class StabilityInpaintingPredictor:
         if variant not in self.SUPPORTED_VARIANTS:
             raise ValueError(
                 f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
             )
+
+        # Merge defaults with overrides
+        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+        device = config.get('device', 'cpu')
 
         self.variant = variant
         model_id = self._MODEL_IDS[variant]
