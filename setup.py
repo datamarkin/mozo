@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="mozo",
-    version="0.2.0",
+    version="0.3.0",
     description="Universal computer vision model serving library with dynamic model management and PixelFlow integration",
     long_description=long_description,
     long_description_content_type="text/markdown",
