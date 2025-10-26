@@ -159,8 +159,15 @@ async def predict(
         elif family == 'stability_inpainting':
             if mask_image is None:
                 raise HTTPException(status_code=400, detail="Inpainting model requires a mask file.")
-            pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            results = model.predict(image=pil_image, mask=mask_image, prompt=prompt)
+            # Convert PIL mask to numpy BGR array to match adapter's expected format
+            mask_array = np.array(mask_image)
+            # If mask is grayscale (H, W), convert to 3-channel (H, W, 3)
+            if len(mask_array.shape) == 2:
+                mask_array = cv2.cvtColor(mask_array, cv2.COLOR_GRAY2BGR)
+            # If mask is RGB (from PIL), convert to BGR
+            elif mask_array.shape[2] == 3:
+                mask_array = cv2.cvtColor(mask_array, cv2.COLOR_RGB2BGR)
+            results = model.predict(image=image, mask=mask_array, prompt=prompt)
         else:
             results = model.predict(image)
 
