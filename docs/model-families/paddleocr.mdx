@@ -1,0 +1,280 @@
+---
+title: PaddleOCR
+description: PP-OCRv5 text recognition with 80+ language support, mobile and server variants
+---
+
+PaddleOCR is a production-grade OCR engine from PaddlePaddle. Mozo provides 5 pre-configured variants using the latest PP-OCRv5 models, balancing speed and accuracy for different deployment needs.
+
+## The Problem
+
+Extracting text from images is essential for document processing, but achieving high accuracy requires sophisticated models. Existing OCR solutions either sacrifice accuracy for speed or require complex configuration for production deployment.
+
+PaddleOCR's PP-OCRv5 solves this with state-of-the-art accuracy while offering both lightweight mobile models and high-precision server models, all pre-configured and ready to use.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="mobile" icon="bolt">
+    **Best for speed**
+    - Fast inference
+    - Good accuracy
+    - Low memory footprint
+  </Card>
+
+  <Card title="server" icon="award">
+    **Best for accuracy**
+    - Highest English accuracy
+    - Production-ready
+    - PP-OCRv5 server models
+  </Card>
+</CardGroup>
+
+## All Variants
+
+| Variant | Language | Speed | Accuracy | Memory | Best For |
+|---------|----------|-------|----------|--------|----------|
+| mobile | EN | **Fastest** | Good | Low | Real-time, edge devices |
+| server | EN | Medium | **Best** | Medium | Production English OCR |
+| mobile-chinese | ZH, EN | Fast | Good | Low | Chinese documents (fast) |
+| server-chinese | ZH, EN | Medium | **Best** | Medium | Chinese documents (accuracy) |
+| mobile-multilingual | 80+ | Fast | Good | Low | Multi-language support |
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/paddleocr/server" \
+      -F "file=@document.jpg"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    with open('document.jpg', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/paddleocr/server',
+            files={'file': f}
+        )
+
+    results = response.json()
+    for item in results:
+        print(f"{item['text']} (confidence: {item['confidence']:.2f})")
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+```json
+[
+  {
+    "text": "Invoice Number: 2024-001",
+    "bbox": [120, 50, 380, 85],
+    "confidence": 0.99,
+    "angle": 0,
+    "direction": "horizontal"
+  },
+  {
+    "text": "Total: $1,234.56",
+    "bbox": [100, 450, 320, 485],
+    "confidence": 0.97,
+    "angle": 0,
+    "direction": "horizontal"
+  }
+]
+```
+
+<ResponseField name="text" type="string" required>
+  Recognized text content
+</ResponseField>
+
+<ResponseField name="bbox" type="array" required>
+  Bounding box coordinates `[x1, y1, x2, y2]` in image pixels
+</ResponseField>
+
+<ResponseField name="confidence" type="float" required>
+  Recognition confidence score (0.0 to 1.0)
+</ResponseField>
+
+<ResponseField name="angle" type="float">
+  Text rotation angle in degrees
+</ResponseField>
+
+<ResponseField name="direction" type="string">
+  Text direction: "horizontal" or "vertical"
+</ResponseField>
+
+## Supported Languages
+
+### English Variants (mobile, server)
+- English only
+- Optimized for Latin alphabet
+- Best accuracy for English text
+
+### Chinese Variants (mobile-chinese, server-chinese)
+- Chinese Simplified and Traditional
+- English (bilingual support)
+- Best for Chinese documents with mixed content
+
+### Multilingual Variant (mobile-multilingual)
+Supports 80+ languages including:
+- **Latin Scripts:** English, French, German, Spanish, Portuguese, Italian, Dutch, Swedish, Norwegian, Danish, Polish, Czech, Romanian, Turkish
+- **Asian Scripts:** Chinese, Japanese, Korean, Thai, Vietnamese, Hindi, Bengali, Telugu, Tamil, Kannada, Malayalam
+- **Cyrillic:** Russian, Ukrainian, Bulgarian, Serbian
+- **Arabic:** Arabic, Persian, Urdu
+- **Others:** Hebrew, Greek, and more
+
+<Note>
+For optimal accuracy with a specific language, set the `language` parameter explicitly when using the Python SDK.
+</Note>
+
+## Common Use Cases
+
+### Document Digitization
+```bash
+curl -X POST "http://localhost:8000/predict/paddleocr/server" \
+  -F "file=@contract.pdf"
+```
+
+### Receipt Scanning
+```bash
+curl -X POST "http://localhost:8000/predict/paddleocr/mobile" \
+  -F "file=@receipt.jpg"
+```
+
+### Multi-Language Documents
+```bash
+curl -X POST "http://localhost:8000/predict/paddleocr/mobile-multilingual" \
+  -F "file=@multilingual_doc.jpg"
+```
+
+### Chinese Invoice Processing
+```bash
+curl -X POST "http://localhost:8000/predict/paddleocr/server-chinese" \
+  -F "file=@chinese_invoice.jpg"
+```
+
+## Performance Characteristics
+
+### Speed Comparison
+
+- **mobile**: ~0.3-1 second per page (lightweight models)
+- **server**: ~1-3 seconds per page (high-accuracy models)
+- **mobile-chinese**: ~0.5-1.5 seconds per page
+- **server-chinese**: ~1.5-3.5 seconds per page
+- **mobile-multilingual**: ~0.4-1.2 seconds per page
+
+<Note>
+Times vary by image size, text density, and hardware
+</Note>
+
+### Accuracy Comparison
+
+PaddleOCR PP-OCRv5 achieves:
+- **English (server)**: 98%+ accuracy on printed text
+- **Chinese (server)**: 97%+ accuracy on printed text
+- **Mobile variants**: 2-5% lower accuracy than server, but 2-3x faster
+
+## PP-OCRv5 Features
+
+PaddleOCR uses the latest PP-OCRv5 models which include:
+
+- **Text Detection:** Identifies text regions with rotated and curved text support
+- **Text Recognition:** Recognizes text content with context-aware language models
+- **Angle Classification:** Automatically detects and corrects text rotation
+- **Multi-Language:** Single model supports 80+ languages
+
+## vs EasyOCR
+
+| Feature | PaddleOCR | EasyOCR |
+|---------|-----------|---------|
+| Setup | Easy | Easiest |
+| English accuracy | **Better (PP-OCRv5)** | Good |
+| Chinese accuracy | **Better** | Good |
+| Speed (mobile) | **Faster** | Good |
+| Speed (server) | Good | Faster (light variant) |
+| Language support | 80+ | 80+ |
+| Best for | Production accuracy | Quick integration |
+
+<Tip>
+Use **EasyOCR** for quick prototyping and simple use cases. Use **PaddleOCR** for production deployments requiring maximum accuracy.
+</Tip>
+
+## Advanced: Custom Language
+
+You can override the language parameter via Python SDK:
+
+```python
+from mozo import ModelManager
+
+manager = ModelManager()
+model = manager.get_model('paddleocr', 'mobile-multilingual', language='fr')  # French
+```
+
+Supported language codes:
+- `en` - English
+- `ch` - Chinese
+- `fr` - French
+- `german` - German
+- `korean` - Korean
+- `japan` - Japanese
+- [See full list in PaddleOCR docs](https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/multi_languages_en.md)
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Low accuracy on handwriting">
+    PaddleOCR is optimized for printed text. For handwriting, consider specialized handwriting recognition models.
+  </Accordion>
+
+  <Accordion title="Missing text in output">
+    - Ensure sufficient image resolution (min 150 DPI recommended)
+    - Check text contrast against background
+    - Try server variant for better accuracy
+    - For rotated text, ensure `use_angle_cls=True` (default)
+  </Accordion>
+
+  <Accordion title="Slow predictions">
+    - Use mobile variants instead of server
+    - Resize large images before processing:
+    ```python
+    from PIL import Image
+    img = Image.open('large.jpg')
+    img.thumbnail((1920, 1080))
+    img.save('resized.jpg')
+    ```
+  </Accordion>
+
+  <Accordion title="Wrong language detected">
+    Explicitly set language via Python SDK:
+    ```python
+    model = manager.get_model('paddleocr', 'mobile', language='fr')
+    ```
+  </Accordion>
+
+  <Accordion title="Installation error">
+    PaddleOCR requires separate installation:
+    ```bash
+    pip install paddleocr paddlepaddle
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="EasyOCR" href="/model-families/easyocr">
+    Easier setup alternative
+  </Card>
+
+  <Card title="PPStructure" href="/model-families/ppstructure">
+    Document structure analysis
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task vision with OCR
+  </Card>
+</CardGroup>

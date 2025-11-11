@@ -1,0 +1,554 @@
+---
+title: BLIP VQA
+description: Salesforce's vision-language model for fast, lightweight visual question answering
+---
+
+BLIP (Bootstrapping Language-Image Pre-training) is Salesforce's efficient vision-language model. Mozo provides 2 pre-configured variants optimized for visual question answering with excellent speed and low memory requirements.
+
+## The Problem
+
+Advanced vision-language models like Qwen2.5-VL provide exceptional accuracy but require 16GB+ RAM and slow inference times. Many applications need quick answers to simple visual questions without deploying large models.
+
+BLIP VQA solves this with compact models (0.5B parameters) that answer visual questions accurately in 1-2 seconds on CPU with only 4GB RAM.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="base" icon="bolt">
+    **Best for speed**
+    - Fastest inference
+    - Low memory (4GB RAM)
+    - Good accuracy
+  </Card>
+
+  <Card title="capfilt-large" icon="star">
+    **Best for accuracy**
+    - Higher quality answers
+    - Still fast (~2-3 seconds)
+    - Medium memory (6GB RAM)
+  </Card>
+</CardGroup>
+
+## All Variants
+
+| Variant | Parameters | Speed | Accuracy | Memory | Best For |
+|---------|-----------|-------|----------|--------|----------|
+| base | ~0.5B | **Fastest** | Good | 4GB | Real-time VQA, prototyping |
+| capfilt-large | ~1B | Fast | **Better** | 6GB | Production VQA, better quality |
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+      -F "file=@image.jpg" \
+      -F "prompt=What is in this image?"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    with open('photo.jpg', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/blip_vqa/base',
+            files={'file': f},
+            data={'prompt': 'What is the person wearing?'}
+        )
+
+    result = response.json()
+    print(result['text'])
+    ```
+  </Tab>
+
+  <Tab title="JavaScript">
+    ```javascript
+    const formData = new FormData();
+    formData.append('file', imageFile);
+    formData.append('prompt', 'How many people are in the image?');
+
+    const response = await fetch(
+      'http://localhost:8000/predict/blip_vqa/base',
+      { method: 'POST', body: formData }
+    );
+
+    const result = await response.json();
+    console.log(result.text);
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+BLIP VQA **requires** a `prompt` parameter. The model cannot generate descriptions without a question.
+</Warning>
+
+## Response Format
+
+```json
+{
+  "text": "a person wearing a blue shirt and jeans",
+  "prompt": "What is the person wearing?",
+  "variant": "base"
+}
+```
+
+<ResponseField name="text" type="string" required>
+  Answer to the visual question
+</ResponseField>
+
+<ResponseField name="prompt" type="string" required>
+  Original question asked
+</ResponseField>
+
+<ResponseField name="variant" type="string" required>
+  Model variant used (e.g., "base", "capfilt-large")
+</ResponseField>
+
+## Common Use Cases
+
+### Simple Visual Question Answering
+
+```bash
+# Object identification
+curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+  -F "file=@photo.jpg" \
+  -F "prompt=What is the main object in this image?"
+
+# Color questions
+curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+  -F "file=@car.jpg" \
+  -F "prompt=What color is the car?"
+
+# Counting objects
+curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+  -F "file=@crowd.jpg" \
+  -F "prompt=How many people are visible?"
+```
+
+### Action Recognition
+
+```bash
+curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+  -F "file=@sports.jpg" \
+  -F "prompt=What is the person doing?"
+```
+
+### Scene Understanding
+
+```bash
+curl -X POST "http://localhost:8000/predict/blip_vqa/base" \
+  -F "file=@landscape.jpg" \
+  -F "prompt=Where was this photo taken?"
+```
+
+### Accessibility Applications
+
+```python
+import requests
+import os
+
+# Batch process images with descriptive questions
+image_dir = "photos/"
+for filename in os.listdir(image_dir):
+    if filename.endswith(('.jpg', '.png')):
+        with open(os.path.join(image_dir, filename), 'rb') as f:
+            response = requests.post(
+                'http://localhost:8000/predict/blip_vqa/base',
+                files={'file': f},
+                data={'prompt': 'Describe what you see.'}
+            )
+            result = response.json()
+            print(f"{filename}: {result['text']}")
+```
+
+## Performance Characteristics
+
+### Speed Comparison
+
+- **base:** ~0.5-1.5 seconds per image (CPU)
+- **capfilt-large:** ~1-2.5 seconds per image (CPU)
+
+<Tip>
+BLIP VQA is 5-10x faster than Qwen2.5-VL on CPU, making it ideal for real-time applications.
+</Tip>
+
+### Memory Usage
+
+- **base:** ~4GB RAM
+- **capfilt-large:** ~6GB RAM
+
+### Accuracy
+
+- **Simple questions:** Excellent (comparable to larger models)
+- **Complex reasoning:** Good (but not as strong as Qwen2.5-VL)
+- **Counting:** Moderate (approximate counts, not exact)
+
+## Python SDK
+
+Use BLIP VQA models directly in Python without the HTTP server.
+
+### Quick Start
+
+```python
+from mozo import ModelManager
+import cv2
+
+# Initialize manager
+manager = ModelManager()
+
+# Load model
+model = manager.get_model('blip_vqa', 'base')
+
+# Load image
+image = cv2.imread('photo.jpg')
+
+# Ask a question
+result = model.predict(image, prompt="What is in this image?")
+
+# Access answer
+print(f"Q: {result['prompt']}")
+print(f"A: {result['text']}")
+```
+
+### Using Different Variants
+
+```python
+# Fast variant (base)
+base_model = manager.get_model('blip_vqa', 'base')
+result = base_model.predict(image, prompt="What color is the car?")
+print(result['text'])
+
+# Higher quality variant (capfilt-large)
+large_model = manager.get_model('blip_vqa', 'capfilt-large')
+result = large_model.predict(image, prompt="What is happening in this image?")
+print(result['text'])
+```
+
+### Batch Question Answering
+
+```python
+model = manager.get_model('blip_vqa', 'base')
+
+# Ask multiple questions about the same image
+questions = [
+    "What is the main object?",
+    "What color is it?",
+    "Where is this photo taken?",
+    "How many people are visible?"
+]
+
+for question in questions:
+    result = model.predict(image, prompt=question)
+    print(f"Q: {question}")
+    print(f"A: {result['text']}\n")
+```
+
+### Processing Multiple Images
+
+```python
+import os
+
+model = manager.get_model('blip_vqa', 'base')
+question = "What is the main subject of this image?"
+
+for filename in os.listdir('images/'):
+    if filename.endswith(('.jpg', '.png')):
+        image_path = os.path.join('images/', filename)
+        image = cv2.imread(image_path)
+
+        result = model.predict(image, prompt=question)
+        print(f"{filename}: {result['text']}")
+```
+
+### Building an Image Search Index
+
+```python
+from mozo import ModelManager
+import cv2
+import json
+
+model = manager.get_model('blip_vqa', 'capfilt-large')
+
+# Generate descriptions for all images
+image_index = []
+for filename in os.listdir('photos/'):
+    if filename.endswith(('.jpg', '.png')):
+        image = cv2.imread(os.path.join('photos/', filename))
+
+        result = model.predict(
+            image,
+            prompt="Describe the main content of this image."
+        )
+
+        image_index.append({
+            'filename': filename,
+            'description': result['text']
+        })
+
+# Save index
+with open('image_index.json', 'w') as f:
+    json.dump(image_index, f, indent=2)
+
+print(f"Indexed {len(image_index)} images")
+```
+
+### Comparative Analysis
+
+```python
+# Compare answers from both variants
+base = manager.get_model('blip_vqa', 'base')
+large = manager.get_model('blip_vqa', 'capfilt-large')
+
+question = "What is happening in this image?"
+
+base_result = base.predict(image, prompt=question)
+large_result = large.predict(image, prompt=question)
+
+print(f"Question: {question}")
+print(f"Base answer: {base_result['text']}")
+print(f"Large answer: {large_result['text']}")
+```
+
+### Interactive VQA Session
+
+```python
+import cv2
+
+model = manager.get_model('blip_vqa', 'base')
+image = cv2.imread('scene.jpg')
+
+print("Interactive VQA - Type 'quit' to exit")
+
+while True:
+    question = input("\nYour question: ")
+
+    if question.lower() in ['quit', 'exit', 'q']:
+        break
+
+    result = model.predict(image, prompt=question)
+    print(f"Answer: {result['text']}")
+```
+
+### Error Handling
+
+```python
+model = manager.get_model('blip_vqa', 'base')
+
+try:
+    # Missing prompt will raise an error
+    result = model.predict(image)
+except TypeError as e:
+    print(f"Error: {e}")
+    print("BLIP VQA requires a prompt parameter")
+
+# Correct usage
+result = model.predict(image, prompt="What is this?")
+print(result['text'])
+```
+
+### Memory Management
+
+```python
+from mozo import ModelManager
+
+manager = ModelManager()
+
+# Load and use model
+model = manager.get_model('blip_vqa', 'capfilt-large')
+result = model.predict(image, prompt="What do you see?")
+
+# Explicitly unload when done (frees ~6GB)
+manager.unload_model('blip_vqa', 'capfilt-large')
+
+# Or cleanup all inactive models
+manager.cleanup_inactive_models(inactive_seconds=600)
+```
+
+## Prompt Engineering Tips
+
+### Effective Prompts
+
+**Direct questions work best:**
+```bash
+# ✅ Good
+"What color is the car?"
+"How many people are in the image?"
+"What is the person wearing?"
+
+# ❌ Less effective
+"Describe everything about the car."
+"Tell me about this scene in detail."
+```
+
+**Keep it simple:**
+```bash
+# ✅ Good
+"What animal is this?"
+
+# ❌ Too complex
+"Identify the species of this animal and describe its habitat preferences."
+```
+
+### Question Types
+
+**BLIP VQA excels at:**
+- Object identification: "What is this?"
+- Color questions: "What color is the X?"
+- Simple counting: "How many X are there?"
+- Action recognition: "What is the person doing?"
+- Location/setting: "Where is this?"
+
+**BLIP VQA struggles with:**
+- Complex reasoning: "Why did this happen?"
+- Multi-step questions: "What happened first, then second?"
+- Detailed descriptions: "Describe every aspect of this scene."
+- Text extraction: "What does the sign say?" (use OCR models instead)
+
+## base vs capfilt-large
+
+### When to Use `base`
+
+- Speed is critical (real-time applications)
+- Simple questions with clear answers
+- Prototyping and testing
+- Limited memory budget (&lt;6GB)
+- High-volume processing
+
+### When to Use `capfilt-large`
+
+- Better answer quality needed
+- Production applications
+- Complex scenes
+- Willing to trade speed for accuracy
+- Medium memory budget (6GB+)
+
+**Example Comparison:**
+
+Question: "What is happening in this image?"
+
+**base response:**
+> "a person sitting on a bench"
+
+**capfilt-large response:**
+> "a person sitting on a park bench under a tree"
+
+## vs Other Vision-Language Models
+
+| Feature | BLIP VQA | Qwen2.5-VL | Qwen3-VL | Florence-2 |
+|---------|----------|------------|----------|------------|
+| Speed (CPU) | **Fastest** (1-2s) | Slow (5-15s) | Medium (3-10s) | Fast (2-4s) |
+| Memory | **Lowest** (4GB) | High (16GB+) | Medium (8GB+) | Low (2-3GB) |
+| Simple VQA | **Excellent** | Excellent | Good | Good |
+| Complex reasoning | Good | **Excellent** | Good | Good |
+| Counting accuracy | Moderate | **Excellent** | Good | Good |
+| Prompt required | ✓ | ✓ | ✓ | Varies by task |
+| Best for | Simple VQA | Complex VQA | Explainable AI | Multi-task |
+
+<Note>
+Use **BLIP VQA** for fast, simple visual questions. Use **Qwen2.5-VL** for complex reasoning and maximum accuracy. Use **Florence-2** when you need multiple vision tasks.
+</Note>
+
+## Example: Real-Time VQA Application
+
+```python
+import requests
+import cv2
+import time
+
+# Simulate real-time camera feed
+cap = cv2.VideoCapture(0)  # Webcam
+
+questions = [
+    "How many people are visible?",
+    "What objects are on the table?",
+    "What is the dominant color?"
+]
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Save frame temporarily
+    cv2.imwrite('temp_frame.jpg', frame)
+
+    # Ask question about current frame
+    for question in questions:
+        start_time = time.time()
+
+        with open('temp_frame.jpg', 'rb') as f:
+            response = requests.post(
+                'http://localhost:8000/predict/blip_vqa/base',
+                files={'file': f},
+                data={'prompt': question}
+            )
+
+        result = response.json()
+        elapsed = time.time() - start_time
+
+        print(f"Q: {question}")
+        print(f"A: {result['text']} ({elapsed:.2f}s)")
+
+    time.sleep(5)  # Process every 5 seconds
+
+cap.release()
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing prompt parameter">
+    BLIP VQA requires a question:
+    ```bash
+    # ❌ Wrong
+    curl -X POST ".../blip_vqa/base" -F "file=@image.jpg"
+
+    # ✅ Correct
+    curl -X POST ".../blip_vqa/base" \
+      -F "file=@image.jpg" \
+      -F "prompt=What is in this image?"
+    ```
+  </Accordion>
+
+  <Accordion title="Generic or unhelpful answers">
+    - Make questions more specific
+    - Try `capfilt-large` for better quality
+    - Avoid overly complex questions
+    - Ensure image quality is good (not blurry, good lighting)
+  </Accordion>
+
+  <Accordion title="Inaccurate counting">
+    BLIP VQA provides approximate counts, not exact. For precise counting, use:
+    - Detection models (Detectron2, Florence-2) + count detections
+    - Qwen2.5-VL for better counting accuracy
+  </Accordion>
+
+  <Accordion title="Slow on first request">
+    Expected - model downloads on first use (~500MB-1GB). Subsequent requests are fast.
+  </Accordion>
+
+  <Accordion title="Cannot read text in image">
+    BLIP VQA is not designed for OCR. For text extraction, use:
+    - EasyOCR
+    - PaddleOCR
+    - Florence-2 OCR task
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="Qwen-VL" href="/model-families/qwen-vl">
+    Advanced vision-language models
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task vision model
+  </Card>
+
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Object detection for counting
+  </Card>
+</CardGroup>

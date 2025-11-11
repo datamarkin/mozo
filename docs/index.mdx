@@ -1,97 +1,152 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Mozo
+description: Universal computer vision model server with 35+ pre-configured models, zero deployment overhead
 ---
 
-## Setting up
+## The Problem
 
-Get your documentation site up and running in minutes.
+Deploying machine learning models traditionally requires complex infrastructure:
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+- **Docker containers** for consistent environments
+- **Kubernetes** for orchestration and scaling
+- **Cloud services** for hosting and model management
+- **API gateways** for routing and authentication
+- **Monitoring systems** for health checks and performance
 
-## Make it yours
+Setting up this infrastructure takes days or weeks. Managing it requires specialized DevOps expertise. Running it costs money even when models sit idle.
 
-Design a docs site that looks great and empowers your users.
+Most developers just want to test if a model works for their use case. They don't want to become infrastructure experts first.
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+## The Solution
+
+Mozo is a universal model server that eliminates deployment complexity:
+
+```bash
+# Install Mozo
+pip install mozo
+
+# Start server with 35+ models ready
+mozo start
+
+# Make predictions via HTTP
+curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+  -F "file=@image.jpg"
+```
+
+**That's it.** No Docker, no Kubernetes, no cloud setup. Just install, start, and use.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="35+ Pre-Configured Models" icon="grid">
+    Object detection, OCR, depth estimation, vision-language models, and more. All variants tested and ready to use.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
 
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+  <Card title="Zero Deployment Overhead" icon="rocket">
+    No Docker, Kubernetes, or cloud services needed. Install with pip, start with one command.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
 
-## Need inspiration?
+  <Card title="Automatic Memory Management" icon="memory">
+    Models load on first access and automatically unload when inactive. Efficient memory usage without manual intervention.
+  </Card>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+  <Card title="Unified Output Format" icon="grid-2">
+    All detection models return PixelFlow Detections format. Write once, work with any model family.
+  </Card>
+</CardGroup>
+
+## Available Model Families
+
+Mozo includes pre-configured variants for:
+
+- **Detectron2** (27 variants) - Object detection, instance segmentation, keypoint detection
+- **EasyOCR** (5 variants) - Text recognition with 80+ language support
+- **PaddleOCR** (5 variants) - PP-OCRv5 for high-accuracy OCR
+- **PPStructure** (4 variants) - Document analysis with layout and table recognition
+- **Florence-2** (8 task variants) - Multi-task vision model
+- **Depth Anything** (3 variants) - Monocular depth estimation
+- **Qwen2.5-VL** (1 variant) - Vision-language understanding and VQA
+- **Qwen3-VL** (1 variant) - VLM with chain-of-thought reasoning
+- **BLIP VQA** (2 variants) - Visual question answering
+- **Stability Inpainting** (1 variant) - Image inpainting with Stable Diffusion 2
+- **Datamarkin** (dynamic variants) - Cloud-based custom model inference
+
+## Two Ways to Use Mozo
+
+### REST API (Recommended)
+
+Start the server and make HTTP requests from any language:
+
+```bash
+mozo start
+```
+
+<CodeGroup>
+```python Python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x",
+    files={"file": open("image.jpg", "rb")}
+)
+detections = response.json()
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+
+const response = await fetch(
+  'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+  { method: 'POST', body: formData }
+);
+const detections = await response.json();
+```
+</CodeGroup>
+
+### Python SDK (Advanced)
+
+Embed Mozo directly in Python applications:
+
+```python
+from mozo import ModelManager
+import cv2
+
+manager = ModelManager()
+model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+image = cv2.imread('image.jpg')
+detections = model.predict(image)
+
+print(f"Found {len(detections)} objects")
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Make your first prediction in under 5 minutes
+  </Card>
+
+  <Card title="Choosing a Model" icon="magnifying-glass" href="/choosing-a-model">
+    Decision guide for selecting the right model
+  </Card>
+
+  <Card title="Model Families" icon="grid" href="/model-families/detectron2">
+    Explore all available models and variants
+  </Card>
+</CardGroup>
+
+## Why Mozo?
+
+**For quick prototyping**: Test if a model works for your use case in minutes, not days.
+
+**For production deployments**: Mozo handles model lifecycle, memory management, and concurrent access automatically.
+
+**For multi-model applications**: Switch between models or use multiple models simultaneously without infrastructure changes.
+
+**For team collaboration**: Consistent model serving API means everyone uses the same interface, regardless of underlying framework.
+
+<Note>
+  Mozo is designed for development and moderate production workloads. For high-throughput production deployments requiring GPU scaling, consider dedicated model serving solutions like TorchServe or Triton.
+</Note>

@@ -1,0 +1,420 @@
+---
+title: Detectron2
+description: Object detection, instance segmentation, and keypoint detection with 27 pre-configured variants
+---
+
+Detectron2 is Facebook AI Research's modular object detection library. Mozo provides 27 pre-configured variants covering Mask R-CNN, Faster R-CNN, RetinaNet, and Keypoint R-CNN architectures.
+
+## The Problem
+
+Object detection and instance segmentation are fundamental computer vision tasks, but setting up Detectron2 traditionally requires:
+- Complex environment configuration
+- Model zoo navigation
+- Manual weight downloading
+- Framework-specific code
+
+Mozo eliminates this complexity with pre-configured, ready-to-use Detectron2 models accessible via simple HTTP requests.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="mask_rcnn_R_50_FPN_3x" icon="star">
+    **Best overall choice**
+    - Instance segmentation + detection
+    - Good speed/accuracy balance
+    - 80 COCO classes
+  </Card>
+
+  <Card title="faster_rcnn_R_50_FPN_3x" icon="bolt">
+    **Fastest detection**
+    - Bounding boxes only (no masks)
+    - Best for real-time needs
+    - 80 COCO classes
+  </Card>
+</CardGroup>
+
+## All Available Variants
+
+### Mask R-CNN (Instance Segmentation)
+Detects objects with pixel-level segmentation masks.
+
+| Variant | Backbone | Speed | Accuracy | Memory |
+|---------|----------|-------|----------|--------|
+| mask_rcnn_R_50_C4_1x | ResNet-50 C4 | Fast | Good | Low |
+| mask_rcnn_R_50_FPN_3x | ResNet-50 FPN | Medium | **Recommended** | Medium |
+| mask_rcnn_R_101_FPN_3x | ResNet-101 FPN | Slower | Better | High |
+| mask_rcnn_X_101_32x8d_FPN_3x | ResNeXt-101 FPN | Slowest | Best | Very High |
+
+**9 total Mask R-CNN variants available**
+
+### Faster R-CNN (Object Detection)
+Detects objects with bounding boxes only (no masks).
+
+| Variant | Backbone | Speed | Accuracy | Memory |
+|---------|----------|-------|----------|--------|
+| faster_rcnn_R_50_C4_1x | ResNet-50 C4 | Fast | Good | Low |
+| faster_rcnn_R_50_FPN_3x | ResNet-50 FPN | Medium | **Recommended** | Medium |
+| faster_rcnn_R_101_FPN_3x | ResNet-101 FPN | Slower | Better | High |
+
+**10 total Faster R-CNN variants available**
+
+### RetinaNet (Small Object Detection)
+Better performance on small objects using focal loss.
+
+| Variant | Speed | Best For |
+|---------|-------|----------|
+| retinanet_R_50_FPN_1x | Fast | General small objects |
+| retinanet_R_50_FPN_3x | Medium | Balanced accuracy |
+| retinanet_R_101_FPN_3x | Slower | Maximum accuracy |
+
+### Keypoint R-CNN (Pose Estimation)
+Detects objects and human keypoints (17 keypoints per person).
+
+| Variant | Backbone | Best For |
+|---------|----------|----------|
+| keypoint_rcnn_R_50_FPN_1x | ResNet-50 | Fast pose estimation |
+| keypoint_rcnn_R_50_FPN_3x | ResNet-50 | Balanced |
+| keypoint_rcnn_R_101_FPN_3x | ResNet-101 | Maximum accuracy |
+| keypoint_rcnn_X_101_32x8d_FPN_3x | ResNeXt-101 | Best quality |
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+      -F "file=@image.jpg"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    response = requests.post(
+        'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+        files={'file': open('image.jpg', 'rb')}
+    )
+
+    detections = response.json()
+    print(f"Found {len(detections)} objects")
+
+    for det in detections:
+        print(f"{det['class_name']}: {det['confidence']:.2f}")
+    ```
+  </Tab>
+
+  <Tab title="JavaScript">
+    ```javascript
+    const formData = new FormData();
+    formData.append('file', imageFile);
+
+    const response = await fetch(
+      'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+      { method: 'POST', body: formData }
+    );
+
+    const detections = await response.json();
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+All Detectron2 models return PixelFlow Detections format:
+
+```json
+[
+  {
+    "bbox": [120.5, 95.2, 315.8, 405.9],
+    "class_name": "person",
+    "class_id": 0,
+    "confidence": 0.95,
+    "mask": [[...]]  // Only for Mask R-CNN and Keypoint R-CNN
+  },
+  {
+    "bbox": [450.2, 180.5, 620.3, 380.1],
+    "class_name": "car",
+    "class_id": 2,
+    "confidence": 0.89
+  }
+]
+```
+
+<ResponseField name="bbox" type="array" required>
+  Bounding box coordinates `[x1, y1, x2, y2]` in image pixels
+</ResponseField>
+
+<ResponseField name="class_name" type="string" required>
+  Object class name from COCO dataset (e.g., "person", "car", "dog")
+</ResponseField>
+
+<ResponseField name="class_id" type="integer" required>
+  Integer class ID (0-79 for COCO classes)
+</ResponseField>
+
+<ResponseField name="confidence" type="float" required>
+  Detection confidence score (0.0 to 1.0)
+</ResponseField>
+
+<ResponseField name="mask" type="array">
+  Segmentation mask polygon points (only for Mask R-CNN variants)
+</ResponseField>
+
+## Supported Classes
+
+All Detectron2 models detect 80 COCO classes including:
+
+**People & Animals:** person, cat, dog, horse, sheep, cow, elephant, bear, zebra, giraffe
+
+**Vehicles:** car, motorcycle, airplane, bus, train, truck, boat
+
+**Indoor:** chair, couch, bed, dining table, toilet, tv, laptop, mouse, keyboard
+
+**Food:** banana, apple, sandwich, orange, broccoli, carrot, hot dog, pizza, donut, cake
+
+**Sports:** sports ball, baseball bat, baseball glove, skateboard, surfboard, tennis racket
+
+[Full COCO class list](https://cocodataset.org/#explore)
+
+## Common Use Cases
+
+### Security & Surveillance
+```bash
+# Detect people and vehicles
+curl -X POST "http://localhost:8000/predict/detectron2/faster_rcnn_R_50_FPN_3x" \
+  -F "file=@security_camera.jpg"
+```
+
+### Image Editing & Composition
+```bash
+# Get pixel-perfect masks for editing
+curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+  -F "file=@photo.jpg"
+```
+
+### Pose Estimation
+```bash
+# Detect human poses
+curl -X POST "http://localhost:8000/predict/detectron2/keypoint_rcnn_R_50_FPN_3x" \
+  -F "file=@person.jpg"
+```
+
+### Inventory Counting
+```bash
+# Count objects on shelves
+curl -X POST "http://localhost:8000/predict/detectron2/faster_rcnn_R_50_FPN_3x" \
+  -F "file=@warehouse.jpg"
+```
+
+## Python SDK
+
+Use Detectron2 models directly in your Python applications without the HTTP server.
+
+### Quick Start
+
+```python
+from mozo import ModelManager
+import cv2
+
+# Initialize manager
+manager = ModelManager()
+
+# Load model
+model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+# Load and predict
+image = cv2.imread('image.jpg')
+detections = model.predict(image)
+
+# Access results
+print(f"Found {len(detections)} objects")
+for det in detections.detections:
+    print(f"{det.class_name}: confidence={det.confidence:.2f}")
+```
+
+### Using Different Variants
+
+```python
+# Object detection only (faster)
+detector = manager.get_model('detectron2', 'faster_rcnn_R_50_FPN_3x')
+detections = detector.predict(image)
+
+# Instance segmentation (with masks)
+segmenter = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+masked_detections = segmenter.predict(image)
+
+# Pose estimation
+pose_model = manager.get_model('detectron2', 'keypoint_rcnn_R_50_FPN_3x')
+pose_detections = pose_model.predict(image)
+
+# Small object detection
+small_obj_model = manager.get_model('detectron2', 'retinanet_R_50_FPN_3x')
+small_detections = small_obj_model.predict(image)
+```
+
+### Filtering and Processing Results
+
+```python
+# Filter by class
+people = detections.filter_by_class(['person'])
+vehicles = detections.filter_by_class(['car', 'truck', 'bus'])
+
+# Filter by confidence
+high_conf = detections.filter_by_confidence(0.9)
+
+# Access detection properties
+for det in detections.detections:
+    x1, y1, x2, y2 = det.bbox
+    width = x2 - x1
+    height = y2 - y1
+
+    print(f"{det.class_name}")
+    print(f"  Location: ({x1:.0f}, {y1:.0f})")
+    print(f"  Size: {width:.0f}x{height:.0f}")
+    print(f"  Confidence: {det.confidence:.2%}")
+```
+
+### Visualization with PixelFlow
+
+```python
+import pixelflow as pf
+
+# Annotate image
+annotated = pf.annotate.draw_detections(
+    image=image,
+    detections=detections,
+    labels=True,
+    boxes=True,
+    masks=True  # Only for Mask R-CNN variants
+)
+
+# Save result
+cv2.imwrite('output.jpg', annotated)
+```
+
+### Batch Processing
+
+```python
+import os
+
+model = manager.get_model('detectron2', 'faster_rcnn_R_50_FPN_3x')
+
+for filename in os.listdir('images/'):
+    if filename.endswith(('.jpg', '.png')):
+        image_path = os.path.join('images/', filename)
+        image = cv2.imread(image_path)
+        detections = model.predict(image)
+        print(f"{filename}: {len(detections)} objects")
+```
+
+### Memory Management
+
+```python
+# Models are cached - subsequent calls reuse loaded model
+model1 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+model2 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')  # Same instance
+
+# Manually unload when done
+manager.unload_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+# Cleanup inactive models (e.g., unused for 10+ minutes)
+manager.cleanup_inactive_models(inactive_seconds=600)
+```
+
+### Advanced: Custom Zones and Analytics
+
+```python
+import pixelflow as pf
+import numpy as np
+
+# Define zone polygon
+zone = np.array([[100, 100], [500, 100], [500, 400], [100, 400]])
+
+# Detect objects
+detections = model.predict(image)
+
+# Filter objects in zone
+in_zone = detections.filter_by_zone(zone)
+print(f"{len(in_zone)} objects in the defined zone")
+
+# Count by class in zone
+class_counts = {}
+for det in in_zone.detections:
+    class_counts[det.class_name] = class_counts.get(det.class_name, 0) + 1
+
+for class_name, count in class_counts.items():
+    print(f"  {class_name}: {count}")
+```
+
+## Performance Characteristics
+
+### Speed Comparison
+
+| Variant Type | Relative Speed | Best For |
+|--------------|----------------|----------|
+| *_C4_1x | Fastest | Real-time applications |
+| *_FPN_1x | Fast | Quick prototyping |
+| *_FPN_3x | Medium | **Recommended balance** |
+| *_101_* | Slower | Accuracy priority |
+| *_X_101_* | Slowest | Maximum accuracy |
+
+### Memory Usage
+
+| Backbone | Approximate RAM | GPU Memory (if used) |
+|----------|----------------|---------------------|
+| R_50_C4 | ~2GB | ~2GB |
+| R_50_FPN | ~3GB | ~3GB |
+| R_101_FPN | ~4GB | ~4GB |
+| X_101_FPN | ~6GB | ~6GB |
+
+## Installation Requirements
+
+Detectron2 requires platform-specific installation:
+
+```bash
+python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+```
+
+**Reference:** [Detectron2 Installation Guide](https://detectron2.readthedocs.io/en/latest/tutorials/install.html)
+
+<Note>
+Other Mozo models work with `pip install mozo` alone. Detectron2 is the only family requiring additional installation.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ImportError: detectron2 not installed">
+    Detectron2 requires separate installation. See installation instructions above.
+  </Accordion>
+
+  <Accordion title="Slow predictions">
+    Use FPN variants with ResNet-50 backbone for best speed/accuracy balance. Avoid X_101 variants unless maximum accuracy is required.
+  </Accordion>
+
+  <Accordion title="Out of memory">
+    Use R_50 variants instead of R_101 or X_101. Or enable automatic cleanup:
+    ```bash
+    curl -X POST "http://localhost:8000/models/cleanup?inactive_seconds=60"
+    ```
+  </Accordion>
+
+  <Accordion title="Missing objects in detection">
+    - Ensure objects are from COCO's 80 classes
+    - Try Mask R-CNN variants (more accurate than Faster R-CNN)
+    - For small objects, use RetinaNet variants
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={2}>
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task alternative with detection capability
+  </Card>
+
+  <Card title="Choosing a Model" href="/choosing-a-model">
+    Decision guide for all model families
+  </Card>
+</CardGroup>

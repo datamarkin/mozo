@@ -1,0 +1,394 @@
+---
+title: Qwen-VL
+description: Vision-language models from Alibaba Cloud for VQA, image understanding, and reasoning
+---
+
+Qwen-VL is Alibaba Cloud's family of vision-language models. Mozo provides two variants: **Qwen2.5-VL** for maximum capability and **Qwen3-VL** for explainable reasoning with chain-of-thought outputs.
+
+## The Problem
+
+Understanding images requires more than object detection - you need to answer questions about image content, extract text, analyze charts, count objects, and reason about visual information. Traditional computer vision models provide structured outputs (bounding boxes, labels) but cannot answer natural language questions or provide explanations.
+
+Qwen-VL solves this with large vision-language models that understand both images and text, enabling natural language interaction with visual content.
+
+## Model Comparison
+
+<CardGroup cols={2}>
+  <Card title="Qwen2.5-VL (7B)" icon="brain">
+    **Best for maximum capability**
+    - 7 billion parameters
+    - Superior accuracy and reasoning
+    - Requires 16GB+ RAM
+    - All-purpose vision-language tasks
+  </Card>
+
+  <Card title="Qwen3-VL (2B)" icon="lightbulb">
+    **Best for explainable AI**
+    - 2 billion parameters
+    - Chain-of-thought reasoning
+    - Requires 8GB+ RAM
+    - Shows thinking process
+  </Card>
+</CardGroup>
+
+## All Variants
+
+### Qwen2.5-VL Family
+
+| Variant | Parameters | RAM | Device | Best For |
+|---------|-----------|-----|--------|----------|
+| qwen2.5_vl/7b-instruct | 7B | 16GB+ | GPU/MPS/CPU | Production VQA, maximum accuracy |
+
+### Qwen3-VL Family
+
+| Variant | Parameters | RAM | Device | Best For |
+|---------|-----------|-----|--------|----------|
+| qwen3_vl/2b-thinking | 2B | 8GB+ | CPU/GPU | Explainable AI, educational use |
+
+<Note>
+**CPU Recommendation:** Qwen2.5-VL requires `device='cpu'` due to MPS compatibility issues on macOS. Qwen3-VL works well on CPU with the smaller 2B model.
+</Note>
+
+## Quick Start
+
+<Tabs>
+  <Tab title="Qwen2.5-VL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+      -F "file=@image.jpg" \
+      -F "prompt=Describe this image in detail."
+    ```
+  </Tab>
+
+  <Tab title="Qwen3-VL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/qwen3_vl/2b-thinking" \
+      -F "file=@chart.jpg" \
+      -F "prompt=Analyze this chart and explain your reasoning."
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    # Qwen2.5-VL - Maximum capability
+    response = requests.post(
+        'http://localhost:8000/predict/qwen2.5_vl/7b-instruct',
+        files={'file': open('photo.jpg', 'rb')},
+        data={'prompt': 'What is happening in this image?'}
+    )
+    result = response.json()
+    print(result['text'])
+
+    # Qwen3-VL - With reasoning
+    response = requests.post(
+        'http://localhost:8000/predict/qwen3_vl/2b-thinking',
+        files={'file': open('diagram.jpg', 'rb')},
+        data={'prompt': 'Explain this diagram step by step.'}
+    )
+    result = response.json()
+    print("Answer:", result['text'])
+    if result.get('thinking'):
+        print("\nReasoning:")
+        print(result['thinking'])
+    ```
+  </Tab>
+</Tabs>
+
+## Response Formats
+
+### Qwen2.5-VL Response
+
+```json
+{
+  "text": "The image shows a modern office workspace with multiple people working at desks. There are laptops, monitors, and office supplies visible. Natural lighting comes through large windows in the background. The space has a collaborative, open-plan layout.",
+  "prompt": "Describe this image in detail.",
+  "variant": "7b-instruct"
+}
+```
+
+### Qwen3-VL Response (with Reasoning)
+
+```json
+{
+  "text": "There are 5 people visible in the image: 3 in the foreground and 2 in the background near the windows.",
+  "thinking": "Let me count the people systematically:\n1. Foreground left: 1 person at desk\n2. Foreground center: 1 person at desk\n3. Foreground right: 1 person at desk\n4. Background left: 1 person standing\n5. Background right: 1 person at window\nTotal: 5 people",
+  "raw_output": "<thinking>Let me count the people systematically:\n1. Foreground left: 1 person at desk\n2. Foreground center: 1 person at desk\n3. Foreground right: 1 person at desk\n4. Background left: 1 person standing\n5. Background right: 1 person at window\nTotal: 5 people</thinking>There are 5 people visible in the image: 3 in the foreground and 2 in the background near the windows.",
+  "prompt": "How many people are in this image?",
+  "variant": "2b-thinking"
+}
+```
+
+<ResponseField name="text" type="string" required>
+  Final answer or description (without thinking tags for Qwen3-VL)
+</ResponseField>
+
+<ResponseField name="thinking" type="string">
+  Chain-of-thought reasoning steps (Qwen3-VL only, extracted from `<thinking>` tags)
+</ResponseField>
+
+<ResponseField name="raw_output" type="string">
+  Complete model output including thinking tags (Qwen3-VL only)
+</ResponseField>
+
+<ResponseField name="prompt" type="string" required>
+  Original prompt used for inference
+</ResponseField>
+
+<ResponseField name="variant" type="string" required>
+  Model variant used (e.g., "7b-instruct", "2b-thinking")
+</ResponseField>
+
+## Common Use Cases
+
+### Visual Question Answering
+
+```bash
+# General questions
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@photo.jpg" \
+  -F "prompt=What is the person wearing?"
+
+# Counting objects
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@inventory.jpg" \
+  -F "prompt=How many boxes are visible?"
+
+# Spatial reasoning
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@scene.jpg" \
+  -F "prompt=What is to the left of the car?"
+```
+
+### Chart and Diagram Analysis
+
+```bash
+# Qwen3-VL shows reasoning steps
+curl -X POST "http://localhost:8000/predict/qwen3_vl/2b-thinking" \
+  -F "file=@sales_chart.jpg" \
+  -F "prompt=What trend does this chart show? Explain your analysis."
+```
+
+### OCR with Context
+
+```bash
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@document.jpg" \
+  -F "prompt=Extract all text from this document and organize it logically."
+```
+
+### Image Captioning
+
+```bash
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@photo.jpg" \
+  -F "prompt=Write a detailed caption for this image."
+```
+
+### Content Moderation
+
+```bash
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@user_upload.jpg" \
+  -F "prompt=Is there any inappropriate content in this image?"
+```
+
+## Performance Characteristics
+
+### Qwen2.5-VL (7B-Instruct)
+
+- **First load:** ~30-60 seconds (downloads ~7-14GB model)
+- **Inference time:** 5-15 seconds per image (CPU), 2-5 seconds (GPU)
+- **Memory:** 16GB+ RAM recommended, 20GB+ with GPU
+- **Accuracy:** State-of-the-art vision-language understanding
+- **Best device:** CPU (MPS has compatibility issues)
+
+### Qwen3-VL (2B-Thinking)
+
+- **First load:** ~15-30 seconds (downloads ~4-8GB model)
+- **Inference time:** 3-10 seconds per image (CPU), 1-3 seconds (GPU)
+- **Memory:** 8GB+ RAM recommended
+- **Accuracy:** Good for 2B model, excellent reasoning transparency
+- **Best device:** CPU or GPU (both work well)
+
+<Tip>
+Qwen3-VL's smaller size makes it suitable for CPU-only deployments while still providing high-quality results with explainable reasoning.
+</Tip>
+
+## Chain-of-Thought Reasoning (Qwen3-VL)
+
+Qwen3-VL's unique feature is transparent reasoning via `<thinking>` tags:
+
+```python
+import requests
+
+response = requests.post(
+    'http://localhost:8000/predict/qwen3_vl/2b-thinking',
+    files={'file': open('math_problem.jpg', 'rb')},
+    data={'prompt': 'Solve this math problem step by step.'}
+)
+
+result = response.json()
+
+# The model shows its work
+print("Reasoning steps:")
+print(result['thinking'])
+# Output: "Let me work through this step by step:
+#          1. First, I identify the equation: 2x + 5 = 15
+#          2. Subtract 5 from both sides: 2x = 10
+#          3. Divide by 2: x = 5"
+
+print("\nFinal answer:")
+print(result['text'])
+# Output: "x = 5"
+```
+
+**Benefits of chain-of-thought:**
+- **Explainability:** Understand how the model reached its conclusion
+- **Trust:** Verify reasoning before accepting the answer
+- **Education:** Learn problem-solving approaches
+- **Debugging:** Identify where reasoning went wrong if answer is incorrect
+
+## Prompt Engineering Tips
+
+### General Tips (Both Models)
+
+**Be specific:**
+```bash
+# ❌ Vague
+"What's in this image?"
+
+# ✅ Specific
+"List all objects visible in this image, including their colors and approximate locations."
+```
+
+**Ask follow-up style questions:**
+```bash
+"Describe this image in detail, including:
+1. What objects are present
+2. What actions are taking place
+3. The setting and environment
+4. Any text visible"
+```
+
+### Qwen2.5-VL Optimal Prompts
+
+```bash
+# Rich descriptions
+"Provide a comprehensive description of this image, including visual details, context, and any notable features."
+
+# Structured output
+"Analyze this image and provide:
+- Main subject
+- Background details
+- Color palette
+- Mood/atmosphere"
+
+# Counting with context
+"Count the number of [objects] and describe their arrangement."
+```
+
+### Qwen3-VL Reasoning Prompts
+
+```bash
+# Encourage thinking
+"Explain your reasoning step by step when answering: [question]"
+
+# Problem-solving
+"Analyze this diagram. Think through each component before providing your conclusion."
+
+# Verification
+"Count the objects carefully, showing your counting process."
+```
+
+## vs Other Vision-Language Models
+
+| Feature | Qwen2.5-VL (7B) | Qwen3-VL (2B) | BLIP VQA | Florence-2 |
+|---------|----------------|---------------|----------|------------|
+| Parameters | 7B | 2B | 0.5B | 0.7B |
+| Memory | 16GB+ | 8GB+ | 4GB+ | 2-3GB |
+| Reasoning quality | **Excellent** | Good | Basic | Good |
+| Chain-of-thought | ✗ | **✓** | ✗ | ✗ |
+| Speed | Slower | Medium | **Fastest** | Fast |
+| Best for | Production VQA | Explainable AI | Simple questions | Multi-task |
+
+<Note>
+Use **Qwen2.5-VL** for maximum accuracy, **Qwen3-VL** for transparent reasoning, **BLIP** for speed, or **Florence-2** for multi-task versatility.
+</Note>
+
+## Installation Requirements
+
+Qwen-VL models require additional dependencies:
+
+```bash
+# Qwen2.5-VL
+pip install git+https://github.com/huggingface/transformers
+pip install qwen-vl-utils
+
+# Qwen3-VL
+pip install transformers>=4.50
+```
+
+<Warning>
+Qwen3-VL requires transformers 4.50 or later. Upgrade if using an older version.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="MPS backend error (macOS)">
+    Qwen2.5-VL has MPS compatibility issues. Force CPU mode:
+    ```python
+    from mozo import ModelManager
+    manager = ModelManager()
+    model = manager.get_model('qwen2.5_vl', '7b-instruct', device='cpu')
+    ```
+    This is set automatically by the adapter.
+  </Accordion>
+
+  <Accordion title="Out of memory error">
+    - **Qwen2.5-VL:** Requires 16GB+ RAM. Use Qwen3-VL (8GB+) or BLIP (4GB+) if limited
+    - **Qwen3-VL:** Requires 8GB+ RAM. Use BLIP if still limited
+    - Manually unload after use:
+    ```bash
+    curl -X POST "http://localhost:8000/models/qwen2.5_vl/7b-instruct/unload"
+    ```
+  </Accordion>
+
+  <Accordion title="Slow inference">
+    - Expected on first load (model download)
+    - Qwen2.5-VL on CPU takes 5-15 seconds per image
+    - Use GPU for 2-3x speedup
+    - Consider Qwen3-VL (smaller, faster) or BLIP for speed
+  </Accordion>
+
+  <Accordion title="No thinking tags in Qwen3-VL output">
+    - Not all prompts trigger reasoning output
+    - Try explicit prompts: "Explain your reasoning step by step"
+    - Complex questions more likely to produce thinking tags
+    - Simple questions may not require reasoning steps
+  </Accordion>
+
+  <Accordion title="Poor accuracy compared to GPT-4V">
+    - Qwen-VL models are smaller than GPT-4V (7B/2B vs ~100B+)
+    - They perform well for most tasks but may struggle with very complex reasoning
+    - For maximum accuracy, consider using cloud VLM APIs
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="BLIP VQA" href="/model-families/blip-vqa">
+    Faster, lighter VQA
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task vision model
+  </Card>
+
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Structured object detection
+  </Card>
+</CardGroup>

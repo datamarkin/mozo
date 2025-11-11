@@ -1,0 +1,361 @@
+---
+title: Choosing a Model
+description: Decision guide for selecting the right model family and variant for your use case
+---
+
+Mozo includes 35+ model variants across 11 families. This guide helps you select the right model for your specific task.
+
+## Quick Decision Tree
+
+<Steps>
+  <Step title="What task do you need to solve?">
+    Select your primary task below to see recommended models.
+  </Step>
+</Steps>
+
+## By Task Type
+
+### Object Detection
+
+**Task:** Detect and locate objects in images with bounding boxes.
+
+**Recommended:**
+- **detectron2/faster_rcnn_R_50_FPN_3x** - Fast and accurate, good for most use cases
+- **detectron2/retinanet_R_50_FPN_3x** - Better for small objects
+
+**When to use:**
+- Security monitoring
+- Inventory counting
+- Traffic analysis
+- General object location
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/predict/detectron2/faster_rcnn_R_50_FPN_3x" \
+  -F "file=@image.jpg"
+```
+
+### Instance Segmentation
+
+**Task:** Detect objects AND get pixel-level segmentation masks.
+
+**Recommended:**
+- **detectron2/mask_rcnn_R_50_FPN_3x** - Best balance of speed and accuracy
+- **detectron2/mask_rcnn_R_101_FPN_3x** - Higher accuracy, slower
+
+**When to use:**
+- Image editing and composition
+- Precise object counting
+- Background removal
+- Medical imaging
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+  -F "file=@image.jpg"
+```
+
+### Text Recognition (OCR)
+
+**Task:** Extract text from images.
+
+#### For Quick Setup & English Text
+- **easyocr/english-light** - Fastest, good accuracy, easy to use
+- **easyocr/english-full** - Highest accuracy for English
+
+#### For Maximum Accuracy
+- **paddleocr/server** - Best English accuracy
+- **paddleocr/server-chinese** - Best Chinese accuracy
+
+#### For Multiple Languages
+- **easyocr/multilingual** - 5 languages (EN, ZH, FR, DE, ES)
+- **paddleocr/mobile-multilingual** - 80+ languages
+
+**When to use:**
+- Document digitization
+- Receipt scanning
+- License plate recognition
+- Sign reading
+
+**Example:**
+```bash
+# Quick and easy
+curl -X POST "http://localhost:8000/predict/easyocr/english-light" \
+  -F "file=@document.jpg"
+
+# Maximum accuracy
+curl -X POST "http://localhost:8000/predict/paddleocr/server" \
+  -F "file=@document.jpg"
+```
+
+### Document Analysis
+
+**Task:** Extract text, tables, and layout from documents.
+
+**Recommended:**
+- **ppstructure/full** - Complete document analysis (layout + OCR + tables)
+- **ppstructure/layout-only** - Just layout detection (fast preview)
+- **ppstructure/table-analysis** - Focus on table extraction
+
+**When to use:**
+- Invoice processing
+- Form extraction
+- Research paper analysis
+- Report digitization
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/predict/ppstructure/full" \
+  -F "file=@invoice.pdf"
+```
+
+### Visual Question Answering
+
+**Task:** Ask questions about image content in natural language.
+
+**Recommended:**
+- **qwen2.5_vl/7b-instruct** - Most capable, requires 16GB+ RAM
+- **blip_vqa/base** - Faster, lower memory requirements
+
+**When to use:**
+- Image captioning
+- Content moderation
+- Visual search
+- Accessibility tools
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@image.jpg" \
+  -F "prompt=Describe what you see in this image"
+```
+
+### Depth Estimation
+
+**Task:** Generate depth maps from single images.
+
+**Recommended:**
+- **depth_anything/small** - Fast, good quality
+- **depth_anything/large** - Best quality, slower
+
+**When to use:**
+- 3D reconstruction
+- Augmented reality
+- Robotics navigation
+- Photo effects
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/predict/depth_anything/small" \
+  -F "file=@scene.jpg"
+```
+
+### Multi-Task Vision
+
+**Task:** One model for multiple vision tasks (detection, captioning, OCR, etc.).
+
+**Recommended:**
+- **florence2/detection** - Object detection
+- **florence2/segmentation** - Instance segmentation
+- **florence2/ocr** - Text recognition
+- **florence2/captioning** - Image descriptions
+
+**When to use:**
+- Need multiple vision capabilities
+- Want consistent output format
+- Memory-efficient multi-task processing
+
+**Example:**
+```bash
+# Detection
+curl -X POST "http://localhost:8000/predict/florence2/detection" \
+  -F "file=@image.jpg"
+
+# Captioning
+curl -X POST "http://localhost:8000/predict/florence2/captioning" \
+  -F "file=@image.jpg"
+```
+
+## Speed vs Accuracy Trade-offs
+
+### Detectron2 Variants
+
+| Variant | Speed | Accuracy | Memory | Best For |
+|---------|-------|----------|--------|----------|
+| R_50_C4 | Fast | Good | Low | Real-time applications |
+| R_50_FPN | Medium | Better | Medium | **Recommended default** |
+| R_101_FPN | Slower | Best | High | Maximum accuracy needed |
+| X_101_FPN | Slowest | Excellent | Very High | Research, offline processing |
+
+### OCR Variants
+
+| Model | Speed | Accuracy | Setup | Best For |
+|-------|-------|----------|-------|----------|
+| easyocr/english-light | **Fastest** | Good | Easiest | Quick testing, English |
+| paddleocr/mobile | Fast | Good | Easy | Production, speed priority |
+| paddleocr/server | Slower | **Best** | Easy | Production, accuracy priority |
+
+### Depth Estimation Variants
+
+| Variant | Speed | Quality | Memory | Best For |
+|---------|-------|---------|--------|----------|
+| small | **Fast** | Good | Low | Real-time, mobile |
+| base | Medium | Better | Medium | Balanced applications |
+| large | Slower | **Best** | High | Offline, maximum quality |
+
+## Memory Requirements
+
+<Warning>
+Large models can consume significant RAM. Plan accordingly for production deployments.
+</Warning>
+
+### Low Memory (&lt;8GB RAM)
+- **detectron2** - R_50 variants
+- **easyocr** - all variants
+- **paddleocr** - mobile variants
+- **depth_anything** - small
+- **blip_vqa** - base
+
+### Medium Memory (8-16GB RAM)
+- **detectron2** - R_101 variants
+- **paddleocr** - server variants
+- **ppstructure** - all variants
+- **florence2** - all tasks
+- **depth_anything** - base, large
+- **stability_inpainting**
+
+### High Memory (16GB+ RAM)
+- **qwen2.5_vl** - 7b-instruct (requires 16GB+)
+- **qwen3_vl** - 2b-thinking
+- **detectron2** - X_101 variants
+
+## Model Family Comparison
+
+<Tabs>
+  <Tab title="Detection Models">
+    **Detectron2:**
+    - Most variants (27)
+    - Highest accuracy
+    - Requires specific installation
+    - Best for: Production object detection
+
+    **Florence-2:**
+    - Multi-task capable
+    - Single model for multiple tasks
+    - Good general performance
+    - Best for: Versatile applications
+  </Tab>
+
+  <Tab title="OCR Models">
+    **EasyOCR:**
+    - Easiest setup
+    - Good general accuracy
+    - 80+ languages
+    - Best for: Quick integration
+
+    **PaddleOCR:**
+    - Highest accuracy (PP-OCRv5)
+    - Mobile and server variants
+    - Well-maintained
+    - Best for: Production OCR
+
+    **Florence-2 OCR:**
+    - Part of multi-task model
+    - Good for mixed tasks
+    - Best for: Combined vision tasks
+  </Tab>
+
+  <Tab title="VLM Models">
+    **Qwen2.5-VL:**
+    - Most capable VLM
+    - Excellent reasoning
+    - High memory requirement
+    - Best for: Complex understanding
+
+    **Qwen3-VL:**
+    - Chain-of-thought reasoning
+    - Explainable outputs
+    - Best for: Interpretable AI
+
+    **BLIP VQA:**
+    - Fast and efficient
+    - Lower memory
+    - Best for: Simple VQA tasks
+  </Tab>
+</Tabs>
+
+## Decision Matrix
+
+Use this matrix to quickly find the right model:
+
+| Your Need | Primary Choice | Alternative | Notes |
+|-----------|---------------|-------------|-------|
+| Fast object detection | detectron2/faster_rcnn_R_50_FPN_3x | florence2/detection | Detectron2 more accurate |
+| Precise segmentation | detectron2/mask_rcnn_R_50_FPN_3x | florence2/segmentation | Need pixel masks |
+| English OCR | easyocr/english-light | paddleocr/server | EasyOCR easier, Paddle more accurate |
+| Multi-language OCR | easyocr/multilingual | paddleocr/mobile-multilingual | Both support 80+ languages |
+| Document extraction | ppstructure/full | florence2/ocr | PPStructure includes tables |
+| Image Q&A | qwen2.5_vl/7b-instruct | blip_vqa/base | Qwen more capable, BLIP faster |
+| Depth maps | depth_anything/small | depth_anything/large | Small sufficient for most cases |
+| Image editing | stability_inpainting/default | detectron2/mask_rcnn | Inpainting for fills, Mask R-CNN for masks |
+
+## Common Use Case Recommendations
+
+### E-commerce Product Analysis
+1. **detectron2/mask_rcnn_R_50_FPN_3x** - Segment products
+2. **qwen2.5_vl/7b-instruct** - Generate descriptions
+
+### Document Processing Pipeline
+1. **ppstructure/layout-only** - Detect layout
+2. **paddleocr/server** - Extract text
+3. **ppstructure/table-analysis** - Parse tables
+
+### Security & Monitoring
+1. **detectron2/faster_rcnn_R_50_FPN_3x** - Detect objects
+2. **easyocr/english-light** - Read signs/plates
+
+### Content Moderation
+1. **detectron2/mask_rcnn_R_50_FPN_3x** - Detect objects
+2. **qwen2.5_vl/7b-instruct** - Analyze context
+
+## Testing Multiple Models
+
+Try several models to find the best fit:
+
+```python
+import requests
+
+models = [
+    "detectron2/faster_rcnn_R_50_FPN_3x",
+    "detectron2/mask_rcnn_R_50_FPN_3x",
+    "florence2/detection"
+]
+
+for model_id in models:
+    response = requests.post(
+        f"http://localhost:8000/predict/{model_id}",
+        files={"file": open("test.jpg", "rb")}
+    )
+    detections = response.json()
+    print(f"{model_id}: {len(detections)} objects")
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Model Families" icon="grid" href="/model-families/detectron2">
+    Detailed documentation for each model family
+  </Card>
+
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Get started with your first prediction
+  </Card>
+
+  <Card title="REST API" icon="code" href="/rest-api">
+    Complete API reference
+  </Card>
+</CardGroup>
+
+<Note>
+**Still unsure?** Start with **detectron2/mask_rcnn_R_50_FPN_3x** for detection, **easyocr/english-light** for OCR, or **depth_anything/small** for depth. These are well-balanced defaults that work for most use cases.
+</Note>

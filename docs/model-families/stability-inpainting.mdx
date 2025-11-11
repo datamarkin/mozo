@@ -1,0 +1,453 @@
+---
+title: Stability Inpainting
+description: Stable Diffusion 2 Inpainting for intelligent object removal and image editing
+---
+
+Stability AI's Stable Diffusion 2 Inpainting model intelligently fills masked regions in images using text prompts. Mozo provides a ready-to-use endpoint for object removal, content-aware fill, and creative image editing.
+
+## The Problem
+
+Removing objects from photos or filling missing regions traditionally requires manual photo editing skills. Simple tools like clone stamp or content-aware fill often create visible artifacts, while achieving professional results demands expertise in tools like Photoshop.
+
+Stable Diffusion 2 Inpainting solves this by using AI to understand image context and generate realistic fills based on text descriptions, producing professional results automatically.
+
+## Variant
+
+<Card title="default" icon="wand-magic-sparkles">
+  **Stable Diffusion 2 Inpainting**
+  - Text-guided inpainting
+  - High-quality generation
+  - Medium speed (~10-30 seconds)
+  - Requires: image + mask + prompt
+</Card>
+
+## Quick Start
+
+<Warning>
+Stability Inpainting requires **THREE** parameters:
+1. `file` - Original image
+2. `mask` - Mask image (white = areas to inpaint)
+3. `prompt` - Text description of desired fill
+</Warning>
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/stability_inpainting/default" \
+      -F "file=@photo.jpg" \
+      -F "mask=@mask.png" \
+      -F "prompt=green grass and trees" \
+      --output inpainted.png
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+    from PIL import Image
+    from io import BytesIO
+
+    # Send image, mask, and prompt
+    with open('photo.jpg', 'rb') as img_file, \
+         open('mask.png', 'rb') as mask_file:
+
+        response = requests.post(
+            'http://localhost:8000/predict/stability_inpainting/default',
+            files={
+                'file': img_file,
+                'mask': mask_file
+            },
+            data={'prompt': 'a beautiful beach with palm trees'}
+        )
+
+    # Save result
+    result = Image.open(BytesIO(response.content))
+    result.save('inpainted_result.png')
+    result.show()
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+<ResponseField name="Content-Type" type="string" required>
+  `image/png` - Binary PNG image data
+</ResponseField>
+
+The response is the **inpainted image** as a PNG file with the same dimensions as the input image.
+
+## Creating Masks
+
+### Mask Requirements
+
+- **Format:** Any image format (PNG, JPG, etc.)
+- **Dimensions:** Must match input image size
+- **White areas (255, 255, 255):** Will be inpainted/filled
+- **Black areas (0, 0, 0):** Will be kept from original image
+- **Grayscale:** Supported (255 = fill, 0 = keep)
+
+### Creating Masks Programmatically
+
+```python
+import cv2
+import numpy as np
+
+# Method 1: Manual rectangular mask
+image = cv2.imread('photo.jpg')
+height, width = image.shape[:2]
+
+mask = np.zeros((height, width, 3), dtype=np.uint8)
+# Mark region to inpaint as white
+mask[100:300, 200:400] = 255  # Rectangle [y1:y2, x1:x2]
+
+cv2.imwrite('mask.png', mask)
+```
+
+```python
+# Method 2: Using object detection bounding box
+from mozo import ModelManager
+import cv2
+import numpy as np
+
+# Detect object to remove
+manager = ModelManager()
+detector = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+image = cv2.imread('photo.jpg')
+detections = detector.predict(image)
+
+# Create mask from first detection
+height, width = image.shape[:2]
+mask = np.zeros((height, width, 3), dtype=np.uint8)
+
+if len(detections) > 0:
+    bbox = detections.boxes[0].astype(int)
+    x1, y1, x2, y2 = bbox
+    mask[y1:y2, x1:x2] = 255  # Mark object region as white
+
+cv2.imwrite('object_mask.png', mask)
+```
+
+```python
+# Method 3: Using segmentation mask
+# If you have a segmentation mask from Detectron2
+if len(detections) > 0 and detections.masks is not None:
+    # Convert polygon mask to image mask
+    seg_mask = detections.masks[0]  # Get first object's mask
+
+    # Create white mask where object is
+    mask = np.zeros((height, width, 3), dtype=np.uint8)
+    # Fill polygon with white
+    cv2.fillPoly(mask, [seg_mask.astype(np.int32)], (255, 255, 255))
+
+    cv2.imwrite('precise_mask.png', mask)
+```
+
+## Common Use Cases
+
+### Object Removal
+
+```python
+import requests
+from PIL import Image
+from io import BytesIO
+
+# Remove person from photo
+with open('photo_with_person.jpg', 'rb') as img, \
+     open('person_mask.png', 'rb') as mask:
+
+    response = requests.post(
+        'http://localhost:8000/predict/stability_inpainting/default',
+        files={'file': img, 'mask': mask},
+        data={'prompt': 'empty park with grass and trees'}
+    )
+
+result = Image.open(BytesIO(response.content))
+result.save('person_removed.png')
+```
+
+### Product Photography Background Replacement
+
+```bash
+curl -X POST "http://localhost:8000/predict/stability_inpainting/default" \
+  -F "file=@product.jpg" \
+  -F "mask=@background_mask.png" \
+  -F "prompt=white studio background" \
+  --output product_clean_bg.png
+```
+
+### Watermark Removal
+
+```python
+# Create mask covering watermark area
+mask = np.zeros_like(image)
+mask[10:50, width-150:width] = 255  # Watermark in top-right corner
+
+# Inpaint to remove watermark
+response = requests.post(
+    'http://localhost:8000/predict/stability_inpainting/default',
+    files={
+        'file': open('watermarked.jpg', 'rb'),
+        'mask': ('mask.png', cv2.imencode('.png', mask)[1].tobytes(), 'image/png')
+    },
+    data={'prompt': 'clear sky'}  # Describe what should be there
+)
+```
+
+### Image Repair/Restoration
+
+```bash
+# Fix damaged areas in old photo
+curl -X POST "http://localhost:8000/predict/stability_inpainting/default" \
+  -F "file=@old_photo.jpg" \
+  -F "mask=@damage_mask.png" \
+  -F "prompt=vintage photo texture" \
+  --output restored_photo.png
+```
+
+### Creative Editing
+
+```bash
+# Replace object with something else
+curl -X POST "http://localhost:8000/predict/stability_inpainting/default" \
+  -F "file=@room.jpg" \
+  -F "mask=@couch_mask.png" \
+  -F "prompt=modern blue armchair" \
+  --output room_redesigned.png
+```
+
+## Prompt Engineering
+
+### Effective Prompts
+
+The prompt describes what should appear in the masked region:
+
+```bash
+# ✅ Good prompts - describe desired content
+"green grass and trees"
+"white studio background"
+"empty wooden table"
+"blue sky with clouds"
+"brick wall texture"
+
+# ❌ Poor prompts - too vague
+"remove object"
+"fill"
+"background"
+```
+
+### Context-Aware Prompts
+
+Match the prompt to surrounding context:
+
+```python
+# Photo of a beach - remove person
+prompt = "sandy beach with waves"  # Matches beach context
+
+# Office photo - remove laptop
+prompt = "clean wooden desk"  # Matches office context
+
+# Nature scene - remove trash
+prompt = "green grass and wildflowers"  # Matches nature context
+```
+
+### Style Matching
+
+```bash
+# For vintage photos
+"vintage photograph texture, sepia tone"
+
+# For modern photos
+"modern clean background"
+
+# For artistic images
+"impressionist painting style background"
+```
+
+## Performance Characteristics
+
+- **First load:** ~20-40 seconds (downloads Stable Diffusion 2 model, ~5GB)
+- **Inference time:** 10-30 seconds per image (CPU), 5-10 seconds (GPU)
+- **Memory:** 6-8GB RAM (CPU), 4-6GB VRAM (GPU)
+- **Quality:** High (realistic, context-aware fills)
+
+<Tip>
+GPU acceleration significantly speeds up generation. Enable GPU if available for 2-3x faster results.
+</Tip>
+
+## Image Size Recommendations
+
+- **Optimal:** 512x512 pixels (model's native resolution)
+- **Supported:** 256x256 to 1024x1024
+- **Larger images:** Will be processed but take longer and may lose quality
+
+```python
+from PIL import Image
+
+# Resize for optimal performance
+img = Image.open('large_photo.jpg')
+img.thumbnail((512, 512), Image.LANCZOS)
+img.save('resized_photo.jpg')
+
+# Process resized image
+# Then upscale result if needed
+```
+
+## Advanced: Mask Expansion
+
+Expand mask slightly beyond object for better blending:
+
+```python
+import cv2
+import numpy as np
+
+# Load mask
+mask = cv2.imread('object_mask.png', cv2.IMREAD_GRAYSCALE)
+
+# Expand mask by 10 pixels
+kernel = np.ones((10, 10), np.uint8)
+expanded_mask = cv2.dilate(mask, kernel, iterations=1)
+
+# Convert back to 3-channel
+expanded_mask_rgb = cv2.cvtColor(expanded_mask, cv2.COLOR_GRAY2BGR)
+cv2.imwrite('expanded_mask.png', expanded_mask_rgb)
+```
+
+This helps avoid visible seams between inpainted and original regions.
+
+## vs Traditional Methods
+
+| Method | Quality | Speed | Skill Required | Context-Aware |
+|--------|---------|-------|----------------|---------------|
+| Stability Inpainting | **Excellent** | Medium | **Low** | **Yes** |
+| Content-Aware Fill (Photoshop) | Good | **Fast** | Medium | Limited |
+| Clone Stamp | Variable | Medium | **High** | No |
+| Manual Painting | **Excellent** | **Slow** | **Very High** | **Yes** |
+
+<Note>
+Stability Inpainting provides professional results without professional skills. Best for automated workflows and non-experts.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Missing mask parameter error">
+    Inpainting requires both image and mask:
+    ```bash
+    # ❌ Wrong - missing mask
+    curl -X POST ".../stability_inpainting/default" \
+      -F "file=@image.jpg" \
+      -F "prompt=background"
+
+    # ✅ Correct
+    curl -X POST ".../stability_inpainting/default" \
+      -F "file=@image.jpg" \
+      -F "mask=@mask.png" \
+      -F "prompt=background"
+    ```
+  </Accordion>
+
+  <Accordion title="Inpainted region looks wrong">
+    - **Check mask:** Ensure white = fill, black = keep
+    - **Improve prompt:** Be specific about desired content
+    - **Match context:** Prompt should match surrounding scene
+    - **Expand mask:** Slightly larger mask improves blending
+  </Accordion>
+
+  <Accordion title="Mask dimensions don't match image">
+    Mask must be exactly the same size as input image:
+    ```python
+    # Resize mask to match image
+    from PIL import Image
+    img = Image.open('photo.jpg')
+    mask = Image.open('mask.png')
+
+    mask_resized = mask.resize(img.size, Image.LANCZOS)
+    mask_resized.save('mask_resized.png')
+    ```
+  </Accordion>
+
+  <Accordion title="Slow generation">
+    - Expected for Stable Diffusion (10-30 seconds)
+    - Use GPU for 2-3x speedup
+    - Reduce image size to 512x512 for faster processing
+    - Consider batch processing with model caching
+  </Accordion>
+
+  <Accordion title="Out of memory">
+    - Requires 6-8GB RAM on CPU
+    - Reduce image resolution
+    - Manually unload model after use:
+    ```bash
+    curl -X POST "http://localhost:8000/models/stability_inpainting/default/unload"
+    ```
+  </Accordion>
+
+  <Accordion title="Generated content has different style">
+    - Stable Diffusion may generate photorealistic content that doesn't match artistic/stylized originals
+    - Add style keywords to prompt: "oil painting style", "cartoon style", "vintage photo"
+    - For better style matching, consider fine-tuned SD models (not currently available in Mozo)
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={2}>
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Create masks from object detection/segmentation
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Segmentation for mask generation
+  </Card>
+</CardGroup>
+
+## Example Workflow: Automated Object Removal
+
+```python
+import requests
+import cv2
+import numpy as np
+from PIL import Image
+from io import BytesIO
+
+# Step 1: Detect object to remove
+detect_response = requests.post(
+    'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+    files={'file': open('photo.jpg', 'rb')}
+)
+detections = detect_response.json()
+
+# Step 2: Create mask from first detection
+image = cv2.imread('photo.jpg')
+height, width = image.shape[:2]
+mask = np.zeros((height, width, 3), dtype=np.uint8)
+
+if len(detections) > 0:
+    bbox = detections[0]['bbox']
+    x1, y1, x2, y2 = [int(coord) for coord in bbox]
+
+    # Expand bbox slightly for better blending
+    margin = 10
+    x1, y1 = max(0, x1-margin), max(0, y1-margin)
+    x2, y2 = min(width, x2+margin), min(height, y2+margin)
+
+    mask[y1:y2, x1:x2] = 255
+
+# Step 3: Inpaint
+mask_bytes = cv2.imencode('.png', mask)[1].tobytes()
+
+inpaint_response = requests.post(
+    'http://localhost:8000/predict/stability_inpainting/default',
+    files={
+        'file': open('photo.jpg', 'rb'),
+        'mask': ('mask.png', mask_bytes, 'image/png')
+    },
+    data={'prompt': 'empty street with asphalt'}
+)
+
+# Step 4: Save result
+result = Image.open(BytesIO(inpaint_response.content))
+result.save('object_removed.png')
+print("Object removed successfully!")
+```

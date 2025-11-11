@@ -1,80 +1,323 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Make your first prediction in under 5 minutes
 ---
 
-## Get started in three steps
+Get Mozo running and make your first model prediction in 3 simple steps.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+- Python 3.9-3.12
+- pip package manager
+- An image file to test with (any common format: JPG, PNG, etc.)
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Step 1: Install Mozo
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Install via pip">
+    ```bash
+    pip install mozo
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Check>
+    Verify installation:
+    ```bash
+    mozo version
+    ```
+    </Check>
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Step 2: Start the Server
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Start Mozo server">
+    ```bash
+    mozo start
+    ```
 
-### Step 3: Go live
+    The server starts on `http://localhost:8000` with all 35+ models ready to use.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+    <Check>
+    You should see:
+    ```
+    INFO:     Uvicorn running on http://0.0.0.0:8000
+    INFO:     Application startup complete
+    ```
+    </Check>
+  </Step>
+</Steps>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+Models load on first access (lazy loading), not at startup. The server starts in seconds regardless of how many models are available.
 </Note>
+
+## Step 3: Make Your First Prediction
+
+Choose your preferred method:
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+      -F "file=@your_image.jpg"
+    ```
+
+    **Response:**
+    ```json
+    [
+      {
+        "bbox": [120.5, 95.2, 315.8, 405.9],
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.95,
+        "mask": [[...]]
+      }
+    ]
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    # Make prediction request
+    with open('your_image.jpg', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+            files={'file': f}
+        )
+
+    # Parse results
+    detections = response.json()
+    print(f"Found {len(detections)} objects")
+
+    for det in detections:
+        print(f"  - {det['class_name']}: {det['confidence']:.2f}")
+    ```
+  </Tab>
+
+  <Tab title="JavaScript">
+    ```javascript
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    const response = await fetch(
+      'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+      {
+        method: 'POST',
+        body: formData
+      }
+    );
+
+    const detections = await response.json();
+    console.log(`Found ${detections.length} objects`);
+    ```
+  </Tab>
+</Tabs>
+
+<Check>
+**Success!** You've made your first prediction. The model detected objects in your image and returned bounding boxes, class names, confidences, and segmentation masks.
+</Check>
+
+## Alternative: Python SDK (No Server)
+
+You can also use Mozo directly in Python without starting the HTTP server. This is ideal for embedding in applications or when you only need Python access.
+
+<Tabs>
+  <Tab title="Object Detection">
+    ```python
+    from mozo import ModelManager
+    import cv2
+
+    # Initialize manager
+    manager = ModelManager()
+
+    # Load model
+    model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+    # Load image and predict
+    image = cv2.imread('your_image.jpg')
+    detections = model.predict(image)
+
+    # Access results
+    print(f"Found {len(detections)} objects")
+    for det in detections.detections:
+        print(f"  - {det.class_name}: {det.confidence:.2f}")
+    ```
+  </Tab>
+
+  <Tab title="Text Recognition">
+    ```python
+    from mozo import ModelManager
+    import cv2
+
+    manager = ModelManager()
+    model = manager.get_model('easyocr', 'english-light')
+
+    image = cv2.imread('document.jpg')
+    results = model.predict(image)
+
+    for item in results.detections:
+        print(f"Text: {item.text}")
+        print(f"Confidence: {item.confidence:.2%}")
+    ```
+  </Tab>
+
+  <Tab title="Depth Estimation">
+    ```python
+    from mozo import ModelManager
+    import cv2
+
+    manager = ModelManager()
+    model = manager.get_model('depth_anything', 'small')
+
+    image = cv2.imread('scene.jpg')
+    depth_map = model.predict(image)
+
+    # depth_map is a PIL Image
+    depth_map.save('depth_output.png')
+    depth_map.show()
+    ```
+  </Tab>
+
+  <Tab title="Visual Q&A">
+    ```python
+    from mozo import ModelManager
+    import cv2
+
+    manager = ModelManager()
+    model = manager.get_model('qwen2.5_vl', '7b-instruct')
+
+    image = cv2.imread('image.jpg')
+    result = model.predict(
+        image,
+        prompt="What objects are visible in this image?"
+    )
+
+    print(result['text'])
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+**REST API vs Python SDK:**
+- **REST API** (`mozo start`): Use when you need HTTP access, multi-language support, or want all models instantly available
+- **Python SDK** (`ModelManager`): Use when embedding in Python apps, avoiding HTTP overhead, or needing direct memory access
+</Note>
+
+## What Just Happened?
+
+1. **Mozo received your request** and identified which model to use (`detectron2/mask_rcnn_R_50_FPN_3x`)
+2. **The model loaded** (takes a few seconds on first access, then cached)
+3. **Inference ran** on your image
+4. **Results returned** in a unified JSON format
+
+## Try Other Models
+
+Now that the server is running, try different models:
+
+### Object Detection (Faster R-CNN)
+
+```bash
+curl -X POST "http://localhost:8000/predict/detectron2/faster_rcnn_R_50_FPN_3x" \
+  -F "file=@your_image.jpg"
+```
+
+### Text Recognition (EasyOCR)
+
+```bash
+curl -X POST "http://localhost:8000/predict/easyocr/english-light" \
+  -F "file=@document.jpg"
+```
+
+### Depth Estimation
+
+```bash
+curl -X POST "http://localhost:8000/predict/depth_anything/small" \
+  -F "file=@scene.jpg"
+```
+
+### Visual Question Answering
+
+```bash
+curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct" \
+  -F "file=@image.jpg" \
+  -F "prompt=What objects are visible in this image?"
+```
+
+## Explore Available Models
+
+List all model families:
+
+```bash
+curl http://localhost:8000/models
+```
+
+List variants for a specific family:
+
+```bash
+curl http://localhost:8000/models/detectron2/variants
+```
+
+Get detailed information about a model:
+
+```bash
+curl http://localhost:8000/models/detectron2/mask_rcnn_R_50_FPN_3x/info
+```
+
+## Server Options
+
+Customize server behavior:
+
+```bash
+# Custom port
+mozo start --port 8080
+
+# Custom host
+mozo start --host 127.0.0.1
+
+# Production mode with multiple workers
+mozo start --workers 4
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Choosing a Model" icon="magnifying-glass" href="/choosing-a-model">
+    Learn which model to use for different tasks
+  </Card>
+
+  <Card title="REST API Reference" icon="code" href="/rest-api">
+    Explore all API endpoints and options
+  </Card>
+
+  <Card title="Model Families" icon="grid" href="/model-families/detectron2">
+    See detailed documentation for each model family
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Model loading is slow on first request">
+    This is expected behavior. Models load on first access and can take several seconds depending on model size. Subsequent requests to the same model are fast (cached in memory).
+  </Accordion>
+
+  <Accordion title="Out of memory error">
+    Some models (like Qwen2.5-VL 7B) require significant RAM (16GB+). Either:
+    - Use a smaller variant
+    - Manually unload other models first
+    - Enable aggressive cleanup: `curl -X POST "http://localhost:8000/models/cleanup?inactive_seconds=60"`
+  </Accordion>
+
+  <Accordion title="ImportError: detectron2 not installed">
+    Detectron2 requires platform-specific installation. See [Detectron2 installation guide](https://detectron2.readthedocs.io/en/latest/tutorials/install.html).
+  </Accordion>
+
+  <Accordion title="MPS/GPU issues on macOS">
+    Some models have limited MPS support. If you encounter errors, the server automatically falls back to CPU (set via `PYTORCH_ENABLE_MPS_FALLBACK=1`).
+  </Accordion>
+</AccordionGroup>
+
+For more troubleshooting tips, see the [Troubleshooting Guide](/troubleshooting).

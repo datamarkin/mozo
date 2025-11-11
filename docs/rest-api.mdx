@@ -1,0 +1,534 @@
+---
+title: REST API
+description: Complete HTTP API reference for Mozo model server
+---
+
+Mozo provides a REST API for making predictions and managing models via HTTP. All endpoints return JSON responses.
+
+## Base URL
+
+When running locally (default):
+```
+http://localhost:8000
+```
+
+## Authentication
+
+Mozo does not require authentication for local deployments. All endpoints are publicly accessible on the server's host and port.
+
+<Note>
+For production deployments, consider placing Mozo behind a reverse proxy (nginx, Traefik) with authentication middleware.
+</Note>
+
+## Core Endpoints
+
+### Make Prediction
+
+Run inference on an image using a specific model.
+
+<ParamField path="family" type="string" required>
+  Model family name (e.g., `detectron2`, `easyocr`, `depth_anything`)
+</ParamField>
+
+<ParamField path="variant" type="string" required>
+  Model variant name (e.g., `mask_rcnn_R_50_FPN_3x`, `english-light`)
+</ParamField>
+
+<ParamField body="file" type="file" required>
+  Image file to process. Supports common formats: JPG, PNG, BMP, TIFF
+</ParamField>
+
+<ParamField body="prompt" type="string">
+  Text prompt for vision-language models (Qwen-VL, BLIP, Florence-2 captioning)
+</ParamField>
+
+<ParamField body="mask" type="file">
+  Mask image for inpainting models (Stability Inpainting). Must match input image dimensions.
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \
+  -F "file=@image.jpg"
+```
+
+```python Python
+import requests
+
+with open('image.jpg', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+        files={'file': f}
+    )
+
+detections = response.json()
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', imageFile);
+
+const response = await fetch(
+  'http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x',
+  { method: 'POST', body: formData }
+);
+
+const detections = await response.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json Detection Models
+[
+  {
+    "bbox": [120.5, 95.2, 315.8, 405.9],
+    "class_name": "person",
+    "class_id": 0,
+    "confidence": 0.95,
+    "mask": [[...]]
+  },
+  {
+    "bbox": [450.2, 180.5, 620.3, 380.1],
+    "class_name": "car",
+    "class_id": 2,
+    "confidence": 0.89
+  }
+]
+```
+
+```json VLM Models
+{
+  "text": "The image shows a person standing next to a red car in an urban setting...",
+  "prompt": "Describe this image",
+  "variant": "7b-instruct"
+}
+```
+
+```json OCR Models
+[
+  {
+    "text": "Invoice",
+    "bbox": [100, 50, 200, 80],
+    "confidence": 0.98
+  },
+  {
+    "text": "Total: $1,234.56",
+    "bbox": [100, 400, 300, 430],
+    "confidence": 0.95
+  }
+]
+```
+</ResponseExample>
+
+#### Response Formats by Model Type
+
+**Object Detection/Segmentation** (Detectron2, Florence-2):
+- Returns array of detection objects
+- Each detection includes `bbox`, `class_name`, `class_id`, `confidence`
+- Segmentation models also include `mask` array
+
+**OCR Models** (EasyOCR, PaddleOCR, PPStructure):
+- Returns array of text detection objects
+- Each includes `text`, `bbox`, `confidence`
+- PPStructure may include `layout_type`, `table_html`, `formula_latex`
+
+**Vision-Language Models** (Qwen-VL, BLIP):
+- Returns object with `text` response and metadata
+- Includes `prompt` (input) and `variant` (model used)
+
+**Depth Estimation** (Depth Anything):
+- Returns PNG image (binary data)
+- Content-Type: `image/png`
+
+**Inpainting** (Stability):
+- Returns PNG image (binary data)
+- Content-Type: `image/png`
+
+### List Model Families
+
+Get all available model families.
+
+<RequestExample>
+```bash cURL
+curl http://localhost:8000/models
+```
+
+```python Python
+import requests
+response = requests.get('http://localhost:8000/models')
+families = response.json()
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "families": [
+    "detectron2",
+    "depth_anything",
+    "qwen2.5_vl",
+    "qwen3_vl",
+    "paddleocr",
+    "ppstructure",
+    "easyocr",
+    "florence2",
+    "blip_vqa",
+    "stability_inpainting",
+    "datamarkin"
+  ]
+}
+```
+</ResponseExample>
+
+### List Model Variants
+
+Get all variants for a specific model family.
+
+<ParamField path="family" type="string" required>
+  Model family name
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl http://localhost:8000/models/detectron2/variants
+```
+
+```python Python
+import requests
+response = requests.get('http://localhost:8000/models/detectron2/variants')
+variants = response.json()
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "family": "detectron2",
+  "variants": [
+    "mask_rcnn_R_50_FPN_3x",
+    "faster_rcnn_R_50_FPN_3x",
+    "retinanet_R_50_FPN_3x",
+    "keypoint_rcnn_R_50_FPN_3x"
+    // ... 23 more variants
+  ]
+}
+```
+</ResponseExample>
+
+### Get Model Info
+
+Get detailed information about a model family or specific variant.
+
+<ParamField path="family" type="string" required>
+  Model family name
+</ParamField>
+
+<ParamField path="variant" type="string" required>
+  Model variant name
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl http://localhost:8000/models/detectron2/mask_rcnn_R_50_FPN_3x/info
+```
+
+```python Python
+import requests
+response = requests.get(
+    'http://localhost:8000/models/detectron2/mask_rcnn_R_50_FPN_3x/info'
+)
+info = response.json()
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "family": "detectron2",
+  "variant": "mask_rcnn_R_50_FPN_3x",
+  "task_type": "object_detection",
+  "description": "Detectron2 models for object detection, instance segmentation, and keypoint detection",
+  "loaded": false
+}
+```
+</ResponseExample>
+
+## Model Management Endpoints
+
+### List Loaded Models
+
+Get all currently loaded models in memory.
+
+<RequestExample>
+```bash cURL
+curl http://localhost:8000/models/loaded
+```
+
+```python Python
+import requests
+response = requests.get('http://localhost:8000/models/loaded')
+loaded = response.json()
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "loaded_models": [
+    {
+      "model_id": "detectron2/mask_rcnn_R_50_FPN_3x",
+      "last_used": 1698765432,
+      "inactive_seconds": 45
+    },
+    {
+      "model_id": "easyocr/english-light",
+      "last_used": 1698765400,
+      "inactive_seconds": 77
+    }
+  ]
+}
+```
+</ResponseExample>
+
+### Unload Model
+
+Manually unload a specific model to free memory.
+
+<ParamField path="family" type="string" required>
+  Model family name
+</ParamField>
+
+<ParamField path="variant" type="string" required>
+  Model variant name
+</ParamField>
+
+<RequestExample>
+```bash cURL
+curl -X POST "http://localhost:8000/models/detectron2/mask_rcnn_R_50_FPN_3x/unload"
+```
+
+```python Python
+import requests
+response = requests.post(
+    'http://localhost:8000/models/detectron2/mask_rcnn_R_50_FPN_3x/unload'
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "status": "success",
+  "message": "Model detectron2/mask_rcnn_R_50_FPN_3x unloaded successfully"
+}
+```
+</ResponseExample>
+
+### Cleanup Inactive Models
+
+Automatically unload models that haven't been used recently.
+
+<ParamField query="inactive_seconds" type="integer" default="600">
+  Time threshold in seconds. Models inactive longer than this are unloaded.
+</ParamField>
+
+<RequestExample>
+```bash cURL
+# Unload models inactive for 10+ minutes (default)
+curl -X POST "http://localhost:8000/models/cleanup"
+
+# Unload models inactive for 1+ minute (aggressive)
+curl -X POST "http://localhost:8000/models/cleanup?inactive_seconds=60"
+```
+
+```python Python
+import requests
+
+# Default cleanup (10 minutes)
+response = requests.post('http://localhost:8000/models/cleanup')
+
+# Aggressive cleanup (1 minute)
+response = requests.post(
+    'http://localhost:8000/models/cleanup',
+    params={'inactive_seconds': 60}
+)
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "status": "success",
+  "unloaded_count": 2,
+  "message": "Unloaded 2 inactive model(s)"
+}
+```
+</ResponseExample>
+
+## Error Responses
+
+All endpoints return consistent error responses:
+
+<ResponseExample>
+```json Model Not Found
+{
+  "detail": "Unknown model family: 'invalid_model'. Available families: [...]"
+}
+```
+
+```json Variant Not Found
+{
+  "detail": "Unsupported variant: 'invalid_variant' for family 'detectron2'"
+}
+```
+
+```json Missing Required Parameter
+{
+  "detail": "Missing required parameter: prompt"
+}
+```
+
+```json Model Loading Error
+{
+  "detail": "Failed to load model detectron2/mask_rcnn_R_50_FPN_3x: [error message]"
+}
+```
+</ResponseExample>
+
+## HTTP Status Codes
+
+| Code | Meaning | Common Causes |
+|------|---------|---------------|
+| 200 | Success | Request completed successfully |
+| 400 | Bad Request | Missing required parameters, invalid file format |
+| 404 | Not Found | Invalid family or variant name |
+| 500 | Internal Server Error | Model loading failed, prediction error |
+
+## Rate Limiting
+
+Mozo does not implement rate limiting by default. For production deployments, implement rate limiting at the reverse proxy level (nginx, Traefik, Kong).
+
+## File Upload Limits
+
+Default maximum file size: **10MB**
+
+To change this limit, configure your reverse proxy or modify the FastAPI server settings.
+
+## CORS
+
+CORS is enabled by default for all origins (`*`). For production, configure CORS to only allow your application domains.
+
+## Server Configuration
+
+### Command-Line Options
+
+```bash
+# Default: all interfaces, port 8000, reload enabled
+mozo start
+
+# Custom port
+mozo start --port 8080
+
+# Custom host (localhost only)
+mozo start --host 127.0.0.1
+
+# Production mode with workers
+mozo start --workers 4
+
+# Disable reload (production)
+mozo start --no-reload
+```
+
+### Environment Variables
+
+<ParamField name="PYTORCH_ENABLE_MPS_FALLBACK" type="string" default="1">
+  Enable MPS fallback for macOS compatibility
+</ParamField>
+
+<ParamField name="HF_HOME" type="string">
+  Custom directory for HuggingFace model cache
+</ParamField>
+
+<ParamField name="DATAMARKIN_TOKEN" type="string">
+  Bearer token for Datamarkin cloud inference
+</ParamField>
+
+## Examples by Use Case
+
+### Batch Processing
+
+Process multiple images with the same model:
+
+```python
+import requests
+import glob
+
+model_id = "detectron2/mask_rcnn_R_50_FPN_3x"
+
+for image_path in glob.glob("images/*.jpg"):
+    with open(image_path, 'rb') as f:
+        response = requests.post(
+            f"http://localhost:8000/predict/{model_id}",
+            files={'file': f}
+        )
+        detections = response.json()
+        print(f"{image_path}: {len(detections)} objects")
+```
+
+### Multi-Model Pipeline
+
+Use multiple models in sequence:
+
+```python
+import requests
+
+# Step 1: Detect objects
+response1 = requests.post(
+    "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x",
+    files={'file': open('image.jpg', 'rb')}
+)
+detections = response1.json()
+
+# Step 2: Generate description
+response2 = requests.post(
+    "http://localhost:8000/predict/qwen2.5_vl/7b-instruct",
+    files={'file': open('image.jpg', 'rb')},
+    data={'prompt': f'Describe the {len(detections)} objects in this image'}
+)
+description = response2.json()
+```
+
+### Memory-Efficient Processing
+
+Manually manage memory for large models:
+
+```python
+import requests
+
+# Load and use large model
+model_id = "qwen2.5_vl/7b-instruct"
+response = requests.post(
+    f"http://localhost:8000/predict/{model_id}",
+    files={'file': open('image.jpg', 'rb')},
+    data={'prompt': 'Analyze this image'}
+)
+
+# Immediately free memory after use
+requests.post(f"http://localhost:8000/models/{model_id.replace('/', '/')}/unload")
+```
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Python SDK" icon="code" href="/api-reference/python-sdk/manager">
+    Use Mozo directly in Python applications
+  </Card>
+
+  <Card title="Model Families" icon="grid" href="/model-families/detectron2">
+    Detailed documentation for each model
+  </Card>
+
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Common issues and solutions
+  </Card>
+</CardGroup>

@@ -1,0 +1,715 @@
+---
+title: Depth Anything
+description: Monocular depth estimation from single images with 3 quality variants
+---
+
+Depth Anything V2 is a state-of-the-art monocular depth estimation model. Mozo provides 3 pre-configured variants that generate depth maps from single images, enabling 3D understanding without specialized hardware.
+
+## The Problem
+
+Understanding 3D scene structure traditionally requires stereo cameras, LiDAR sensors, or structured light systems. This specialized hardware is expensive and not always available, limiting 3D applications to research labs and high-end products.
+
+Depth Anything V2 solves this by estimating depth from ordinary 2D images using deep learning, bringing 3D understanding to any camera-equipped device.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="small" icon="bolt">
+    **Best for speed**
+    - Fastest inference (~1 second)
+    - Low memory footprint
+    - Good depth quality
+    - Real-time applications
+  </Card>
+
+  <Card title="large" icon="award">
+    **Best for quality**
+    - Highest accuracy
+    - Best edge preservation
+    - Slower inference (~3 seconds)
+    - Production 3D applications
+  </Card>
+</CardGroup>
+
+## All Variants
+
+| Variant | Speed | Quality | Memory | Best For |
+|---------|-------|---------|--------|----------|
+| small | **Fastest** (~1s) | Good | Low (~1GB) | Real-time, mobile, prototyping |
+| base | Medium (~2s) | Better | Medium (~2GB) | Balanced applications |
+| large | Slower (~3s) | **Best** | High (~3GB) | Maximum quality, offline processing |
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    # Returns PNG image (depth map)
+    curl -X POST "http://localhost:8000/predict/depth_anything/small" \
+      -F "file=@scene.jpg" \
+      --output depth_map.png
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+    from PIL import Image
+    from io import BytesIO
+
+    # Get depth map
+    with open('scene.jpg', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/depth_anything/small',
+            files={'file': f}
+        )
+
+    # Response is PNG image data
+    depth_map = Image.open(BytesIO(response.content))
+    depth_map.save('depth_output.png')
+
+    # Display
+    depth_map.show()
+    ```
+  </Tab>
+
+  <Tab title="JavaScript">
+    ```javascript
+    const formData = new FormData();
+    formData.append('file', imageFile);
+
+    const response = await fetch(
+      'http://localhost:8000/predict/depth_anything/small',
+      { method: 'POST', body: formData }
+    );
+
+    // Response is image/png
+    const blob = await response.blob();
+    const imageUrl = URL.createObjectURL(blob);
+    document.getElementById('depth-img').src = imageUrl;
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+<ResponseField name="Content-Type" type="string" required>
+  `image/png` - Binary PNG image data
+</ResponseField>
+
+**Depth Map Encoding:**
+- Grayscale image where pixel intensity represents depth
+- **Darker pixels:** Closer to camera (near)
+- **Lighter pixels:** Farther from camera (far)
+- Value range: 0-255 (8-bit grayscale)
+
+<Note>
+The response is a PNG **image file**, not JSON. Save it directly or load it into an image processing library.
+</Note>
+
+## Understanding Depth Maps
+
+### Visualization
+
+```python
+import requests
+from PIL import Image
+from io import BytesIO
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Get depth map
+response = requests.post(
+    'http://localhost:8000/predict/depth_anything/small',
+    files={'file': open('scene.jpg', 'rb')}
+)
+
+depth_map = Image.open(BytesIO(response.content))
+
+# Visualize with colormap
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+plt.imshow(Image.open('scene.jpg'))
+plt.title('Original Image')
+plt.axis('off')
+
+plt.subplot(1, 2, 2)
+plt.imshow(np.array(depth_map), cmap='viridis')
+plt.title('Depth Map (yellow=far, blue=near)')
+plt.colorbar(label='Depth')
+plt.axis('off')
+
+plt.tight_layout()
+plt.show()
+```
+
+### Color Interpretation
+
+When using `viridis` colormap (common for depth):
+- **Blue/Purple:** Near (foreground objects)
+- **Green:** Middle distance
+- **Yellow/Bright:** Far (background, sky)
+
+## Common Use Cases
+
+### 3D Reconstruction
+
+```python
+import requests
+import numpy as np
+from PIL import Image
+from io import BytesIO
+
+# Get depth map
+response = requests.post(
+    'http://localhost:8000/predict/depth_anything/large',
+    files={'file': open('room.jpg', 'rb')}
+)
+
+depth_map = np.array(Image.open(BytesIO(response.content)))
+
+# Normalize depth values to meters (calibration needed)
+depth_meters = (depth_map / 255.0) * 10  # Assuming max depth 10m
+
+# Generate point cloud (simplified)
+height, width = depth_map.shape
+y_coords, x_coords = np.mgrid[0:height, 0:width]
+
+points_3d = np.stack([
+    x_coords.flatten(),
+    y_coords.flatten(),
+    depth_meters.flatten()
+], axis=1)
+
+print(f"Generated {len(points_3d)} 3D points")
+```
+
+### Augmented Reality Effects
+
+```python
+import cv2
+import numpy as np
+from PIL import Image
+from io import BytesIO
+import requests
+
+# Load original image
+original = cv2.imread('photo.jpg')
+
+# Get depth map
+response = requests.post(
+    'http://localhost:8000/predict/depth_anything/small',
+    files={'file': open('photo.jpg', 'rb')}
+)
+depth_map = np.array(Image.open(BytesIO(response.content)))
+
+# Apply depth-based blur (fake bokeh effect)
+foreground_mask = depth_map < 100  # Near objects
+blurred = cv2.GaussianBlur(original, (21, 21), 0)
+
+# Keep foreground sharp, blur background
+result = np.where(
+    foreground_mask[:, :, np.newaxis],
+    original,
+    blurred
+)
+
+cv2.imwrite('bokeh_effect.jpg', result)
+```
+
+### Obstacle Detection (Robotics)
+
+```python
+import numpy as np
+from PIL import Image
+from io import BytesIO
+
+# Get depth map from robot camera
+response = requests.post(
+    'http://localhost:8000/predict/depth_anything/small',
+    files={'file': robot_camera_frame}
+)
+
+depth_map = np.array(Image.open(BytesIO(response.content)))
+
+# Detect close obstacles (dark pixels = near)
+obstacle_threshold = 80  # Adjust based on calibration
+obstacles = depth_map < obstacle_threshold
+
+# Count obstacle pixels in center region (robot's path)
+h, w = depth_map.shape
+center_region = obstacles[h//3:2*h//3, w//3:2*w//3]
+obstacle_ratio = center_region.sum() / center_region.size
+
+if obstacle_ratio > 0.3:  # 30% of path is blocked
+    print("OBSTACLE DETECTED - STOP")
+else:
+    print("Path clear - continue")
+```
+
+### Portrait Mode Effect
+
+```bash
+# Get depth map
+curl -X POST "http://localhost:8000/predict/depth_anything/base" \
+  -F "file=@portrait.jpg" \
+  --output depth.png
+
+# Use depth map to create bokeh effect in photo editing software
+```
+
+## Performance Characteristics
+
+### Processing Time (CPU)
+
+- **small:** ~0.5-1.5 seconds per image
+- **base:** ~1-2.5 seconds per image
+- **large:** ~2-4 seconds per image
+
+<Tip>
+With GPU acceleration, all variants run 3-5x faster.
+</Tip>
+
+### Memory Usage
+
+- **small:** ~1GB RAM
+- **base:** ~2GB RAM
+- **large:** ~3GB RAM
+
+### Accuracy
+
+All variants produce high-quality depth maps:
+- **Relative depth:** Excellent (order of objects front-to-back)
+- **Edge preservation:** Good to excellent (large is best)
+- **Fine details:** Base and large variants excel
+- **Absolute depth:** Not calibrated (requires manual scaling)
+
+## Python SDK
+
+Use Depth Anything models directly in Python without the HTTP server.
+
+### Quick Start
+
+```python
+from mozo import ModelManager
+import cv2
+from PIL import Image
+
+# Initialize manager
+manager = ModelManager()
+
+# Load model
+model = manager.get_model('depth_anything', 'small')
+
+# Load image and generate depth map
+image = cv2.imread('scene.jpg')
+depth_map = model.predict(image)
+
+# depth_map is a PIL Image
+depth_map.save('depth_output.png')
+depth_map.show()
+```
+
+### Using Different Variants
+
+```python
+# Fast depth estimation (small)
+small_model = manager.get_model('depth_anything', 'small')
+depth_small = small_model.predict(image)
+
+# Balanced quality (base)
+base_model = manager.get_model('depth_anything', 'base')
+depth_base = base_model.predict(image)
+
+# Highest quality (large)
+large_model = manager.get_model('depth_anything', 'large')
+depth_large = large_model.predict(image)
+
+print(f"Small: {depth_small.size}")
+print(f"Base: {depth_base.size}")
+print(f"Large: {depth_large.size}")
+```
+
+### Depth Map Visualization
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+
+model = manager.get_model('depth_anything', 'small')
+depth_map = model.predict(image)
+
+# Convert to numpy array
+depth_array = np.array(depth_map)
+
+# Visualize with colormap
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+# Original image
+axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+axes[0].set_title('Original Image')
+axes[0].axis('off')
+
+# Depth map with colormap
+im = axes[1].imshow(depth_array, cmap='viridis')
+axes[1].set_title('Depth Map (yellow=far, blue=near)')
+axes[1].axis('off')
+plt.colorbar(im, ax=axes[1], label='Depth')
+
+plt.tight_layout()
+plt.savefig('depth_visualization.png')
+plt.show()
+```
+
+### 3D Point Cloud Generation
+
+```python
+import numpy as np
+
+model = manager.get_model('depth_anything', 'large')
+depth_map = model.predict(image)
+
+# Convert to numpy array
+depth_array = np.array(depth_map)
+
+# Normalize depth to meters (calibration needed)
+depth_meters = (depth_array / 255.0) * 10  # Assuming max depth 10m
+
+# Generate 3D point cloud
+height, width = depth_array.shape
+y_coords, x_coords = np.mgrid[0:height, 0:width]
+
+points_3d = np.stack([
+    x_coords.flatten(),
+    y_coords.flatten(),
+    depth_meters.flatten()
+], axis=1)
+
+print(f"Generated {len(points_3d)} 3D points")
+
+# Save point cloud (simplified format)
+np.savetxt('point_cloud.xyz', points_3d, fmt='%.6f')
+```
+
+### Depth-Based Image Effects
+
+```python
+import cv2
+import numpy as np
+
+model = manager.get_model('depth_anything', 'small')
+
+# Load image
+original = cv2.imread('photo.jpg')
+depth_map = model.predict(original)
+depth_array = np.array(depth_map)
+
+# Create bokeh effect (blur background, keep foreground sharp)
+foreground_mask = depth_array < 100  # Near objects
+
+# Blur entire image
+blurred = cv2.GaussianBlur(original, (21, 21), 0)
+
+# Combine: sharp foreground, blurred background
+result = np.where(
+    foreground_mask[:, :, np.newaxis],
+    original,
+    blurred
+)
+
+cv2.imwrite('bokeh_effect.jpg', result)
+```
+
+### Batch Processing
+
+```python
+import os
+
+model = manager.get_model('depth_anything', 'small')
+
+for filename in os.listdir('images/'):
+    if filename.endswith(('.jpg', '.png')):
+        image_path = os.path.join('images/', filename)
+        image = cv2.imread(image_path)
+
+        depth_map = model.predict(image)
+
+        # Save depth map
+        output_path = os.path.join('depth_maps/', f'depth_{filename}')
+        depth_map.save(output_path)
+
+        print(f"Processed: {filename}")
+```
+
+### Combining with Object Detection
+
+```python
+from mozo import ModelManager
+import cv2
+import numpy as np
+
+manager = ModelManager()
+
+# Load both models
+detector = manager.get_model('detectron2', 'faster_rcnn_R_50_FPN_3x')
+depth_model = manager.get_model('depth_anything', 'small')
+
+# Process image
+image = cv2.imread('scene.jpg')
+
+# Detect objects
+detections = detector.predict(image)
+
+# Get depth map
+depth_map = depth_model.predict(image)
+depth_array = np.array(depth_map)
+
+# Calculate depth for each detected object
+for det in detections.detections:
+    x1, y1, x2, y2 = [int(v) for v in det.bbox]
+
+    # Extract depth in bounding box
+    object_depth = depth_array[y1:y2, x1:x2]
+    mean_depth = object_depth.mean()
+
+    # Categorize distance
+    if mean_depth < 85:
+        distance = "NEAR"
+    elif mean_depth < 170:
+        distance = "MID"
+    else:
+        distance = "FAR"
+
+    print(f"{det.class_name}: {distance} (depth={mean_depth:.1f})")
+```
+
+### Obstacle Detection for Robotics
+
+```python
+import numpy as np
+
+model = manager.get_model('depth_anything', 'small')
+
+# Process camera frame
+camera_frame = cv2.imread('robot_view.jpg')
+depth_map = model.predict(camera_frame)
+depth_array = np.array(depth_map)
+
+# Detect obstacles in robot's path
+obstacle_threshold = 80  # Closer than this is obstacle
+obstacles = depth_array < obstacle_threshold
+
+# Focus on center region (robot's path)
+h, w = depth_array.shape
+center_region = obstacles[h//3:2*h//3, w//3:2*w//3]
+
+# Check if path is blocked
+obstacle_ratio = center_region.sum() / center_region.size
+
+if obstacle_ratio > 0.3:  # 30% of path blocked
+    print("⚠ OBSTACLE DETECTED - STOP")
+else:
+    print("✓ Path clear - continue")
+```
+
+### Depth Statistics
+
+```python
+import numpy as np
+
+model = manager.get_model('depth_anything', 'base')
+depth_map = model.predict(image)
+depth_array = np.array(depth_map)
+
+# Compute statistics
+stats = {
+    'min_depth': depth_array.min(),
+    'max_depth': depth_array.max(),
+    'mean_depth': depth_array.mean(),
+    'median_depth': np.median(depth_array),
+    'std_depth': depth_array.std()
+}
+
+# Analyze distribution
+near_pixels = (depth_array < 85).sum()
+mid_pixels = ((depth_array >= 85) & (depth_array < 170)).sum()
+far_pixels = (depth_array >= 170).sum()
+
+print("Depth Statistics:")
+print(f"  Min: {stats['min_depth']}")
+print(f"  Max: {stats['max_depth']}")
+print(f"  Mean: {stats['mean_depth']:.1f}")
+print(f"  Median: {stats['median_depth']:.1f}")
+print(f"  Std: {stats['std_depth']:.1f}")
+print(f"\nPixel Distribution:")
+print(f"  Near: {near_pixels:,} ({near_pixels/depth_array.size*100:.1f}%)")
+print(f"  Mid: {mid_pixels:,} ({mid_pixels/depth_array.size*100:.1f}%)")
+print(f"  Far: {far_pixels:,} ({far_pixels/depth_array.size*100:.1f}%)")
+```
+
+### Memory Management
+
+```python
+from mozo import ModelManager
+
+manager = ModelManager()
+
+# Load model
+model = manager.get_model('depth_anything', 'large')
+depth_map = model.predict(image)
+
+# Explicitly unload when done (frees ~3GB)
+manager.unload_model('depth_anything', 'large')
+
+# Or switch to smaller variant
+model_small = manager.get_model('depth_anything', 'small')  # Uses ~1GB
+```
+
+## Depth Map Processing
+
+### Converting to Numpy Array
+
+```python
+from PIL import Image
+import numpy as np
+from io import BytesIO
+
+depth_map_pil = Image.open(BytesIO(response.content))
+depth_array = np.array(depth_map_pil)
+
+print(depth_array.shape)  # (height, width)
+print(depth_array.dtype)  # uint8 (0-255)
+```
+
+### Finding Distance to Specific Objects
+
+```python
+import cv2
+import numpy as np
+
+# Assume you have object bounding box from detection model
+bbox = [100, 50, 300, 250]  # [x1, y1, x2, y2]
+
+# Extract depth in bounding box region
+x1, y1, x2, y2 = bbox
+object_depth = depth_array[y1:y2, x1:x2]
+
+# Average depth of object
+mean_depth = object_depth.mean()
+
+print(f"Object average depth: {mean_depth}/255")
+if mean_depth < 85:
+    print("Object is NEAR")
+elif mean_depth < 170:
+    print("Object is MID-RANGE")
+else:
+    print("Object is FAR")
+```
+
+### Depth-Based Segmentation
+
+```python
+import numpy as np
+
+# Segment image into depth layers
+near_mask = depth_array < 85
+mid_mask = (depth_array >= 85) & (depth_array < 170)
+far_mask = depth_array >= 170
+
+# Count pixels in each layer
+print(f"Near: {near_mask.sum()} pixels")
+print(f"Mid: {mid_mask.sum()} pixels")
+print(f"Far: {far_mask.sum()} pixels")
+```
+
+## Variant Selection Guide
+
+### Choose `small` when:
+- Speed is critical (real-time applications)
+- Running on limited hardware (mobile, edge devices)
+- Prototyping or testing
+- Relative depth is sufficient (not fine details)
+
+### Choose `base` when:
+- Balanced speed and quality needed
+- Standard production applications
+- Good compromise for most use cases
+
+### Choose `large` when:
+- Maximum quality is essential
+- Offline processing is acceptable
+- Fine depth details matter (edges, small objects)
+- Creating assets for 3D applications
+
+## vs Other Depth Estimation Methods
+
+| Method | Hardware | Speed | Accuracy | Cost |
+|--------|----------|-------|----------|------|
+| Depth Anything | Single camera | **Fast** | Good | **Free** |
+| Stereo Vision | 2 cameras | Medium | Good | Medium |
+| LiDAR | LiDAR sensor | **Fastest** | **Best** | Very High |
+| Structured Light | IR projector + camera | Fast | Excellent | High |
+
+<Note>
+Depth Anything provides the best value: no specialized hardware, fast inference, and good quality. However, it provides **relative depth** (not metric depth in meters).
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Depth map looks incorrect or noisy">
+    - Ensure input image has good quality (not blurry, well-lit)
+    - Try `large` variant for better quality
+    - Some scenes are inherently challenging (reflective surfaces, uniform textures)
+    - Depth Anything works best with natural outdoor/indoor scenes
+  </Accordion>
+
+  <Accordion title="How to convert to metric depth (meters)?">
+    Depth Anything provides relative depth, not absolute. To calibrate:
+    1. Measure actual distance to a reference object
+    2. Note its depth value in the map
+    3. Scale linearly: `depth_meters = (depth_value / 255) * max_distance`
+
+    Note: This is approximate and scene-dependent.
+  </Accordion>
+
+  <Accordion title="Depth map resolution differs from input">
+    Depth maps are generated at the model's native resolution and may differ from input. Resize if needed:
+    ```python
+    depth_map_resized = depth_map.resize(original_size, Image.LANCZOS)
+    ```
+  </Accordion>
+
+  <Accordion title="Slow processing">
+    - Use `small` variant for 2-3x speedup
+    - Enable GPU acceleration if available
+    - Reduce input image resolution before processing:
+    ```python
+    img = Image.open('large.jpg')
+    img.thumbnail((1280, 720))  # Resize before sending
+    ```
+  </Accordion>
+
+  <Accordion title="Works poorly on specific scene types">
+    Depth Anything may struggle with:
+    - Mirrors and reflective surfaces (confuses depth)
+    - Uniform textures (sky, walls)
+    - Transparent objects (glass, water)
+    - Extremely low light conditions
+
+    These are limitations of monocular depth estimation in general.
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={2}>
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Combine with object detection for 3D object localization
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task vision alternative (includes some depth understanding)
+  </Card>
+</CardGroup>

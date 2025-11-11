@@ -1,0 +1,558 @@
+---
+title: PPStructure
+description: Document structure analysis with layout detection, table recognition, and formula extraction
+---
+
+PP-Structure is PaddlePaddle's document understanding system. Mozo provides 4 pre-configured variants for analyzing document layouts, extracting tables as HTML, and recognizing mathematical formulas as LaTeX.
+
+## The Problem
+
+Document digitization requires more than OCR - you need to understand document structure, preserve table formatting, and extract mathematical formulas. Traditional OCR tools extract text line-by-line but lose critical layout information, making the output unusable for structured data extraction.
+
+PP-StructureV3 solves this by combining layout analysis, table recognition, and formula extraction in a unified pipeline, returning structured data ready for downstream processing.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="full" icon="star">
+    **Best for complete analysis**
+    - Layout detection
+    - Table recognition (HTML)
+    - Formula extraction (LaTeX)
+    - Document orientation correction
+  </Card>
+
+  <Card title="layout-only" icon="bolt">
+    **Best for fast preview**
+    - Layout detection only
+    - Fastest inference
+    - No OCR overhead
+  </Card>
+</CardGroup>
+
+## All Variants
+
+| Variant | Layout | Tables | Formulas | OCR | Speed | Best For |
+|---------|--------|--------|----------|-----|-------|----------|
+| layout-only | ✓ | ✗ | ✗ | ✗ | **Fastest** | Quick structure preview |
+| full | ✓ | ✓ | ✓ | ✓ | Slower | **Complete document analysis** |
+| table-analysis | ✓ | ✓ | ✗ | ✓ | Medium | Invoice, form extraction |
+| formula-analysis | ✓ | ✗ | ✓ | ✓ | Medium | Research papers, textbooks |
+
+<Note>
+All variants perform layout detection. The difference is which specialized recognition modules are enabled.
+</Note>
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/ppstructure/full" \
+      -F "file=@document.pdf"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    with open('invoice.pdf', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/ppstructure/full',
+            files={'file': f}
+        )
+
+    results = response.json()
+    for item in results:
+        print(f"Type: {item['layout_type']}")
+        if item.get('table_html'):
+            print(f"Table: {item['table_html'][:100]}...")
+        if item.get('text'):
+            print(f"Text: {item['text']}")
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+```json
+[
+  {
+    "bbox": [50, 100, 550, 150],
+    "layout_type": "title",
+    "text": "Annual Financial Report 2024",
+    "confidence": 0.98,
+    "page_index": 0
+  },
+  {
+    "bbox": [50, 200, 550, 450],
+    "layout_type": "table",
+    "table_html": "<table><tr><th>Quarter</th><th>Revenue</th></tr><tr><td>Q1</td><td>$1.2M</td></tr></table>",
+    "confidence": 0.95,
+    "page_index": 0
+  },
+  {
+    "bbox": [50, 500, 350, 550],
+    "layout_type": "formula",
+    "formula_latex": "E = mc^2",
+    "confidence": 0.92,
+    "page_index": 0
+  },
+  {
+    "bbox": [50, 600, 550, 750],
+    "layout_type": "text",
+    "text": "The following sections describe...",
+    "confidence": 0.97,
+    "page_index": 0
+  }
+]
+```
+
+<ResponseField name="bbox" type="array" required>
+  Bounding box coordinates `[x1, y1, x2, y2]` in image pixels
+</ResponseField>
+
+<ResponseField name="layout_type" type="string" required>
+  Element type: `title`, `text`, `table`, `formula`, `figure`, `list`, `reference`
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  Extracted text content (for text regions, available when OCR is enabled)
+</ResponseField>
+
+<ResponseField name="table_html" type="string">
+  HTML table structure (only for `layout_type: table`, when table recognition enabled)
+</ResponseField>
+
+<ResponseField name="formula_latex" type="string">
+  LaTeX formula (only for `layout_type: formula`, when formula recognition enabled)
+</ResponseField>
+
+<ResponseField name="confidence" type="float" required>
+  Detection confidence score (0.0 to 1.0)
+</ResponseField>
+
+<ResponseField name="page_index" type="integer">
+  Page number for multi-page documents (0-indexed)
+</ResponseField>
+
+## Layout Types Detected
+
+PP-Structure recognizes these document element types:
+
+- **title** - Headings and titles
+- **text** - Body text paragraphs
+- **table** - Tables (with HTML extraction if enabled)
+- **formula** - Mathematical formulas (with LaTeX if enabled)
+- **figure** - Images, charts, diagrams
+- **list** - Bulleted or numbered lists
+- **reference** - Citations and references
+
+## Common Use Cases
+
+### Invoice Processing
+```bash
+# Extract tables and text from invoices
+curl -X POST "http://localhost:8000/predict/ppstructure/table-analysis" \
+  -F "file=@invoice.pdf"
+```
+
+### Research Paper Analysis
+```bash
+# Extract formulas and structure from academic papers
+curl -X POST "http://localhost:8000/predict/ppstructure/formula-analysis" \
+  -F "file=@research_paper.pdf"
+```
+
+### Complete Document Digitization
+```bash
+# Full pipeline: layout + tables + formulas
+curl -X POST "http://localhost:8000/predict/ppstructure/full" \
+  -F "file=@document.pdf"
+```
+
+### Quick Structure Preview
+```bash
+# Fast layout detection without OCR
+curl -X POST "http://localhost:8000/predict/ppstructure/layout-only" \
+  -F "file=@document.jpg"
+```
+
+## Performance Characteristics
+
+### Processing Time
+
+- **layout-only**: ~0.5-1 second per page (layout detection only)
+- **table-analysis**: ~2-5 seconds per page (layout + table recognition)
+- **formula-analysis**: ~2-4 seconds per page (layout + formula recognition)
+- **full**: ~3-8 seconds per page (all features enabled)
+
+<Note>
+Times vary by document complexity, page size, and number of tables/formulas
+</Note>
+
+### Accuracy
+
+- **Layout Detection**: 95%+ accuracy on common document types
+- **Table Recognition**: 90%+ structure accuracy for standard tables
+- **Formula Recognition**: 85%+ accuracy for common mathematical notation
+
+## Python SDK
+
+Use PP-Structure models directly in Python for document analysis.
+
+### Quick Start
+
+```python
+from mozo import ModelManager
+import cv2
+
+# Initialize manager
+manager = ModelManager()
+
+# Load model
+model = manager.get_model('ppstructure', 'full')
+
+# Analyze document
+image = cv2.imread('document.jpg')
+results = model.predict(image)
+
+# Process results
+for element in results.detections:
+    print(f"Type: {element.layout_type}")
+    print(f"Location: {element.bbox}")
+
+    if hasattr(element, 'text') and element.text:
+        print(f"Text: {element.text}")
+
+    if hasattr(element, 'table_html') and element.table_html:
+        print(f"Table HTML: {element.table_html[:100]}...")
+
+    if hasattr(element, 'formula_latex') and element.formula_latex:
+        print(f"Formula: {element.formula_latex}")
+```
+
+### Using Different Variants
+
+```python
+# Fast layout detection only
+layout_model = manager.get_model('ppstructure', 'layout-only')
+layout = layout_model.predict(image)
+
+# Full analysis (all features)
+full_model = manager.get_model('ppstructure', 'full')
+complete = full_model.predict(image)
+
+# Focus on tables
+table_model = manager.get_model('ppstructure', 'table-analysis')
+tables = table_model.predict(image)
+
+# Focus on formulas
+formula_model = manager.get_model('ppstructure', 'formula-analysis')
+formulas = formula_model.predict(image)
+```
+
+### Extract Tables as DataFrames
+
+```python
+import pandas as pd
+from html.parser import HTMLParser
+
+model = manager.get_model('ppstructure', 'table-analysis')
+results = model.predict(image)
+
+# Find table elements
+tables = [
+    elem for elem in results.detections
+    if elem.layout_type == 'table' and hasattr(elem, 'table_html')
+]
+
+# Convert to pandas DataFrames
+for i, table_elem in enumerate(tables):
+    try:
+        # Parse HTML table to DataFrame
+        df = pd.read_html(table_elem.table_html)[0]
+        print(f"Table {i+1}:")
+        print(df)
+        df.to_csv(f'table_{i+1}.csv', index=False)
+    except Exception as e:
+        print(f"Could not parse table {i+1}: {e}")
+```
+
+### Extract Formulas for LaTeX
+
+```python
+model = manager.get_model('ppstructure', 'formula-analysis')
+results = model.predict(image)
+
+# Collect all formulas
+formulas = [
+    elem.formula_latex for elem in results.detections
+    if elem.layout_type == 'formula' and hasattr(elem, 'formula_latex')
+]
+
+# Write to LaTeX file
+with open('extracted_formulas.tex', 'w') as f:
+    f.write('\\documentclass{article}\n\\begin{document}\n\n')
+    for i, formula in enumerate(formulas):
+        f.write(f'% Formula {i+1}\n')
+        f.write(f'$${formula}$$\n\n')
+    f.write('\\end{document}\n')
+
+print(f"Extracted {len(formulas)} formulas to extracted_formulas.tex")
+```
+
+### Multi-Page PDF Processing
+
+```python
+from collections import defaultdict
+
+model = manager.get_model('ppstructure', 'full')
+
+# Process PDF (one image per page)
+import fitz  # PyMuPDF
+import numpy as np
+
+doc = fitz.open('document.pdf')
+all_results = defaultdict(list)
+
+for page_num in range(len(doc)):
+    page = doc[page_num]
+    pix = page.get_pixmap()
+
+    # Convert to numpy array
+    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+        pix.height, pix.width, pix.n
+    )
+
+    # Analyze page
+    results = model.predict(img)
+
+    # Group by page
+    for elem in results.detections:
+        all_results[page_num].append(elem)
+
+# Summary
+for page_num, elements in all_results.items():
+    print(f"Page {page_num + 1}: {len(elements)} elements")
+```
+
+### Filter by Element Type
+
+```python
+results = model.predict(image)
+
+# Extract only titles
+titles = [
+    elem for elem in results.detections
+    if elem.layout_type == 'title'
+]
+
+# Extract only tables
+tables = [
+    elem for elem in results.detections
+    if elem.layout_type == 'table'
+]
+
+# Extract only text paragraphs
+paragraphs = [
+    elem for elem in results.detections
+    if elem.layout_type == 'text'
+]
+
+print(f"Found {len(titles)} titles, {len(tables)} tables, {len(paragraphs)} paragraphs")
+```
+
+### Reconstruct Document Structure
+
+```python
+# Sort elements by vertical position
+sorted_elements = sorted(results.detections, key=lambda e: e.bbox[1])
+
+# Reconstruct reading order
+for elem in sorted_elements:
+    if elem.layout_type == 'title':
+        print(f"\n=== {elem.text} ===\n")
+    elif elem.layout_type == 'text':
+        print(elem.text)
+    elif elem.layout_type == 'table':
+        print("[TABLE]")
+    elif elem.layout_type == 'formula':
+        print(f"[FORMULA: {elem.formula_latex}]")
+    elif elem.layout_type == 'figure':
+        print("[FIGURE]")
+```
+
+## Table Recognition Details
+
+When `use_table_recognition=True`, PP-Structure:
+
+1. Detects table regions in the document
+2. Analyzes table structure (rows, columns, cells)
+3. Performs OCR on each cell
+4. Outputs HTML table structure
+
+**HTML Output Example:**
+```html
+<table>
+  <tr>
+    <th>Product</th>
+    <th>Quantity</th>
+    <th>Price</th>
+  </tr>
+  <tr>
+    <td>Widget A</td>
+    <td>10</td>
+    <td>$5.00</td>
+  </tr>
+</table>
+```
+
+**Use cases:**
+- Invoice line item extraction
+- Financial report tables
+- Form field extraction
+- Spreadsheet digitization
+
+## Formula Recognition Details
+
+When `use_formula_recognition=True`, PP-Structure:
+
+1. Detects formula regions (inline or display equations)
+2. Recognizes mathematical symbols and structure
+3. Outputs LaTeX notation
+
+**LaTeX Output Examples:**
+```latex
+E = mc^2
+\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+\int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}
+```
+
+**Use cases:**
+- Academic paper digitization
+- Textbook conversion
+- Equation extraction for rendering
+- Math homework analysis
+
+## Multi-Page Document Support
+
+PP-Structure processes multi-page PDFs automatically:
+
+```python
+import requests
+
+# Process entire PDF
+with open('multi_page.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:8000/predict/ppstructure/full',
+        files={'file': f}
+    )
+
+results = response.json()
+
+# Group by page
+from collections import defaultdict
+pages = defaultdict(list)
+for item in results:
+    pages[item['page_index']].append(item)
+
+for page_num, elements in pages.items():
+    print(f"Page {page_num}: {len(elements)} elements")
+```
+
+## vs Other OCR Models
+
+| Feature | PPStructure | PaddleOCR | EasyOCR |
+|---------|-------------|-----------|---------|
+| Layout detection | ✓ | ✗ | ✗ |
+| Table recognition | ✓ (HTML) | ✗ | ✗ |
+| Formula extraction | ✓ (LaTeX) | ✗ | ✗ |
+| Text OCR | ✓ | ✓ | ✓ |
+| Speed | Slower | **Fastest** | Fast |
+| Best for | Document structure | Text-only OCR | Simple OCR |
+
+<Tip>
+Use **PPStructure** for documents with complex layouts. Use **PaddleOCR** or **EasyOCR** for simple text extraction.
+</Tip>
+
+## Variant Selection Guide
+
+### Choose `layout-only` when:
+- You only need to know where elements are (no text extraction)
+- Building a document viewer or annotation tool
+- Fast preview before full processing
+- Testing document layout detection
+
+### Choose `table-analysis` when:
+- Processing invoices, receipts, forms
+- Extracting tabular data
+- Don't need formula recognition
+- Want faster processing than `full`
+
+### Choose `formula-analysis` when:
+- Digitizing academic papers, textbooks
+- Extracting mathematical equations
+- Don't need table recognition
+- Want faster processing than `full`
+
+### Choose `full` when:
+- Need complete document understanding
+- Processing diverse document types
+- Want all features available
+- Accuracy more important than speed
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Poor table recognition accuracy">
+    - Ensure table has clear grid lines
+    - Try higher resolution images (min 300 DPI)
+    - Complex tables with merged cells may have lower accuracy
+    - Consider using `layout-only` to verify table detection first
+  </Accordion>
+
+  <Accordion title="Formula not recognized">
+    - Ensure formula is clearly visible (not handwritten)
+    - PP-Structure works best with typeset formulas
+    - Complex multi-line formulas may be split into multiple regions
+    - Check LaTeX output for syntax errors
+  </Accordion>
+
+  <Accordion title="Slow processing">
+    - Use `layout-only` for faster results without OCR
+    - Reduce image resolution before processing
+    - Process pages in parallel if analyzing multi-page PDF
+    - Use `table-analysis` or `formula-analysis` instead of `full` if you don't need both
+  </Accordion>
+
+  <Accordion title="Installation error">
+    PP-Structure requires PaddleOCR installation:
+    ```bash
+    pip install paddleocr paddlepaddle
+    ```
+  </Accordion>
+
+  <Accordion title="Missing text in output">
+    - `layout-only` variant does NOT perform OCR
+    - Use `full`, `table-analysis`, or `formula-analysis` for text extraction
+    - Check `text` field in response (may be empty for non-text regions)
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="PaddleOCR" href="/model-families/paddleocr">
+    High-accuracy text-only OCR
+  </Card>
+
+  <Card title="EasyOCR" href="/model-families/easyocr">
+    Simple text extraction
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task vision alternative
+  </Card>
+</CardGroup>
