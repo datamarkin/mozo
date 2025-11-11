@@ -1,0 +1,395 @@
+---
+title: Florence-2
+description: Microsoft's unified vision model for detection, segmentation, captioning, and OCR
+---
+
+Florence-2 is Microsoft's unified vision-language model that performs multiple computer vision tasks with a single model. Mozo provides 8 pre-configured task variants, all powered by the same underlying model for maximum memory efficiency.
+
+## The Problem
+
+Traditional computer vision applications require loading separate models for each task - one for detection, another for captioning, another for OCR. This creates memory overhead and deployment complexity when you need multiple vision capabilities.
+
+Florence-2 solves this with a single unified model that can perform detection, segmentation, captioning, and OCR tasks by changing only the task prompt, not the model weights.
+
+## Recommended Variants
+
+<CardGroup cols={2}>
+  <Card title="detection" icon="crosshairs">
+    **Best for object detection**
+    - Bounding boxes for all objects
+    - Fast inference
+    - Returns PixelFlow Detections
+  </Card>
+
+  <Card title="captioning" icon="message">
+    **Best for image descriptions**
+    - Natural language descriptions
+    - No prompt required
+    - OpenAI-compatible response
+  </Card>
+</CardGroup>
+
+## All Task Variants
+
+<Note>
+**Important:** Florence-2 "variants" are actually different **tasks** performed by the same model. The model loads once and is shared across all tasks for memory efficiency.
+</Note>
+
+### Detection Tasks
+
+| Variant | Output | Prompt Required | Best For |
+|---------|--------|-----------------|----------|
+| detection | Bounding boxes + labels | No | General object detection |
+| detection_with_caption | Bounding boxes + descriptions | No | Detailed region understanding |
+
+### Segmentation Tasks
+
+| Variant | Output | Prompt Required | Best For |
+|---------|--------|-----------------|----------|
+| segmentation | Pixel masks for specified object | **Yes** (e.g., "person") | Targeted object segmentation |
+
+### Captioning Tasks
+
+| Variant | Output | Prompt Required | Best For |
+|---------|--------|-----------------|----------|
+| captioning | Brief image caption | No | Quick image descriptions |
+| detailed_captioning | Detailed description | No | More context about image content |
+| more_detailed_captioning | Comprehensive analysis | No | Full image understanding |
+
+### OCR Tasks
+
+| Variant | Output | Prompt Required | Best For |
+|---------|--------|-----------------|----------|
+| ocr | Extracted text | No | Simple text extraction |
+| ocr_with_region | Text + bounding boxes | No | Text location + content |
+
+## Quick Start
+
+<Tabs>
+  <Tab title="Detection">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/florence2/detection" \
+      -F "file=@image.jpg"
+    ```
+  </Tab>
+
+  <Tab title="Captioning">
+    ```bash
+    curl -X POST "http://localhost:8000/predict/florence2/captioning" \
+      -F "file=@photo.jpg"
+    ```
+  </Tab>
+
+  <Tab title="Segmentation">
+    ```bash
+    # Requires prompt parameter
+    curl -X POST "http://localhost:8000/predict/florence2/segmentation" \
+      -F "file=@image.jpg" \
+      -F "prompt=person"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+
+    # Detection
+    response = requests.post(
+        'http://localhost:8000/predict/florence2/detection',
+        files={'file': open('image.jpg', 'rb')}
+    )
+    detections = response.json()
+
+    # Captioning
+    response = requests.post(
+        'http://localhost:8000/predict/florence2/captioning',
+        files={'file': open('photo.jpg', 'rb')}
+    )
+    caption = response.json()
+    print(caption['text'])
+
+    # Segmentation (with prompt)
+    response = requests.post(
+        'http://localhost:8000/predict/florence2/segmentation',
+        files={'file': open('image.jpg', 'rb')},
+        data={'prompt': 'car'}
+    )
+    masks = response.json()
+    ```
+  </Tab>
+</Tabs>
+
+## Response Formats
+
+### Detection Tasks
+
+```json
+[
+  {
+    "bbox": [120, 95, 315, 405],
+    "class_name": "person",
+    "class_id": 0,
+    "confidence": 0.92
+  },
+  {
+    "bbox": [450, 180, 620, 380],
+    "class_name": "car",
+    "class_id": 1,
+    "confidence": 0.88
+  }
+]
+```
+
+**With captions** (`detection_with_caption`):
+```json
+[
+  {
+    "bbox": [120, 95, 315, 405],
+    "class_name": "a person wearing a blue shirt",
+    "confidence": 0.92
+  }
+]
+```
+
+### Segmentation Task
+
+```json
+[
+  {
+    "bbox": [100, 50, 400, 450],
+    "class_name": "person",
+    "confidence": 0.95,
+    "mask": [[x1,y1], [x2,y2], ...]  // Polygon points
+  }
+]
+```
+
+### Captioning Tasks
+
+```json
+{
+  "text": "A person standing next to a red car on a city street.",
+  "prompt": "<CAPTION>",
+  "variant": "captioning"
+}
+```
+
+### OCR Tasks
+
+**Simple OCR** (`ocr`):
+```json
+{
+  "text": "Welcome to our store\nOpen 9AM - 5PM\nPhone: 555-1234",
+  "prompt": "<OCR>",
+  "variant": "ocr"
+}
+```
+
+**OCR with regions** (`ocr_with_region`):
+```json
+[
+  {
+    "text": "Welcome",
+    "bbox": [50, 20, 200, 60],
+    "confidence": 0.98
+  },
+  {
+    "text": "Open 9AM - 5PM",
+    "bbox": [50, 80, 250, 110],
+    "confidence": 0.96
+  }
+]
+```
+
+## Common Use Cases
+
+### Multi-Task Image Analysis
+```python
+import requests
+
+image_file = {'file': open('photo.jpg', 'rb')}
+
+# Get objects in the image
+detections = requests.post(
+    'http://localhost:8000/predict/florence2/detection',
+    files=image_file
+).json()
+
+# Get image description
+caption = requests.post(
+    'http://localhost:8000/predict/florence2/detailed_captioning',
+    files={'file': open('photo.jpg', 'rb')}
+).json()
+
+# Extract any text
+text = requests.post(
+    'http://localhost:8000/predict/florence2/ocr',
+    files={'file': open('photo.jpg', 'rb')}
+).json()
+
+print(f"Objects: {len(detections)}")
+print(f"Caption: {caption['text']}")
+print(f"Text: {text['text']}")
+```
+
+### Targeted Object Segmentation
+```bash
+# Segment specific object types
+curl -X POST "http://localhost:8000/predict/florence2/segmentation" \
+  -F "file=@scene.jpg" \
+  -F "prompt=person"
+
+curl -X POST "http://localhost:8000/predict/florence2/segmentation" \
+  -F "file=@parking.jpg" \
+  -F "prompt=car"
+```
+
+### Document Understanding
+```bash
+# Get detailed caption about document layout
+curl -X POST "http://localhost:8000/predict/florence2/more_detailed_captioning" \
+  -F "file=@document.jpg"
+
+# Extract text with locations
+curl -X POST "http://localhost:8000/predict/florence2/ocr_with_region" \
+  -F "file=@document.jpg"
+```
+
+## Performance Characteristics
+
+- **First load:** ~10-20 seconds (downloads microsoft/Florence-2-large model)
+- **Task switching:** Instant (same model, different prompts)
+- **Detection:** ~1-3 seconds per image
+- **Captioning:** ~2-4 seconds per image
+- **OCR:** ~1-2 seconds per image
+- **Memory:** ~2-3GB RAM for the shared model
+
+<Tip>
+All task variants share the same model instance. Use multiple Florence-2 tasks without worrying about memory - the model loads only once.
+</Tip>
+
+## Model Sharing Example
+
+```python
+from mozo import ModelManager
+
+manager = ModelManager()
+
+# These all load the same underlying model
+detector = manager.get_model('florence2', 'detection')
+captioner = manager.get_model('florence2', 'captioning')
+ocr = manager.get_model('florence2', 'ocr')
+
+# Model is loaded only once, used by all three
+# Memory usage: ~2-3GB (not 6-9GB)
+```
+
+## Segmentation Details
+
+The `segmentation` task requires a text prompt describing what to segment:
+
+```python
+import requests
+
+# Segment people
+response = requests.post(
+    'http://localhost:8000/predict/florence2/segmentation',
+    files={'file': open('crowd.jpg', 'rb')},
+    data={'prompt': 'person'}
+)
+
+# Segment cars
+response = requests.post(
+    'http://localhost:8000/predict/florence2/segmentation',
+    files={'file': open('street.jpg', 'rb')},
+    data={'prompt': 'car'}
+)
+
+# Segment custom objects
+response = requests.post(
+    'http://localhost:8000/predict/florence2/segmentation',
+    files={'file': open('image.jpg', 'rb')},
+    data={'prompt': 'red umbrella'}
+)
+```
+
+**Prompt examples:**
+- Simple: `"person"`, `"car"`, `"dog"`
+- With attributes: `"red car"`, `"person with hat"`, `"black dog"`
+- Spatial: `"person on the left"`, `"car in the background"`
+
+## vs Task-Specific Models
+
+| Feature | Florence-2 | Detectron2 | PaddleOCR | Qwen-VL |
+|---------|-----------|------------|-----------|---------|
+| Detection | Good | **Best** | ✗ | Good |
+| Segmentation | Good | **Best** | ✗ | ✗ |
+| Captioning | **Good** | ✗ | ✗ | **Best** |
+| OCR | Good | ✗ | **Best** | Good |
+| Memory (multi-task) | **Efficient** | High | Medium | Very High |
+| Speed | Good | Faster | Faster | Slower |
+| Best for | Versatile applications | Production detection | Production OCR | Advanced VLM |
+
+<Note>
+Use **Florence-2** when you need multiple vision capabilities with minimal memory overhead. Use specialized models (Detectron2, PaddleOCR) for maximum accuracy in production.
+</Note>
+
+## Captioning Level Comparison
+
+**captioning:**
+> "A person standing next to a car."
+
+**detailed_captioning:**
+> "A person wearing a blue shirt standing next to a red car on a city street with buildings in the background."
+
+**more_detailed_captioning:**
+> "The image shows a person wearing a blue shirt and jeans standing next to a red sedan parked on a city street. In the background, there are several modern buildings with glass facades, and a few pedestrians walking on the sidewalk. The scene appears to be taken during daytime with clear weather conditions."
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Segmentation returns empty results">
+    Segmentation requires a `prompt` parameter:
+    ```bash
+    # ❌ Wrong
+    curl -X POST ".../florence2/segmentation" -F "file=@image.jpg"
+
+    # ✅ Correct
+    curl -X POST ".../florence2/segmentation" \
+      -F "file=@image.jpg" \
+      -F "prompt=person"
+    ```
+  </Accordion>
+
+  <Accordion title="Detection accuracy lower than Detectron2">
+    Florence-2 prioritizes versatility over specialized accuracy. For production object detection requiring maximum accuracy, use Detectron2.
+  </Accordion>
+
+  <Accordion title="OCR missing some text">
+    Florence-2 OCR is good but not as accurate as PaddleOCR or EasyOCR for text-heavy documents. For production OCR, use specialized OCR models.
+  </Accordion>
+
+  <Accordion title="Model loading slow on first request">
+    Expected - Florence-2-large is ~1GB download. Subsequent requests reuse the cached model and are fast.
+  </Accordion>
+
+  <Accordion title="Using multiple tasks increases memory">
+    This should not happen - all tasks share the same model. If memory increases, check that you're using ModelManager correctly (shared instance).
+  </Accordion>
+</AccordionGroup>
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Specialized object detection
+  </Card>
+
+  <Card title="PaddleOCR" href="/model-families/paddleocr">
+    Production OCR engine
+  </Card>
+
+  <Card title="Qwen-VL" href="/model-families/qwen-vl">
+    Advanced vision-language model
+  </Card>
+</CardGroup>

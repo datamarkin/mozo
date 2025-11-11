@@ -1,0 +1,453 @@
+---
+title: Datamarkin
+description: Cloud-based inference for custom-trained models via Datamarkin Vision Service
+---
+
+Datamarkin is a cloud-based computer vision model hosting service. Unlike other Mozo adapters that load models locally, the Datamarkin adapter provides inference via HTTP API calls to remotely hosted custom models.
+
+## The Problem
+
+Training custom computer vision models for specific domains (industrial inspection, wildlife monitoring, medical imaging) requires infrastructure to host and serve these models. Deploying models to production involves container orchestration, GPU management, scaling, monitoring, and DevOps complexity.
+
+Datamarkin Vision Service solves this by providing cloud-hosted inference for your custom-trained models, accessible via simple HTTP requests. No infrastructure management, instant scaling, and pay-per-use pricing.
+
+## Key Difference from Other Models
+
+<Warning>
+**Datamarkin is NOT a self-hosted model.** All other Mozo model families (Detectron2, PaddleOCR, etc.) download and run models locally on your server. Datamarkin makes HTTP requests to cloud-hosted models at `vision.datamarkin.com`.
+</Warning>
+
+**Local Models (Detectron2, PaddleOCR, etc.):**
+- Download model weights (~500MB-14GB)
+- Run inference on your hardware
+- No internet required after download
+- No usage limits
+- Full privacy (data never leaves your server)
+
+**Datamarkin (Cloud Service):**
+- No model downloads required
+- Inference runs on Datamarkin's servers
+- Requires internet connection for each request
+- Usage-based pricing (free tier available)
+- Data is sent to cloud API (review privacy policy)
+
+## Variant System
+
+Datamarkin uses **dynamic variants**. Unlike other families with predefined variants (e.g., `mask_rcnn_R_50_FPN_3x`), Datamarkin accepts any training ID as a variant:
+
+```bash
+# Your custom model's training ID becomes the variant
+curl -X POST "http://localhost:8000/predict/datamarkin/YOUR_TRAINING_ID" \
+  -F "file=@image.jpg"
+```
+
+Examples:
+- `datamarkin/wings-v4` - Butterfly wing detection model
+- `datamarkin/pcb-defects` - PCB defect detection
+- `datamarkin/retail-products` - Product recognition
+- `datamarkin/your-custom-model` - Any model trained via Datamarkin
+
+<Tip>
+The variant name IS the training ID. No configuration needed - just use your model's training ID directly.
+</Tip>
+
+## Authentication
+
+### Using Environment Variable (Recommended)
+
+```bash
+# Set token once
+export DATAMARKIN_TOKEN="your_bearer_token_here"
+
+# All Datamarkin requests will use this token
+curl -X POST "http://localhost:8000/predict/datamarkin/wings-v4" \
+  -F "file=@butterfly.jpg"
+```
+
+### Using Python SDK
+
+```python
+from mozo import ModelManager
+
+manager = ModelManager()
+
+# Option 1: Token from environment (DATAMARKIN_TOKEN)
+model = manager.get_model('datamarkin', 'wings-v4')
+
+# Option 2: Explicit token
+model = manager.get_model(
+    'datamarkin',
+    'your-training-id',
+    bearer_token='your_bearer_token_here'
+)
+
+# Make prediction
+import cv2
+image = cv2.imread('image.jpg')
+detections = model.predict(image)
+```
+
+### Public Models (No Authentication)
+
+Some Datamarkin models are public and don't require authentication:
+
+```bash
+curl -X POST "http://localhost:8000/predict/datamarkin/public-demo-model" \
+  -F "file=@image.jpg"
+```
+
+## Quick Start
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    # Set authentication
+    export DATAMARKIN_TOKEN="your_token"
+
+    # Run inference
+    curl -X POST "http://localhost:8000/predict/datamarkin/YOUR_TRAINING_ID" \
+      -F "file=@image.jpg"
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    import requests
+    import os
+
+    # Authentication from environment
+    headers = {
+        'Authorization': f"Bearer {os.getenv('DATAMARKIN_TOKEN')}"
+    }
+
+    # Run inference
+    with open('image.jpg', 'rb') as f:
+        response = requests.post(
+            'http://localhost:8000/predict/datamarkin/YOUR_TRAINING_ID',
+            files={'file': f}
+        )
+
+    detections = response.json()
+    for det in detections:
+        print(f"{det['class_name']}: {det['confidence']:.2f}")
+    ```
+  </Tab>
+
+  <Tab title="Python SDK">
+    ```python
+    from mozo import ModelManager
+    import cv2
+
+    # Initialize
+    manager = ModelManager()
+    model = manager.get_model('datamarkin', 'YOUR_TRAINING_ID')
+
+    # Predict
+    image = cv2.imread('image.jpg')
+    detections = model.predict(image)
+
+    print(f"Found {len(detections)} objects")
+    for det in detections.detections:
+        print(f"  {det.class_name}: {det.bbox}")
+    ```
+  </Tab>
+</Tabs>
+
+## Response Format
+
+Datamarkin returns PixelFlow Detections format:
+
+```json
+[
+  {
+    "bbox": [120, 95, 315, 405],
+    "class_name": "wing_damage",
+    "class_id": 0,
+    "confidence": 0.92,
+    "keypoints": [[150, 120], [200, 180], ...]  // If model supports keypoints
+  },
+  {
+    "bbox": [450, 180, 620, 380],
+    "class_name": "wing_healthy",
+    "class_id": 1,
+    "confidence": 0.88
+  }
+]
+```
+
+**Supported Task Types:**
+- Object detection (bounding boxes)
+- Instance segmentation (masks)
+- Keypoint detection (pose estimation)
+
+Output format matches the model type you trained on Datamarkin's platform.
+
+## Common Use Cases
+
+### Domain-Specific Object Detection
+
+```python
+# Industrial defect detection
+model = manager.get_model('datamarkin', 'pcb-defects-v2')
+defects = model.predict(pcb_image)
+
+# Medical imaging
+model = manager.get_model('datamarkin', 'xray-fractures')
+fractures = model.predict(xray_image)
+
+# Agricultural monitoring
+model = manager.get_model('datamarkin', 'crop-disease-detector')
+diseases = model.predict(leaf_image)
+```
+
+### Keypoint Detection
+
+```python
+# Animal pose estimation
+model = manager.get_model('datamarkin', 'butterfly-keypoints')
+detections = model.predict(butterfly_image)
+
+# Access keypoints
+for det in detections.detections:
+    if hasattr(det, 'keypoints') and det.keypoints:
+        print(f"Object has {len(det.keypoints)} keypoints")
+        for i, kp in enumerate(det.keypoints):
+            print(f"  Keypoint {i}: x={kp[0]}, y={kp[1]}")
+```
+
+### Batch Processing
+
+```python
+import os
+
+image_dir = "images_to_process/"
+model = manager.get_model('datamarkin', 'your-model-id')
+
+results = {}
+for filename in os.listdir(image_dir):
+    if filename.endswith(('.jpg', '.png')):
+        image = cv2.imread(os.path.join(image_dir, filename))
+        detections = model.predict(image)
+        results[filename] = len(detections)
+        print(f"{filename}: {len(detections)} objects")
+```
+
+## Configuration Options
+
+### Custom Base URL
+
+If using self-hosted Datamarkin:
+
+```python
+model = manager.get_model(
+    'datamarkin',
+    'your-model',
+    base_url='https://your-custom-domain.com',
+    bearer_token='your_token'
+)
+```
+
+### Timeout Configuration
+
+For models with slow inference:
+
+```python
+model = manager.get_model(
+    'datamarkin',
+    'large-model-id',
+    timeout=60  # Wait up to 60 seconds (default: 30)
+)
+```
+
+## Performance Characteristics
+
+- **No local loading:** Instant - no model download required
+- **First request:** Same as subsequent requests (no warmup needed locally)
+- **Inference time:** Varies by model and Datamarkin's server load
+- **Latency:** Includes network round-trip time (~50-500ms depending on location)
+- **Memory:** Minimal - no model weights loaded locally
+
+<Note>
+Inference speed depends on Datamarkin's infrastructure and your internet connection, not your local hardware.
+</Note>
+
+## Cost Considerations
+
+Datamarkin is a paid service with usage-based pricing:
+
+- **Free tier:** Available for testing and development
+- **Pay-per-prediction:** Scale automatically, pay only for what you use
+- **Enterprise plans:** Contact Datamarkin for custom pricing
+
+**Cost Comparison:**
+
+| Deployment | Setup Cost | Ongoing Cost | Scaling |
+|------------|------------|--------------|---------|
+| Self-hosted models | **Free** (use Mozo) | GPU/server costs | Manual |
+| Datamarkin | **Free** (API only) | Per-prediction | Automatic |
+
+<Tip>
+Use self-hosted models (Detectron2, etc.) for high-volume applications. Use Datamarkin for custom models, low-volume apps, or when you don't want to manage infrastructure.
+</Tip>
+
+## Error Handling
+
+### Authentication Errors (401)
+
+```python
+# RuntimeError: Datamarkin API authentication failed (401 Unauthorized)
+# Fix: Check your token
+model = manager.get_model(
+    'datamarkin',
+    'model-id',
+    bearer_token='correct_token_here'
+)
+```
+
+### Model Not Found (404)
+
+```python
+# RuntimeError: Training ID 'wrong-id' not found
+# Fix: Verify training ID from Datamarkin dashboard
+model = manager.get_model('datamarkin', 'correct-training-id')
+```
+
+### Timeout Errors
+
+```python
+# RuntimeError: Datamarkin API timeout after 30s
+# Fix: Increase timeout for slow models
+model = manager.get_model(
+    'datamarkin',
+    'slow-model',
+    timeout=120  # 2 minutes
+)
+```
+
+## Privacy & Security
+
+<Warning>
+**Data Privacy:** Images are sent to Datamarkin's servers for inference. Review Datamarkin's privacy policy if processing sensitive data.
+</Warning>
+
+**Recommendations:**
+- For sensitive data (medical, personal), use self-hosted Mozo models
+- For public/non-sensitive data, Datamarkin is convenient
+- For compliance requirements (HIPAA, GDPR), verify Datamarkin's certifications
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 Authentication Error">
+    Check your bearer token:
+    ```bash
+    # Verify environment variable is set
+    echo $DATAMARKIN_TOKEN
+
+    # If empty, set it
+    export DATAMARKIN_TOKEN="your_token_here"
+    ```
+
+    Or provide explicitly:
+    ```python
+    model = manager.get_model(
+        'datamarkin',
+        'model-id',
+        bearer_token='your_actual_token'
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="404 Model Not Found">
+    - Verify training ID from Datamarkin dashboard
+    - Check for typos in training ID
+    - Ensure model has been deployed (not just trained)
+    - Confirm you have access to this model
+  </Accordion>
+
+  <Accordion title="Connection Timeout">
+    - Check internet connection
+    - Increase timeout parameter
+    - Verify base_url is correct
+    - Check if Datamarkin service is experiencing issues
+  </Accordion>
+
+  <Accordion title="Slow Inference">
+    Datamarkin inference includes:
+    - Network latency (upload image + download results)
+    - Server-side model inference
+    - Possible queueing if servers are busy
+
+    Consider:
+    - Use smaller images for faster uploads
+    - Batch process during off-peak hours
+    - For high-volume/low-latency needs, self-host models instead
+  </Accordion>
+
+  <Accordion title="Different output format than expected">
+    Output format depends on your model type:
+    - Detection model → bounding boxes
+    - Segmentation model → masks
+    - Keypoint model → keypoints
+
+    Verify your model's task type in Datamarkin dashboard.
+  </Accordion>
+</AccordionGroup>
+
+## Datamarkin vs Self-Hosted Models
+
+### Choose Datamarkin when:
+- You need custom domain-specific models
+- You don't want to manage infrastructure
+- Usage is low-to-medium volume
+- You want instant scaling
+- DevOps complexity is a concern
+- You're prototyping or testing
+
+### Choose Self-Hosted (other Mozo models) when:
+- You need privacy/data sovereignty
+- Usage is high volume (cost-effective at scale)
+- You want offline capability
+- You need guaranteed latency
+- You have GPU infrastructure available
+- Open-source models meet your needs
+
+## Related Models
+
+<CardGroup cols={3}>
+  <Card title="Detectron2" href="/model-families/detectron2">
+    Self-hosted object detection
+  </Card>
+
+  <Card title="Florence-2" href="/model-families/florence2">
+    Multi-task self-hosted model
+  </Card>
+
+  <Card title="Choosing a Model" href="/choosing-a-model">
+    Decision guide for all families
+  </Card>
+</CardGroup>
+
+## Getting Started with Datamarkin
+
+1. **Sign up** at [vision.datamarkin.com](https://vision.datamarkin.com)
+2. **Train or deploy** a custom model
+3. **Get your training ID** from the dashboard
+4. **Get your API token** from settings
+5. **Use with Mozo:**
+
+```python
+from mozo import ModelManager
+import cv2
+
+manager = ModelManager()
+model = manager.get_model(
+    'datamarkin',
+    'YOUR_TRAINING_ID',
+    bearer_token='YOUR_API_TOKEN'
+)
+
+image = cv2.imread('test.jpg')
+detections = model.predict(image)
+print(f"Found {len(detections)} objects")
+```
