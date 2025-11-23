@@ -141,30 +141,84 @@ MODEL_REGISTRY = {
 
 def get_available_families():
     """
-    Get list of all available model families.
+    Get list of all available model families for discovery and API endpoints.
+
+    Problem: Users need to discover which model families are available without
+    importing adapters or reading source code. API endpoints need to list available
+    families without loading any models.
+
+    Solution: Returns all registered model family names from the registry. This is
+    a lightweight, fast operation that doesn't import or instantiate any adapters.
 
     Returns:
-        list: List of model family names
+        list: List of model family names (e.g., ['detectron2', 'depth_anything', 'qwen2.5_vl', ...])
+
+    Example:
+        ```python
+        from mozo.registry import get_available_families
+
+        families = get_available_families()
+        print(f"Available model families: {families}")
+        # Output: ['detectron2', 'depth_anything', 'qwen2.5_vl', 'paddleocr', ...]
+
+        # Check if a specific family is available
+        if 'detectron2' in families:
+            print("Detectron2 models are available")
+        ```
+
+    Note:
+        - This is a fast lookup (no imports, no model loading)
+        - Used by REST API /models endpoint
+        - Returns all families registered in MODEL_REGISTRY
     """
     return list(MODEL_REGISTRY.keys())
 
 
 def get_available_variants(family):
     """
-    Get list of variant names for a model family from registry.
+    Get list of variant names for a model family from registry for fast discovery.
 
-    NOTE: Registry variants are for fast discovery only.
-    Adapters are the source of truth for configuration.
-    Some adapters may support additional variants not listed here.
+    Problem: Each model family has multiple variants (e.g., Detectron2 has 27 variants).
+    Users need to discover available variants without importing heavy adapter modules or
+    loading models. API endpoints need to list variants quickly for documentation and
+    validation.
+
+    Solution: Returns variant names from the lightweight registry. This avoids importing
+    adapters, which can trigger heavy dependencies (PyTorch, Transformers, etc.).
+
+    IMPORTANT: Registry is for fast discovery only. Adapters are the authoritative source
+    for variant configurations. Some adapters may support additional variants not listed
+    in the registry - the adapter will still work, this list is just for convenience.
 
     Args:
-        family: Model family name
+        family: Model family name (e.g., 'detectron2', 'depth_anything')
 
     Returns:
-        list: Variant names
+        list: Variant names for the family (e.g., ['mask_rcnn_R_50_FPN_3x', ...])
+             Returns empty list for families with dynamic variants (e.g., datamarkin)
 
     Raises:
-        ValueError: If family is not in registry
+        ValueError: If family name is not found in registry
+
+    Example:
+        ```python
+        from mozo.registry import get_available_variants
+
+        # List all Detectron2 variants
+        variants = get_available_variants('detectron2')
+        print(f"Detectron2 has {len(variants)} variants")
+        print(variants[:3])  # ['mask_rcnn_R_50_FPN_3x', 'mask_rcnn_R_50_C4_1x', ...]
+
+        # Check if specific variant exists
+        if 'mask_rcnn_R_50_FPN_3x' in variants:
+            print("Mask R-CNN variant is available")
+        ```
+
+    Note:
+        - Fast lookup (no adapter imports, no model loading)
+        - Registry may be out of sync with adapters - this is acceptable
+        - Adapters validate variants during instantiation
+        - Empty list means dynamic variants (adapter accepts any variant)
     """
     if family not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model family: '{family}'. Available families: {get_available_families()}")
@@ -174,17 +228,57 @@ def get_available_variants(family):
 
 def get_model_info(family, variant=None):
     """
-    Get information about a model family.
+    Get detailed information about a model family from registry.
+
+    Problem: Users need to understand what a model family does, which task type it
+    handles, and what variants are available before loading models. API endpoints
+    need this metadata for documentation and validation without loading adapters.
+
+    Solution: Returns comprehensive family metadata from registry including task type,
+    description, adapter class, module path, and available variants. Optionally validates
+    that a specific variant exists in the registry.
 
     Args:
-        family: Model family name
-        variant: Optional variant name (for validation only)
+        family: Model family name (e.g., 'detectron2', 'depth_anything')
+        variant: Optional variant name for validation. If provided, checks if variant
+                exists in registry (raises ValueError if not found)
 
     Returns:
-        dict: Model family information
+        dict: Model family information with keys:
+            - family: Family name
+            - adapter_class: Adapter class name
+            - module: Python module path to adapter
+            - task_type: Task category (e.g., 'object_detection', 'ocr')
+            - description: Human-readable family description
+            - variants: List of available variant names
 
     Raises:
-        ValueError: If family or variant is not found
+        ValueError: If family name not found in registry
+        ValueError: If variant provided and not found in registry (except datamarkin)
+
+    Example:
+        ```python
+        from mozo.registry import get_model_info
+
+        # Get family information
+        info = get_model_info('detectron2')
+        print(f"Task: {info['task_type']}")  # 'object_detection'
+        print(f"Description: {info['description']}")
+        print(f"Variants: {len(info['variants'])}")  # 27
+
+        # Validate a specific variant exists
+        try:
+            info = get_model_info('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            print("Variant is valid")
+        except ValueError as e:
+            print(f"Variant not found: {e}")
+        ```
+
+    Note:
+        - Fast metadata lookup (no adapter imports)
+        - Used by REST API /models/{family}/{variant}/info endpoint
+        - Datamarkin family accepts any variant (dynamic variants)
+        - Variant validation is advisory only - adapters are authoritative
     """
     if family not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model family: '{family}'. Available families: {get_available_families()}")

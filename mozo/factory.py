@@ -11,10 +11,41 @@ from .registry import MODEL_REGISTRY
 
 class ModelFactory:
     """
-    Factory class for creating model instances dynamically.
+    Factory class for creating model instances dynamically from registry configuration.
 
-    The factory reads from MODEL_REGISTRY to instantiate the correct adapter class
-    with the appropriate parameters for the requested model variant.
+    Problem: Different ML frameworks (Detectron2, HuggingFace, PaddleOCR, etc.) have
+    completely different APIs and initialization patterns. Hard-coding model instantiation
+    for each framework creates rigid, difficult-to-extend code.
+
+    Solution: ModelFactory uses the registry pattern to dynamically import and instantiate
+    the correct adapter class for any model family. This enables adding new model families
+    without modifying core server code - just register the adapter and it's available.
+
+    The factory is intentionally "dumb" - it only handles adapter loading and instantiation.
+    All variant validation, configuration, and model initialization logic lives in the
+    adapters themselves, keeping responsibilities clear.
+
+    Example:
+        ```python
+        from mozo.factory import ModelFactory
+
+        factory = ModelFactory()
+
+        # Factory looks up 'detectron2' in registry, imports adapter, instantiates
+        model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+
+        # Factory handles completely different framework transparently
+        model = factory.create_model('depth_anything', 'small')
+
+        # List all available families
+        families = factory.get_available_families()
+        print(families)  # ['detectron2', 'depth_anything', 'qwen2.5_vl', ...]
+        ```
+
+    Note:
+        - Adapter classes are cached after first import for performance
+        - Registry is for discovery; adapters are source of truth for variants
+        - Factory delegates all validation and configuration to adapters
     """
 
     def __init__(self):
@@ -66,26 +97,60 @@ class ModelFactory:
         """
         Create a model instance from family and variant identifiers.
 
-        Factory is dumb - just loads adapter and passes variant.
-        Adapters handle all validation and configuration.
+        Problem: Each ML framework requires different instantiation code - different imports,
+        different parameter names, different initialization patterns. Supporting multiple
+        frameworks means either duplicating logic or creating complex conditional code.
+
+        Solution: Factory looks up the adapter class for the requested family in the registry,
+        dynamically imports it, and instantiates it with the variant and any additional
+        parameters. The adapter handles all framework-specific logic, keeping the factory
+        simple and extensible.
+
+        The factory intentionally does minimal work:
+        1. Validate family exists in registry
+        2. Import the appropriate adapter class (cached after first import)
+        3. Instantiate adapter with variant + parameters
+        4. Return the model instance
+
+        All variant validation, configuration parsing, and model loading happens in the
+        adapter, not the factory. This separation of concerns makes both components simpler.
 
         Args:
             family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
-            **override_params: Additional parameters passed to adapter
-                             (e.g., bearer_token for datamarkin, device override)
+                    Variant names are adapter-specific; adapters validate variants
+            **override_params: Additional parameters passed directly to adapter constructor
+                             Examples: bearer_token for datamarkin, device for GPU control
 
         Returns:
-            Instantiated model predictor object
+            Instantiated model predictor object with a predict() method for inference
 
         Raises:
-            ValueError: If family is not found
-            ImportError: If adapter class cannot be loaded
+            ValueError: If family name is not found in MODEL_REGISTRY
+            ImportError: If adapter module or class cannot be imported
+            RuntimeError: If adapter instantiation fails (wrapped exception from adapter)
 
         Example:
-            >>> factory = ModelFactory()
-            >>> model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
-            >>> model = factory.create_model('datamarkin', 'wings-v4', bearer_token='xxx')
+            ```python
+            factory = ModelFactory()
+
+            # Standard detection model
+            model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            detections = model.predict(image)
+
+            # Cloud-based model with authentication
+            model = factory.create_model('datamarkin', 'wings-v4', bearer_token='your_token')
+            detections = model.predict(image)
+
+            # Override device for GPU
+            model = factory.create_model('depth_anything', 'small', device='cuda')
+            depth_map = model.predict(image)
+            ```
+
+        Note:
+            - Adapter classes are imported once and cached for performance
+            - Factory warns if variant not in registry but still attempts (adapter validates)
+            - Registry is for discovery; adapters are authoritative on supported variants
         """
         # Validate family exists
         if family not in MODEL_REGISTRY:

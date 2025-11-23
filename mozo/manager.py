@@ -18,15 +18,45 @@ from .factory import ModelFactory
 
 class ModelManager:
     """
-    Manages the lifecycle of model instances.
+    Manages the lifecycle of model instances with automatic memory optimization.
 
-    Key features:
-    - Lazy loading: Models are only loaded when first requested
-    - Thread-safe: Multiple concurrent requests handled correctly
-    - Usage tracking: Timestamp recorded for each model access
-    - Memory management: Can unload models to free memory
+    Problem: Loading all ML models at startup wastes gigabytes of memory and slows
+    initialization to minutes. Traditional model serving requires complex deployment
+    infrastructure (Docker, Kubernetes) to manage this efficiently.
 
-    Similar to the vision engine's dynamic model deployment pattern.
+    Solution: ModelManager loads models only when first requested (lazy loading) and
+    automatically unloads inactive models to free memory. This keeps your server fast
+    and memory-efficient without manual intervention.
+
+    Features:
+    - Lazy loading: Models load on first access, not at startup (startup takes seconds, not minutes)
+    - Thread-safe: Multiple concurrent requests handled correctly without race conditions
+    - Usage tracking: Automatic timestamping of every model access for cleanup decisions
+    - Memory management: Automatic or manual model unloading to reclaim memory
+
+    Example:
+        ```python
+        from mozo import ModelManager
+
+        # Initialize manager (fast - no models loaded yet)
+        manager = ModelManager()
+
+        # First access loads the model (takes time)
+        model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        detections = model.predict(image)
+
+        # Subsequent access reuses cached model (instant)
+        model2 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        more_detections = model2.predict(another_image)
+
+        # Automatically clean up models inactive for 10+ minutes
+        manager.cleanup_inactive_models(600)
+        ```
+
+    Note:
+        - Only requested models consume memory
+        - Thread-safe: safe to call from multiple threads/requests simultaneously
+        - Cleanup can be manual (unload_model) or automatic (cleanup_inactive_models)
     """
 
     def __init__(self):
@@ -74,31 +104,52 @@ class ModelManager:
 
     def get_model(self, family: str, variant: str, **kwargs):
         """
-        Get a model instance, loading it if necessary (lazy loading).
+        Get a model instance, loading it on first access if not already cached.
 
-        This method is thread-safe: if multiple threads request the same model
-        simultaneously, only one will load it while others wait.
+        Problem: Model loading can take seconds or even minutes depending on model size.
+        Waiting for every model to load at server startup is impractical when you have
+        35+ models available. Additionally, concurrent requests need safe access to shared
+        model instances.
+
+        Solution: This method implements lazy loading - models are loaded only when first
+        requested, then cached for instant subsequent access. Thread-safe locking ensures
+        that if multiple requests arrive simultaneously for the same model, only one
+        performs the loading while others wait and reuse the loaded instance.
 
         Args:
             family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
-                    For datamarkin, variant is the training_id
-            **kwargs: Additional parameters to pass to the model (e.g., bearer_token)
+                    For datamarkin family, variant is the training_id
+            **kwargs: Additional parameters passed to model initialization
+                     Required for some adapters (e.g., bearer_token for datamarkin)
 
         Returns:
-            Model predictor instance
+            Model predictor instance with a predict() method for running inference
 
         Raises:
-            ValueError: If family or variant is invalid
-            RuntimeError: If model fails to load
+            ValueError: If family or variant name is invalid or not found in registry
+            RuntimeError: If model fails to load due to missing dependencies or initialization errors
 
         Example:
-            >>> manager = ModelManager()
-            >>> # Standard model
-            >>> model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
-            >>> # Datamarkin with bearer_token
-            >>> model = manager.get_model('datamarkin', 'wings-v4', bearer_token='xxx')
-            >>> predictions = model.predict(image)
+            ```python
+            manager = ModelManager()
+
+            # Standard model - loads on first call
+            model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            detections = model.predict(image)
+
+            # Cloud model with authentication
+            model = manager.get_model('datamarkin', 'wings-v4', bearer_token='your_token')
+            detections = model.predict(image)
+
+            # Subsequent calls return cached instance (instant)
+            same_model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            ```
+
+        Note:
+            - First call to a model loads it (slow), subsequent calls reuse cached instance (fast)
+            - Thread-safe: multiple simultaneous requests for same model wait and share the loaded instance
+            - Usage timestamp is updated on every access for cleanup tracking
         """
         model_id = self._get_model_id(family, variant)
 
@@ -144,17 +195,42 @@ class ModelManager:
 
     def unload_model(self, family: str, variant: str) -> bool:
         """
-        Explicitly unload a model to free memory.
+        Explicitly unload a specific model to free memory immediately.
+
+        Problem: Some models consume several GB of memory (e.g., Qwen2.5-VL requires 16GB+).
+        After batch processing or when switching to different models, you need to free memory
+        without waiting for automatic cleanup.
+
+        Solution: Immediately unload the specified model and trigger garbage collection to
+        reclaim memory. The model can be reloaded later if needed through lazy loading.
 
         Args:
-            family: Model family name
-            variant: Model variant name
+            family: Model family name (e.g., 'detectron2', 'depth_anything')
+            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
 
         Returns:
-            bool: True if model was unloaded, False if it wasn't loaded
+            bool: True if model was loaded and successfully unloaded, False if model was not loaded
 
         Example:
-            >>> manager.unload_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            ```python
+            manager = ModelManager()
+
+            # Use a large model for batch processing
+            model = manager.get_model('qwen2.5_vl', '7b-instruct')
+            for image in batch:
+                result = model.predict(image)
+
+            # Immediately free 16GB+ memory after batch completes
+            manager.unload_model('qwen2.5_vl', '7b-instruct')
+
+            # Now load a different model for next task
+            model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            ```
+
+        Note:
+            - Unloaded models can be reloaded on next get_model() call
+            - Triggers garbage collection to ensure memory is actually freed
+            - Returns False if model wasn't loaded (safe to call multiple times)
         """
         model_id = self._get_model_id(family, variant)
         return self.unload_model_by_id(model_id)
@@ -214,20 +290,48 @@ class ModelManager:
 
     def cleanup_inactive_models(self, inactive_seconds: int = 600) -> int:
         """
-        Automatically unload models that haven't been used recently.
+        Automatically unload models that haven't been used in the specified time period.
 
-        This is similar to the vision engine's automatic model cleanup.
+        Problem: ML models consume significant memory (hundreds of MB to several GB each).
+        Running multiple models simultaneously can exhaust available RAM, causing system
+        slowdowns or crashes. Manually tracking which models to unload is impractical in
+        production environments with varying request patterns.
+
+        Solution: This method automatically identifies and unloads models that haven't
+        been accessed recently, freeing memory for active models. The unloaded models
+        can be reloaded on-demand if needed later, balancing memory efficiency with
+        availability.
 
         Args:
-            inactive_seconds: Time threshold in seconds (default: 600 = 10 minutes)
+            inactive_seconds: Time threshold in seconds for considering a model inactive.
+                             Default is 600 seconds (10 minutes). Models not accessed
+                             within this period are candidates for unloading.
 
         Returns:
-            int: Number of models unloaded
+            int: Number of models successfully unloaded
 
         Example:
-            >>> # Unload models inactive for more than 10 minutes
-            >>> count = manager.cleanup_inactive_models(600)
-            >>> print(f"Unloaded {count} inactive models")
+            ```python
+            manager = ModelManager()
+
+            # Load and use several models
+            model1 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            model2 = manager.get_model('depth_anything', 'small')
+            model3 = manager.get_model('qwen2.5_vl', '7b-instruct')
+
+            # After 10 minutes of inactivity, free memory from unused models
+            unloaded_count = manager.cleanup_inactive_models(600)
+            print(f"Freed memory from {unloaded_count} inactive models")
+
+            # More aggressive cleanup for memory-constrained environments
+            unloaded_count = manager.cleanup_inactive_models(60)  # 1 minute threshold
+            ```
+
+        Note:
+            - Unloaded models can be reloaded on next access (lazy loading applies)
+            - Triggers garbage collection to ensure memory is actually freed
+            - Safe to call periodically (no effect if all models are active)
+            - Useful for long-running servers with varying workload patterns
         """
         inactive_models = self.get_inactive_models(inactive_seconds)
         count = 0
