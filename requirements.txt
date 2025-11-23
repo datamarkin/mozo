@@ -9,3 +9,4 @@ Pillow
 numpy
 scipy
 pixelflow
+diffusers
