@@ -102,7 +102,7 @@ class ModelManager:
         parts = model_id.split('/', 1)
         return parts[0], parts[1]
 
-    def get_model(self, family: str, variant: str, **kwargs):
+    def get_model(self, family: str, variant: str, device: str = None, **kwargs):
         """
         Get a model instance, loading it on first access if not already cached.
 
@@ -120,6 +120,8 @@ class ModelManager:
             family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
                     For datamarkin family, variant is the training_id
+            device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
+                   If None, automatically selects best available device
             **kwargs: Additional parameters passed to model initialization
                      Required for some adapters (e.g., bearer_token for datamarkin)
 
@@ -151,7 +153,10 @@ class ModelManager:
             - Thread-safe: multiple simultaneous requests for same model wait and share the loaded instance
             - Usage timestamp is updated on every access for cleanup tracking
         """
+        # Include device in model_id for caching different device configurations
         model_id = self._get_model_id(family, variant)
+        if device:
+            model_id = f"{model_id}@{device}"
 
         # Ensure a lock exists for this model (thread-safe lock creation)
         with self._global_lock:
@@ -162,9 +167,9 @@ class ModelManager:
         with self._locks[model_id]:
             # Check if model is already loaded
             if model_id not in self._models:
-                print(f"[ModelManager] Loading model: {model_id} (family={family}, variant={variant})...")
+                print(f"[ModelManager] Loading model: {model_id} (family={family}, variant={variant}, device={device or 'auto'})...")
                 try:
-                    self._models[model_id] = self._factory.create_model(family, variant, **kwargs)
+                    self._models[model_id] = self._factory.create_model(family, variant, device=device, **kwargs)
                     print(f"[ModelManager] Model {model_id} loaded successfully.")
                 except Exception as e:
                     print(f"[ModelManager] ERROR: Failed to load model {model_id}: {e}")

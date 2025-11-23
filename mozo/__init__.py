@@ -59,7 +59,7 @@ from mozo.registry import (
 _default_manager = None
 
 
-def get_model(identifier, variant=None):
+def get_model(identifier, variant=None, device=None):
     """
     Load a model without explicitly creating a ModelManager.
 
@@ -70,6 +70,9 @@ def get_model(identifier, variant=None):
     Args:
         identifier: Either "family/variant" string or just "family"
         variant: Variant name (optional if identifier contains "/")
+        device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
+                If None, automatically selects best available device:
+                CUDA GPU > Apple MPS > CPU
 
     Returns:
         Loaded model predictor instance
@@ -77,14 +80,17 @@ def get_model(identifier, variant=None):
     Examples:
         >>> from mozo import get_model
         >>>
-        >>> # Full path format
+        >>> # Auto-selects best device (GPU if available)
         >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x')
         >>>
-        >>> # Separate family and variant
-        >>> model = get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        >>> # Force CPU (e.g., for memory reasons)
+        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x', device='cpu')
+        >>>
+        >>> # Force specific GPU
+        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x', device='cuda:1')
         >>>
         >>> # Run prediction
-        >>> detections = model.predict(image)
+        >>> detections = model.predict('image.jpg')
     """
     global _default_manager
     if _default_manager is None:
@@ -96,7 +102,7 @@ def get_model(identifier, variant=None):
     else:
         family = identifier
 
-    return _default_manager.get_model(family, variant)
+    return _default_manager.get_model(family, variant, device=device)
 
 
 __all__ = [
