@@ -7,6 +7,7 @@ Handles loading adapter classes and creating model instances from registry confi
 
 import importlib
 from .registry import MODEL_REGISTRY
+from .device import get_default_device
 
 
 class ModelFactory:
@@ -93,7 +94,7 @@ class ModelFactory:
                 f"Module '{module_path}' does not have class '{class_name}': {e}"
             ) from e
 
-    def create_model(self, family, variant, **override_params):
+    def create_model(self, family, variant, device=None, **override_params):
         """
         Create a model instance from family and variant identifiers.
 
@@ -109,8 +110,9 @@ class ModelFactory:
         The factory intentionally does minimal work:
         1. Validate family exists in registry
         2. Import the appropriate adapter class (cached after first import)
-        3. Instantiate adapter with variant + parameters
-        4. Return the model instance
+        3. Apply device auto-detection if not specified
+        4. Instantiate adapter with variant + parameters
+        5. Return the model instance
 
         All variant validation, configuration parsing, and model loading happens in the
         adapter, not the factory. This separation of concerns makes both components simpler.
@@ -119,8 +121,10 @@ class ModelFactory:
             family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
                     Variant names are adapter-specific; adapters validate variants
+            device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
+                   If None, automatically selects best available device
             **override_params: Additional parameters passed directly to adapter constructor
-                             Examples: bearer_token for datamarkin, device for GPU control
+                             Examples: bearer_token for datamarkin
 
         Returns:
             Instantiated model predictor object with a predict() method for inference
@@ -176,9 +180,14 @@ class ModelFactory:
         # Load adapter class (lazy import)
         adapter_class = self._get_adapter_class(module_path, class_name)
 
-        # Let adapter handle everything - no special cases
+        # Apply device: use provided device, or auto-detect if None
+        effective_device = device if device is not None else get_default_device()
+        print(f"[ModelFactory] Using device: {effective_device}" +
+              (" (auto-detected)" if device is None else " (user-specified)"))
+
+        # Let adapter handle everything - pass device in params
         try:
-            model_instance = adapter_class(variant=variant, **override_params)
+            model_instance = adapter_class(variant=variant, device=effective_device, **override_params)
             return model_instance
         except Exception as e:
             raise RuntimeError(
