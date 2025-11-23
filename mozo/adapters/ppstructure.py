@@ -1,4 +1,8 @@
+from typing import Union
+
 import numpy as np
+
+from ..utils import load_image
 
 try:
     from paddleocr import PPStructureV3
@@ -132,12 +136,12 @@ class PPStructurePredictor:
 
         print(f"PP-StructureV3 loaded successfully (variant: {variant}, language: {self.language}).")
 
-    def predict(self, image: np.ndarray):
+    def predict(self, image: Union[str, np.ndarray]):
         """
         Run document structure analysis on image and return PixelFlow Detections.
 
         Args:
-            image: numpy array (H, W, 3) in BGR format (OpenCV standard)
+            image: File path (str) or numpy array (BGR format)
 
         Returns:
             pf.detections.Detections: PixelFlow Detections object with OCRData structure containing:
@@ -149,6 +153,7 @@ class PPStructurePredictor:
                 - Element type classification
                 - Page index for multi-page documents
         """
+        image = load_image(image)
         print(f"Running PP-StructureV3 prediction (variant: {self.variant})...")
 
         # PPStructureV3 expects BGR format (OpenCV standard) - no conversion needed

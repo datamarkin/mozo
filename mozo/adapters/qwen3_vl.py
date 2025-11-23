@@ -1,7 +1,11 @@
+from typing import Union
+
 from PIL import Image
 import numpy as np
 import cv2
 import re
+
+from ..utils import load_image
 
 try:
     from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
@@ -132,12 +136,12 @@ class Qwen3VLPredictor:
         else:
             return None, text
 
-    def predict(self, image: np.ndarray, prompt: str = "Describe this image in detail.") -> dict:
+    def predict(self, image: Union[str, np.ndarray], prompt: str = "Describe this image in detail.") -> dict:
         """
         Run vision-language understanding with reasoning on an image.
 
         Args:
-            image: Input image as numpy array (BGR format from cv2)
+            image: File path (str) or numpy array (BGR format)
             prompt: Text prompt/question about the image
                    Examples:
                    - "Describe this image in detail."
@@ -162,6 +166,7 @@ class Qwen3VLPredictor:
             >>> if result['thinking']:
             ...     print(result['thinking'])  # Reasoning steps
         """
+        image = load_image(image)
         print(f"Running Qwen3-VL inference with prompt: '{prompt[:50]}...'")
 
         # Convert BGR (OpenCV format) to RGB (PIL format)

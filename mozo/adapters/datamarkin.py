@@ -1,8 +1,12 @@
+from typing import Union
+
 import os
 import io
 import numpy as np
 import cv2
 from PIL import Image
+
+from ..utils import load_image
 
 try:
     import requests
@@ -96,12 +100,12 @@ class DatamarkinPredictor:
         else:
             print(f"  Authentication: Public model (no token)")
 
-    def predict(self, image: np.ndarray):
+    def predict(self, image: Union[str, np.ndarray]):
         """
         Run online inference via Datamarkin Vision Service.
 
         Args:
-            image: Input image as numpy array (H, W, 3) in BGR format (OpenCV standard)
+            image: File path (str) or numpy array (BGR format)
 
         Returns:
             pf.detections.Detections: PixelFlow Detections object containing:
@@ -123,6 +127,7 @@ class DatamarkinPredictor:
             >>> for det in detections:
             ...     print(f"  {det.class_name}: {det.bbox}")
         """
+        image = load_image(image)
         print(f"Running Datamarkin online inference...")
         print(f"  Training ID: {self.training_id}")
         print(f"  Image shape: {image.shape}")

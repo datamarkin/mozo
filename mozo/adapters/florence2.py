@@ -1,7 +1,11 @@
+from typing import Union
+
 import numpy as np
 import cv2
 from PIL import Image
 from threading import Lock
+
+from ..utils import load_image
 
 try:
     from transformers import AutoModelForCausalLM, AutoProcessor
@@ -177,12 +181,12 @@ class Florence2Predictor:
         self.model = Florence2Predictor._shared_model
         self.processor = Florence2Predictor._shared_processor
 
-    def predict(self, image: np.ndarray, prompt: str = None):
+    def predict(self, image: Union[str, np.ndarray], prompt: str = None):
         """
         Run inference with the Florence-2 model.
 
         Args:
-            image: Input image as numpy array (H, W, 3) in BGR format (OpenCV standard)
+            image: File path (str) or numpy array (BGR format)
             prompt: Prompt behavior varies by task:
                    - Detection tasks: Ignored (always uses task-specific prompts like '<OD>')
                    - Segmentation: Required (e.g., "person", "car") - describes what to segment
@@ -228,6 +232,9 @@ class Florence2Predictor:
         print(f"Running Florence-2 prediction (task: {self.task})...")
         print(f"  Task prompt: {task_prompt}")
         print(f"  Final prompt: {final_prompt}")
+
+        # Load image from path if needed
+        image = load_image(image)
 
         # Validate image input
         if image is None:
