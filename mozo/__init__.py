@@ -1,10 +1,10 @@
 """
 Mozo - Universal Computer Vision Model Server
 
-25+ pre-configured models ready to use. No deployment, no configuration.
+35+ pre-configured models ready to use. No deployment, no configuration.
 Just `mozo start` and make HTTP requests.
 
-Quick Start:
+Quick Start (Server):
     >>> # From terminal:
     >>> mozo start
     >>>
@@ -12,22 +12,33 @@ Quick Start:
     >>> curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \\
     >>>   -F "file=@image.jpg"
 
-Advanced Usage (Python SDK):
+Quick Start (Python SDK):
+    >>> from mozo import get_model
+    >>>
+    >>> # Load model with simple one-liner
+    >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x')
+    >>>
+    >>> # Run prediction - accepts file path or numpy array
+    >>> detections = model.predict('image.jpg')
+    >>> print(f"Found {len(detections)} objects")
+
+Advanced Usage (with ModelManager):
     >>> from mozo import ModelManager
-    >>> import cv2
     >>>
     >>> manager = ModelManager()
     >>> model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
-    >>> image = cv2.imread('example.jpg')
-    >>> detections = model.predict(image)  # Returns PixelFlow Detections
-    >>> print(f"Found {len(detections)} objects")
+    >>> detections = model.predict('image.jpg')
+    >>>
+    >>> # Advanced: cleanup inactive models
+    >>> manager.cleanup_inactive_models(inactive_seconds=600)
 
 Features:
-    - 25+ models from Detectron2, HuggingFace Transformers
+    - 35+ models from Detectron2, HuggingFace Transformers, PaddleOCR, EasyOCR
     - Zero deployment - no Docker, Kubernetes, or cloud needed
     - Automatic memory management with lazy loading
     - PixelFlow integration for unified detection format
     - Thread-safe concurrent access
+    - Path support: pass file paths directly to predict()
 
 For more information, see:
     - Documentation: https://github.com/datamarkin/mozo
@@ -44,11 +55,56 @@ from mozo.registry import (
     get_model_info,
 )
 
+# Module-level singleton manager for convenience API
+_default_manager = None
+
+
+def get_model(identifier, variant=None):
+    """
+    Load a model without explicitly creating a ModelManager.
+
+    This is a convenience function that uses a shared ModelManager instance.
+    For advanced use cases (cleanup, unloading, multiple managers), use
+    ModelManager directly.
+
+    Args:
+        identifier: Either "family/variant" string or just "family"
+        variant: Variant name (optional if identifier contains "/")
+
+    Returns:
+        Loaded model predictor instance
+
+    Examples:
+        >>> from mozo import get_model
+        >>>
+        >>> # Full path format
+        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x')
+        >>>
+        >>> # Separate family and variant
+        >>> model = get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        >>>
+        >>> # Run prediction
+        >>> detections = model.predict(image)
+    """
+    global _default_manager
+    if _default_manager is None:
+        _default_manager = ModelManager()
+
+    # Support "family/variant" format
+    if variant is None and "/" in identifier:
+        family, variant = identifier.split("/", 1)
+    else:
+        family = identifier
+
+    return _default_manager.get_model(family, variant)
+
+
 __all__ = [
     "ModelManager",
     "MODEL_REGISTRY",
     "get_available_families",
     "get_available_variants",
     "get_model_info",
+    "get_model",
     "__version__",
 ]
