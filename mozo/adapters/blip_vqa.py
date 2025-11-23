@@ -1,6 +1,10 @@
+from typing import Union
+
 import numpy as np
 import cv2
 from PIL import Image
+
+from ..utils import load_image
 
 try:
     from transformers import BlipProcessor, BlipForQuestionAnswering
@@ -67,17 +71,18 @@ class BlipVqaPredictor:
 
         print(f"BLIP VQA model loaded successfully on device '{self.device}'.")
 
-    def predict(self, image: np.ndarray, prompt: str):
+    def predict(self, image: Union[str, np.ndarray], prompt: str):
         """
         Run visual question answering with the BLIP model.
 
         Args:
-            image (np.ndarray): The input image in BGR format (from OpenCV).
+            image: File path (str) or numpy array (BGR format)
             prompt (str): The question to ask about the image.
 
         Returns:
             dict: An OpenAI-compatible dictionary containing the answer.
         """
+        image = load_image(image)
         print(f"Running BLIP VQA prediction (question: '{prompt}')...")
 
         # Convert image from BGR (OpenCV) to RGB (PIL)

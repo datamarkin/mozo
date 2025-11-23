@@ -1,6 +1,10 @@
+from typing import Union
+
 from PIL import Image
 import numpy as np
 import cv2
+
+from ..utils import load_image
 
 try:
     from transformers import pipeline
@@ -60,16 +64,17 @@ class DepthAnythingPredictor:
         self.pipe = pipeline(task="depth-estimation", model=model_name)
         print(f"Depth Anything model loaded successfully (variant: {variant}).")
 
-    def predict(self, image: np.ndarray) -> Image.Image:
+    def predict(self, image: Union[str, np.ndarray]) -> Image.Image:
         """
         Runs depth estimation on an image.
 
         Args:
-            image: A numpy array representing the input image in BGR format (from cv2).
+            image: File path (str) or numpy array (BGR format)
 
         Returns:
             A PIL.Image object representing the depth map.
         """
+        image = load_image(image)
         print("Running depth estimation...")
         # The pipeline expects a PIL Image in RGB format.
         # cv2 reads images as BGR, so we need to convert it.

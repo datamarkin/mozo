@@ -1,6 +1,10 @@
+from typing import Union
+
 import numpy as np
 import cv2
 from PIL import Image
+
+from ..utils import load_image
 
 try:
     from diffusers import StableDiffusionInpaintPipeline
@@ -67,18 +71,20 @@ class StabilityInpaintingPredictor:
         
         print(f"Stability AI Inpainting model loaded successfully on device '{self.device}'.")
 
-    def predict(self, image: np.ndarray, mask: np.ndarray, prompt: str):
+    def predict(self, image: Union[str, np.ndarray], mask: Union[str, np.ndarray], prompt: str):
         """
         Run inpainting on an image.
 
         Args:
-            image: Input image as numpy array (H, W, 3) in BGR format (OpenCV standard)
-            mask: Mask image as numpy array (H, W, 3) in BGR format (white areas will be inpainted)
+            image: File path (str) or numpy array (BGR format)
+            mask: File path (str) or numpy array (BGR format, white areas will be inpainted)
             prompt: Text prompt to guide the inpainting
 
         Returns:
             PIL.Image.Image: The resulting inpainted image
         """
+        image = load_image(image)
+        mask = load_image(mask)
         print(f"Running Stability AI Inpainting prediction...")
 
         # Diffusers pipeline expects RGB format

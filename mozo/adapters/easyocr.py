@@ -1,5 +1,9 @@
+from typing import Union
+
 import numpy as np
 import cv2
+
+from ..utils import load_image
 
 try:
     import easyocr
@@ -129,18 +133,19 @@ class EasyOCRPredictor:
 
         print(f"EasyOCR loaded successfully (variant: {variant}, languages: {self.languages}).")
 
-    def predict(self, image: np.ndarray):
+    def predict(self, image: Union[str, np.ndarray]):
         """
         Run OCR on image and return PixelFlow Detections.
 
         Args:
-            image: numpy array (H, W, 3) in BGR format (OpenCV standard)
+            image: File path (str) or numpy array (BGR format)
 
         Returns:
             pf.detections.Detections: PixelFlow Detections object containing text detections
                                      with OCRData structure including bbox, text, confidence,
                                      and polygon segments
         """
+        image = load_image(image)
         print(f"Running EasyOCR prediction (variant: {self.variant})...")
 
         # EasyOCR expects RGB format, so convert from BGR

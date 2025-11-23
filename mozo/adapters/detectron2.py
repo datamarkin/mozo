@@ -1,5 +1,9 @@
+from typing import Union
+
 import cv2
 import numpy as np
+
+from ..utils import load_image
 
 try:
     from detectron2.engine import DefaultPredictor
@@ -138,13 +142,17 @@ class Detectron2Predictor:
 
         print(f"Detectron2 model loaded successfully (variant: {variant}).")
 
-    def predict(self, image: np.ndarray):
+    def predict(self, image: Union[str, np.ndarray]):
         """
         Runs inference on an image and returns PixelFlow Detections.
+
+        Args:
+            image: File path (str) or numpy array (BGR format)
 
         Returns:
             pf.detections.Detections: PixelFlow Detections object containing all detected objects
         """
+        image = load_image(image)
         print("Running prediction...")
         outputs = self.predictor(image)
 

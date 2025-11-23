@@ -1,6 +1,10 @@
+from typing import Union
+
 from PIL import Image
 import numpy as np
 import cv2
+
+from ..utils import load_image
 
 try:
     from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
@@ -87,12 +91,12 @@ class Qwen2_5VLPredictor:
         print(f"Qwen2.5-VL model loaded successfully (variant: {variant}).")
         print(f"Model device: {self.model.device}")
 
-    def predict(self, image: np.ndarray, prompt: str = "Describe this image in detail.") -> dict:
+    def predict(self, image: Union[str, np.ndarray], prompt: str = "Describe this image in detail.") -> dict:
         """
         Run vision-language understanding on an image.
 
         Args:
-            image: Input image as numpy array (BGR format from cv2)
+            image: File path (str) or numpy array (BGR format)
             prompt: Text prompt/question about the image
                    Examples:
                    - "Describe this image in detail."
@@ -113,6 +117,7 @@ class Qwen2_5VLPredictor:
             >>> result = predictor.predict(image, "What is in this image?")
             >>> print(result['text'])
         """
+        image = load_image(image)
         print(f"Running Qwen2.5-VL inference with prompt: '{prompt[:50]}...'")
 
         # Convert BGR (OpenCV format) to RGB (PIL format)
