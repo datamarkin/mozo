@@ -101,14 +101,6 @@ MODEL_REGISTRY = {
         'variants': ['english-light', 'english-full', 'multilingual', 'chinese'],
     },
 
-    'stability_inpainting': {
-        'adapter_class': 'StabilityInpaintingPredictor',
-        'module': 'mozo.adapters.stability_inpainting',
-        'task_type': 'image_generation',
-        'description': 'Stability AI Stable Diffusion 2 Inpainting - Generate and modify image content using text prompts (REQUIRES: mask image parameter)',
-        'variants': ['default'],
-    },
-
     'florence2': {
         'adapter_class': 'Florence2Predictor',
         'module': 'mozo.adapters.florence2',

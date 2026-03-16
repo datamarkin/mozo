@@ -1,12 +1,10 @@
 import io
 import cv2
-import json
 import numpy as np
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from typing import Optional
-from PIL import Image
 
 # Import model manager, factory, and registry utilities
 from .manager import ModelManager
@@ -91,7 +89,6 @@ async def predict(
     family: str,
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
-    mask: Optional[UploadFile] = File(None, description="Mask file for inpainting models."),
     prompt: str = "Describe this image in detail.",
     bearer_token: Optional[str] = None
 ):
@@ -99,11 +96,10 @@ async def predict(
     Universal prediction endpoint supporting all model families and variants.
 
     Args:
-        family: Model family (e.g., 'detectron2', 'datamarkin', 'stability_inpainting')
+        family: Model family (e.g., 'detectron2', 'datamarkin')
         variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
                 For datamarkin, variant is the training_id
         file: Image file to process
-        mask: Mask file for inpainting models
         prompt: Text prompt for generative models
         bearer_token: Authentication token for datamarkin models (optional)
 
@@ -127,15 +123,6 @@ async def predict(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read or decode the image file: {e}")
 
-    # Read and decode mask if provided
-    mask_image = None
-    if mask:
-        try:
-            mask_contents = await mask.read()
-            mask_image = Image.open(io.BytesIO(mask_contents))
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read or decode the mask file: {e}")
-
     # Get or load model (lazy loading happens here)
     try:
         if family == 'datamarkin':
@@ -156,18 +143,6 @@ async def predict(
         elif family == 'florence2':
             # Florence-2 accepts optional prompt
             results = model.predict(image, prompt=prompt)
-        elif family == 'stability_inpainting':
-            if mask_image is None:
-                raise HTTPException(status_code=400, detail="Inpainting model requires a mask file.")
-            # Convert PIL mask to numpy BGR array to match adapter's expected format
-            mask_array = np.array(mask_image)
-            # If mask is grayscale (H, W), convert to 3-channel (H, W, 3)
-            if len(mask_array.shape) == 2:
-                mask_array = cv2.cvtColor(mask_array, cv2.COLOR_GRAY2BGR)
-            # If mask is RGB (from PIL), convert to BGR
-            elif mask_array.shape[2] == 3:
-                mask_array = cv2.cvtColor(mask_array, cv2.COLOR_RGB2BGR)
-            results = model.predict(image=image, mask=mask_array, prompt=prompt)
         else:
             results = model.predict(image)
 

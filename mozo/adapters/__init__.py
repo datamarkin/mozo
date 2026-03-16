@@ -21,7 +21,6 @@ __all__ = [
     'PaddleOCRPredictor',
     'PPStructurePredictor',
     'EasyOCRPredictor',
-    'StabilityInpaintingPredictor',
     'Florence2Predictor',
     'BlipVqaPredictor',
     'DatamarkinPredictor',
