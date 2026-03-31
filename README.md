@@ -40,7 +40,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **35+ Pre-configured Models** - 11 model families including Detectron2, HuggingFace Transformers, PaddleOCR, EasyOCR, Florence-2, BLIP VQA, and more
+- **35+ Pre-configured Models** - 11 model families including Detectron2, HuggingFace Transformers, PaddleOCR, EasyOCR, Florence-2, BLIP VQA, SAM3, and more
 - **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
 - **Multi-Framework Support** - Unified API across different ML frameworks
 - **PixelFlow Integration** - Detection models return unified format for filtering and annotation
