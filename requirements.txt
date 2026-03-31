@@ -9,4 +9,4 @@ Pillow
 numpy
 scipy
 pixelflow
-diffusers
+rfdetr==1.6.2

@@ -90,7 +90,8 @@ async def predict(
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
     prompt: str = "Describe this image in detail.",
-    bearer_token: Optional[str] = None
+    bearer_token: Optional[str] = None,
+    threshold: float = 0.5
 ):
     """
     Universal prediction endpoint supporting all model families and variants.
@@ -143,6 +144,8 @@ async def predict(
         elif family == 'florence2':
             # Florence-2 accepts optional prompt
             results = model.predict(image, prompt=prompt)
+        elif family == 'rfdetr':
+            results = model.predict(image, threshold=threshold)
         else:
             results = model.predict(image)
 

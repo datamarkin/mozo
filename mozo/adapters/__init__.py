@@ -24,4 +24,5 @@ __all__ = [
     'Florence2Predictor',
     'BlipVqaPredictor',
     'DatamarkinPredictor',
+    'RFDETRPredictor',
 ]
