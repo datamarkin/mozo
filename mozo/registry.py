@@ -128,6 +128,21 @@ MODEL_REGISTRY = {
         'description': 'Datamarkin Vision Service - Cloud-based model inference for keypoint detection, object detection, and segmentation. Variant name is the training_id.',
         'variants': [],  # Dynamic variants - any training_id is valid
     },
+
+    'rfdetr': {
+        'adapter_class': 'RFDETRPredictor',
+        'module': 'mozo.adapters.rfdetr',
+        'task_type': 'object_detection',
+        'description': (
+            'RF-DETR by Roboflow — real-time transformer detection & instance segmentation. '
+            '4 detection variants (nano/small/medium/large) and 4 segmentation variants '
+            '(seg-nano/seg-small/seg-medium/seg-large). All variants Apache 2.0 licensed.'
+        ),
+        'variants': [
+            'nano', 'small', 'medium', 'large',
+            'seg-nano', 'seg-small', 'seg-medium', 'seg-large',
+        ],
+    },
 }
 
 
