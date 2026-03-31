@@ -1,13 +1,34 @@
 import cv2
 import numpy as np
+import torch
 from PIL import Image
 from typing import Union
+
+from ..device import get_default_device
+
+try:
+    import rfdetr
+except ImportError:
+    print("=" * 50)
+    print("ERROR: rfdetr is not installed.")
+    print("Please install it with: pip install rfdetr")
+    print("=" * 50)
+    raise
+
+try:
+    import pixelflow as pf
+except ImportError:
+    print("=" * 50)
+    print("ERROR: PixelFlow is not installed.")
+    print("Please install it with: pip install pixelflow")
+    print("=" * 50)
+    raise
 
 
 class RFDETRPredictor:
     """Adapter for RF-DETR detection and segmentation models by Roboflow."""
 
-    # Maps mozo variant name → rfdetr class name
+    # Maps mozo variant name → rfdetr class name (pretrained COCO models)
     SUPPORTED_VARIANTS = {
         # Detection variants (Apache 2.0)
         'nano':        'RFDETRNano',
@@ -21,20 +42,61 @@ class RFDETRPredictor:
         'seg-large':   'RFDETRSegLarge',
     }
 
-    def __init__(self, variant: str = 'medium', **kwargs):
-        if variant not in self.SUPPORTED_VARIANTS:
-            raise ValueError(
-                f"Unsupported variant: '{variant}'. "
-                f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
-            )
-        self.variant = variant
-        class_name = self.SUPPORTED_VARIANTS[variant]
+    # Maps (project_type, model_size) → rfdetr class name (fine-tuned checkpoints)
+    # Note: RFDETRBase exists as a detection class but has no COCO pretrained variant in mozo.
+    # Note: ('segmentation', 'base') is absent — no RFDETRSegBase class exists in rfdetr.
+    _FINETUNED_CLASS_MAP = {
+        ('detection',    'small'):  'RFDETRSmall',
+        ('detection',    'base'):   'RFDETRBase',
+        ('detection',    'large'):  'RFDETRLarge',
+        ('segmentation', 'small'):  'RFDETRSegSmall',
+        ('segmentation', 'medium'): 'RFDETRSegMedium',
+        ('segmentation', 'large'):  'RFDETRSegLarge',
+    }
 
-        print(f"Loading RF-DETR {variant} ({class_name})...")
-        import rfdetr
-        model_class = getattr(rfdetr, class_name)
-        self.model = model_class()
-        print(f"RF-DETR {variant} loaded successfully.")
+    def __init__(self, variant: str = 'medium', device: str = None, **kwargs):
+        self.variant = variant
+        self.device = device or get_default_device()
+        checkpoint_path = kwargs.get('checkpoint_path')
+
+        if checkpoint_path:
+            # Fine-tuned checkpoint: variant is an opaque training ID used as cache key only.
+            model_size = kwargs.get('model_size')
+            project_type = kwargs.get('project_type')
+            resolution = kwargs.get('resolution', 560)
+
+            if not model_size or not project_type:
+                raise ValueError(
+                    "Fine-tuned checkpoint loading requires 'model_size' and 'project_type' kwargs."
+                )
+
+            key = (project_type, model_size)
+            if key not in self._FINETUNED_CLASS_MAP:
+                raise ValueError(
+                    f"Unsupported combination (project_type='{project_type}', model_size='{model_size}'). "
+                    f"Valid combinations: {list(self._FINETUNED_CLASS_MAP.keys())}"
+                )
+
+            class_name = self._FINETUNED_CLASS_MAP[key]
+            print(f"Loading RF-DETR fine-tuned '{variant}' ({class_name}, resolution={resolution}, device={self.device})...")
+            model_class = getattr(rfdetr, class_name)
+            # Do NOT pass num_classes — the checkpoint preserves the trained head.
+            # Passing num_classes would reinitialize the head and corrupt the loaded weights.
+            self.model = model_class(resolution=resolution, pretrain_weights=checkpoint_path, device=self.device)
+            print(f"RF-DETR fine-tuned '{variant}' loaded successfully.")
+
+        else:
+            # Pretrained COCO model
+            if variant not in self.SUPPORTED_VARIANTS:
+                raise ValueError(
+                    f"Unsupported variant: '{variant}'. "
+                    f"Choose from: {list(self.SUPPORTED_VARIANTS.keys())}"
+                )
+            class_name = self.SUPPORTED_VARIANTS[variant]
+            print(f"Loading RF-DETR {variant} ({class_name}, device={self.device})...")
+            model_class = getattr(rfdetr, class_name)
+            self.model = model_class(device=self.device)
+            print(f"RF-DETR {variant} loaded successfully.")
 
     def predict(self, image: Union[str, np.ndarray], threshold: float = 0.5):
         """
@@ -52,5 +114,7 @@ class RFDETRPredictor:
 
         sv_detections = self.model.predict(image, threshold=threshold)
 
-        import pixelflow as pf
+        if self.device == 'mps':
+            torch.mps.empty_cache()
+
         return pf.detections.from_supervision(sv_detections)
