@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from typing import Union
+from typing import Dict, List, Optional, Union
 
 from ..device import get_default_device
 
@@ -83,6 +83,7 @@ class RFDETRPredictor:
             # Do NOT pass num_classes — the checkpoint preserves the trained head.
             # Passing num_classes would reinitialize the head and corrupt the loaded weights.
             self.model = model_class(resolution=resolution, pretrain_weights=checkpoint_path, device=self.device)
+            self.class_names = kwargs.get('class_names')
             print(f"RF-DETR fine-tuned '{variant}' loaded successfully.")
 
         else:
@@ -96,15 +97,19 @@ class RFDETRPredictor:
             print(f"Loading RF-DETR {variant} ({class_name}, device={self.device})...")
             model_class = getattr(rfdetr, class_name)
             self.model = model_class(device=self.device)
+            self.class_names = pf.COCO_CLASSES
             print(f"RF-DETR {variant} loaded successfully.")
 
-    def predict(self, image: Union[str, np.ndarray], threshold: float = 0.5):
+    def predict(self, image: Union[str, np.ndarray], threshold: float = 0.5,
+                class_names: Optional[Union[List[str], Dict[int, str]]] = None):
         """
         Run inference on image.
 
         Args:
             image: numpy array (H, W, 3) in BGR format (OpenCV standard) or file path string
             threshold: confidence threshold for filtering predictions (default 0.5)
+            class_names: overrides the adapter's default class names for this call.
+                         Accepts a list (indexed by class ID) or a dict {id: name}.
 
         Returns:
             Detections object from pixelflow (includes masks for seg-* variants)
@@ -117,4 +122,6 @@ class RFDETRPredictor:
         if self.device == 'mps':
             torch.mps.empty_cache()
 
-        return pf.detections.from_supervision(sv_detections)
+        return pf.detections.from_supervision(
+            sv_detections, class_names=class_names if class_names is not None else self.class_names
+        )
