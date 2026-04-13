@@ -157,7 +157,7 @@ class Detectron2Predictor:
         outputs = self.predictor(image)
 
         # Use PixelFlow's existing converter for Detectron2
-        detections = pf.detections.from_detectron2(outputs)
+        detections = pf.detections.from_detectron2(outputs, class_names=self.class_names)
 
         print(f"Found {len(detections)} objects.")
         return detections
