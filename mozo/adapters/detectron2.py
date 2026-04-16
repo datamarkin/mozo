@@ -108,39 +108,79 @@ class Detectron2Predictor:
         Args:
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'faster_rcnn_X_101_32x8d_FPN_3x')
             **kwargs: Override default parameters (confidence_threshold, device)
+                For fine-tuned models, also accepts:
+                - checkpoint_path: Path to local .pth weights file
+                - class_names: List of class names (required with checkpoint_path)
+                - num_classes: Number of classes (defaults to len(class_names))
 
         Raises:
-            ValueError: If variant is not supported
+            ValueError: If variant is not supported or class_names missing for fine-tuned model
         """
-        if variant not in self.SUPPORTED_VARIANTS:
-            raise ValueError(
-                f"Unsupported variant: '{variant}'. "
-                f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
-            )
+        checkpoint_path = kwargs.get('checkpoint_path')
 
-        # Merge defaults with overrides
-        config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
-        confidence_threshold = config.get('confidence_threshold', 0.5)
-        device = config.get('device', 'cpu')
+        if checkpoint_path:
+            # --- Fine-tuned model ---
+            class_names = kwargs.get('class_names')
+            if not class_names:
+                raise ValueError("Fine-tuned checkpoint requires 'class_names'.")
 
-        self.variant = variant
-        config_file = self._CONFIG_MAP[variant]
+            num_classes = kwargs.get('num_classes', len(class_names))
+            confidence_threshold = kwargs.get('confidence_threshold', 0.5)
+            device = kwargs.get('device', 'cpu')
 
-        print(f"Loading Detectron2 model (variant: {variant})...")
-        cfg = get_cfg()
-        cfg.merge_from_file(model_zoo.get_config_file(config_file))
-        cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(config_file)
-        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
-        cfg.MODEL.DEVICE = device
+            if variant not in self._CONFIG_MAP:
+                raise ValueError(
+                    f"Unsupported variant: '{variant}'. "
+                    f"Supported variants: {list(self._CONFIG_MAP.keys())}"
+                )
 
-        self.predictor = DefaultPredictor(cfg)
+            self.variant = variant
+            config_file = self._CONFIG_MAP[variant]
 
-        # Get class names from metadata
-        dataset_name = cfg.DATASETS.TRAIN[0] if cfg.DATASETS.TRAIN else "coco_2017_val"
-        metadata = MetadataCatalog.get(dataset_name)
-        self.class_names = metadata.thing_classes
+            print(f"Loading fine-tuned Detectron2 model (variant: {variant})...")
+            cfg = get_cfg()
+            cfg.merge_from_file(model_zoo.get_config_file(config_file))
+            cfg.MODEL.WEIGHTS = checkpoint_path
+            cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
+            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+            cfg.MODEL.DEVICE = device
 
-        print(f"Detectron2 model loaded successfully (variant: {variant}).")
+            if 'retinanet' in variant:
+                cfg.MODEL.RETINANET.NUM_CLASSES = num_classes
+
+            self.predictor = DefaultPredictor(cfg)
+            self.class_names = class_names
+            print(f"Fine-tuned Detectron2 model loaded (variant: {variant}).")
+
+        else:
+            # --- Pre-trained COCO model ---
+            if variant not in self.SUPPORTED_VARIANTS:
+                raise ValueError(
+                    f"Unsupported variant: '{variant}'. "
+                    f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
+                )
+
+            config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
+            confidence_threshold = config.get('confidence_threshold', 0.5)
+            device = config.get('device', 'cpu')
+
+            self.variant = variant
+            config_file = self._CONFIG_MAP[variant]
+
+            print(f"Loading Detectron2 model (variant: {variant})...")
+            cfg = get_cfg()
+            cfg.merge_from_file(model_zoo.get_config_file(config_file))
+            cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(config_file)
+            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
+            cfg.MODEL.DEVICE = device
+
+            self.predictor = DefaultPredictor(cfg)
+
+            dataset_name = cfg.DATASETS.TRAIN[0] if cfg.DATASETS.TRAIN else "coco_2017_val"
+            metadata = MetadataCatalog.get(dataset_name)
+            self.class_names = metadata.thing_classes
+
+            print(f"Detectron2 model loaded successfully (variant: {variant}).")
 
     def predict(self, image: Union[str, np.ndarray]):
         """
