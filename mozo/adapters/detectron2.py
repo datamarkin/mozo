@@ -9,7 +9,6 @@ try:
     from detectron2.engine import DefaultPredictor
     from detectron2.config import get_cfg
     from detectron2 import model_zoo
-    from detectron2.data import MetadataCatalog
 except ImportError:
     print("="*50)
     print("ERROR: Detectron2 is not installed.")
@@ -32,41 +31,13 @@ class Detectron2Predictor:
     Universal Detectron2 adapter - handles ALL detectron2 model variants.
     Supports multiple model families: Mask R-CNN, Faster R-CNN, RetinaNet, Keypoint R-CNN, etc.
 
-    Self-contained adapter with complete configuration.
+    Config and weights resolve independently:
+    - config_path overrides model zoo config derivation
+    - checkpoint_path overrides model zoo weights derivation
+    - labels are passed through to pixelflow (None = pixelflow defaults)
     """
 
-    # Complete variant configuration (single source of truth)
-    SUPPORTED_VARIANTS = {
-        'mask_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_50_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_50_DC5_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_50_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_101_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_101_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'mask_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_C4_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_DC5_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_101_C4_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_101_DC5_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'faster_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'retinanet_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'retinanet_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'retinanet_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'keypoint_rcnn_R_50_FPN_1x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'keypoint_rcnn_R_50_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'keypoint_rcnn_R_101_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-        'keypoint_rcnn_X_101_32x8d_FPN_3x': {'confidence_threshold': 0.5, 'device': 'cpu'},
-    }
-
-    # Mapping of variant names to Detectron2 model zoo config files (implementation detail)
+    # Mapping of variant names to Detectron2 model zoo config files
     _CONFIG_MAP = {
         # Mask R-CNN (Instance Segmentation)
         'mask_rcnn_R_50_FPN_3x': 'COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml',
@@ -103,84 +74,57 @@ class Detectron2Predictor:
 
     def __init__(self, variant="mask_rcnn_R_50_FPN_3x", **kwargs):
         """
-        Initialize Detectron2 predictor with specific model variant.
+        Initialize Detectron2 predictor.
+
+        Config and weights resolve independently — explicit paths override model zoo derivation.
 
         Args:
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'faster_rcnn_X_101_32x8d_FPN_3x')
-            **kwargs: Override default parameters (confidence_threshold, device)
-                For fine-tuned models, also accepts:
-                - checkpoint_path: Path to local .pth weights file
-                - class_names: List of class names (required with checkpoint_path)
-                - num_classes: Number of classes (defaults to len(class_names))
-
-        Raises:
-            ValueError: If variant is not supported or class_names missing for fine-tuned model
+            variant: Model variant name, used to derive config/weights from model zoo
+                     when config_path/checkpoint_path are not provided.
+            **kwargs:
+                config_path: Path to local config YAML (overrides model zoo config)
+                checkpoint_path: Path to local .pth weights (overrides model zoo weights)
+                labels: Structured labels list for pixelflow (optional, None = pixelflow defaults)
+                confidence_threshold: Score threshold for predictions (default 0.5)
+                device: Compute device (default 'cpu')
         """
+        confidence_threshold = kwargs.get('confidence_threshold', 0.5)
+        device = kwargs.get('device', 'cpu')
+        config_path = kwargs.get('config_path')
         checkpoint_path = kwargs.get('checkpoint_path')
 
-        if checkpoint_path:
-            # --- Fine-tuned model ---
-            class_names = kwargs.get('class_names')
-            if not class_names:
-                raise ValueError("Fine-tuned checkpoint requires 'class_names'.")
+        self.variant = variant
 
-            num_classes = kwargs.get('num_classes', len(class_names))
-            confidence_threshold = kwargs.get('confidence_threshold', 0.5)
-            device = kwargs.get('device', 'cpu')
-
+        # Resolve config
+        cfg = get_cfg()
+        if config_path:
+            cfg.merge_from_file(config_path)
+        else:
             if variant not in self._CONFIG_MAP:
                 raise ValueError(
                     f"Unsupported variant: '{variant}'. "
                     f"Supported variants: {list(self._CONFIG_MAP.keys())}"
                 )
+            cfg.merge_from_file(model_zoo.get_config_file(self._CONFIG_MAP[variant]))
 
-            self.variant = variant
-            config_file = self._CONFIG_MAP[variant]
-
-            print(f"Loading fine-tuned Detectron2 model (variant: {variant})...")
-            cfg = get_cfg()
-            cfg.merge_from_file(model_zoo.get_config_file(config_file))
+        # Resolve weights
+        if checkpoint_path:
             cfg.MODEL.WEIGHTS = checkpoint_path
-            cfg.MODEL.ROI_HEADS.NUM_CLASSES = num_classes
-            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
-            cfg.MODEL.DEVICE = device
-
-            if 'retinanet' in variant:
-                cfg.MODEL.RETINANET.NUM_CLASSES = num_classes
-
-            self.predictor = DefaultPredictor(cfg)
-            self.class_names = class_names
-            print(f"Fine-tuned Detectron2 model loaded (variant: {variant}).")
-
         else:
-            # --- Pre-trained COCO model ---
-            if variant not in self.SUPPORTED_VARIANTS:
+            if variant not in self._CONFIG_MAP:
                 raise ValueError(
                     f"Unsupported variant: '{variant}'. "
-                    f"Supported variants: {list(self.SUPPORTED_VARIANTS.keys())}"
+                    f"Supported variants: {list(self._CONFIG_MAP.keys())}"
                 )
+            cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(self._CONFIG_MAP[variant])
 
-            config = {**self.SUPPORTED_VARIANTS[variant], **kwargs}
-            confidence_threshold = config.get('confidence_threshold', 0.5)
-            device = config.get('device', 'cpu')
+        cfg.MODEL.DEVICE = device
+        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
 
-            self.variant = variant
-            config_file = self._CONFIG_MAP[variant]
-
-            print(f"Loading Detectron2 model (variant: {variant})...")
-            cfg = get_cfg()
-            cfg.merge_from_file(model_zoo.get_config_file(config_file))
-            cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(config_file)
-            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = confidence_threshold
-            cfg.MODEL.DEVICE = device
-
-            self.predictor = DefaultPredictor(cfg)
-
-            dataset_name = cfg.DATASETS.TRAIN[0] if cfg.DATASETS.TRAIN else "coco_2017_val"
-            metadata = MetadataCatalog.get(dataset_name)
-            self.class_names = metadata.thing_classes
-
-            print(f"Detectron2 model loaded successfully (variant: {variant}).")
+        print(f"Loading Detectron2 model (variant: {variant})...")
+        self.predictor = DefaultPredictor(cfg)
+        self.labels = kwargs.get('labels')  # pass-through to pixelflow, None = pixelflow defaults
+        print(f"Detectron2 model loaded (variant: {variant}).")
 
     def predict(self, image: Union[str, np.ndarray]):
         """
@@ -196,8 +140,7 @@ class Detectron2Predictor:
         print("Running prediction...")
         outputs = self.predictor(image)
 
-        # Use PixelFlow's existing converter for Detectron2
-        detections = pf.detections.from_detectron2(outputs, class_names=self.class_names)
+        detections = pf.detections.from_detectron2(outputs, labels=self.labels)
 
         print(f"Found {len(detections)} objects.")
         return detections
