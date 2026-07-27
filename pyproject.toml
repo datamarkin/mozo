@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mozo"
-version = "0.4.0"
+dynamic = ["version"]
 description = "Universal computer vision model serving library with dynamic model management and PixelFlow integration"
 readme = "README.md"
 authors = [
@@ -30,13 +30,21 @@ dependencies = [
     "opencv-python",
     "transformers",
     "torch",
-    "torchvision",
     "Pillow",
     "numpy",
-    "scipy",
     "pixelflow",
     "click",
 ]
+
+# Optional, per-family dependencies. Adapters raise ImportError with install
+# instructions when their framework is missing, so the core install stays light.
+# detectron2 is deliberately absent: it has no pip release and must be installed
+# per platform (https://detectron2.readthedocs.io/en/latest/tutorials/install.html).
+[project.optional-dependencies]
+rfdetr = ["rfdetr>=1.6.2"]
+paddleocr = ["paddleocr>=3.0.0"]
+easyocr = ["easyocr"]
+qwen = ["qwen-vl-utils"]
 
 [project.scripts]
 mozo = "mozo.cli:cli"
@@ -44,3 +52,15 @@ mozo = "mozo.cli:cli"
 [project.urls]
 "Homepage" = "https://github.com/datamarkin/mozo"
 "Bug Tracker" = "https://github.com/datamarkin/mozo/issues"
+
+[tool.setuptools]
+packages = ["mozo", "mozo.adapters"]
+
+# Version lives in mozo/__init__.py — single source of truth.
+[tool.setuptools.dynamic]
+version = { attr = "mozo.__version__" }
+
+# Ship the test UI and its example image; /test-ui and /static/example.jpg
+# return errors without them (they were missing from the 0.4.0 wheel).
+[tool.setuptools.package-data]
+mozo = ["static/*"]
