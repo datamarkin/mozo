@@ -9,8 +9,7 @@ from typing import Optional
 # Import model manager, factory, and registry utilities
 from . import __version__
 from .manager import ModelManager
-from .factory import ModelFactory
-from .registry import get_available_families, get_model_info
+from .registry import get_available_families, get_available_variants, get_model_info
 
 import os
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -26,15 +25,14 @@ app = FastAPI(
 @app.on_event("startup")
 def setup_manager():
     """
-    Initialize model manager and factory (no models loaded yet - they load on-demand).
+    Initialize the model manager (no models loaded yet - they load on-demand).
 
     This is much faster than the old approach which loaded all models at startup.
     Models will be loaded automatically when first requested.
     """
-    print("[Server] Initializing model manager and factory...")
+    print("[Server] Initializing model manager...")
     app.state.model_manager = ModelManager()
-    app.state.model_factory = ModelFactory()
-    print("[Server] Model manager and factory ready. Models will be loaded on-demand.")
+    print("[Server] Model manager ready. Models will be loaded on-demand.")
 
 # --- API Endpoints ---
 @app.get("/", summary="Health Check", description="Check if the API server is ready.")
@@ -91,7 +89,6 @@ async def predict(
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
     prompt: str = "Describe this image in detail.",
-    bearer_token: Optional[str] = None,
     threshold: float = 0.5,
     labels: Optional[str] = None,
 ):
@@ -99,12 +96,11 @@ async def predict(
     Universal prediction endpoint supporting all model families and variants.
 
     Args:
-        family: Model family (e.g., 'detectron2', 'datamarkin')
-        variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
-                For datamarkin, variant is the training_id
+        family: Model family (e.g., 'detectron2', 'rfdetr')
+        variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
         file: Image file to process
         prompt: Text prompt for generative models
-        bearer_token: Authentication token for datamarkin models (optional)
+        threshold: Confidence threshold for detection models
         labels: Comma-separated class labels for detection models (e.g., "hardhat,vest,person").
                 Overrides the model's default labels when provided.
 
@@ -113,7 +109,7 @@ async def predict(
 
     Examples:
         POST /predict/detectron2/mask_rcnn_R_50_FPN_3x
-        POST /predict/datamarkin/wings-v4?bearer_token=xxx
+        POST /predict/rfdetr/nano?threshold=0.5
         POST /predict/qwen3_vl/2b-thinking?prompt=What is in this image?
     """
     if not hasattr(app.state, "model_manager"):
@@ -130,11 +126,7 @@ async def predict(
 
     # Get or load model (lazy loading happens here)
     try:
-        if family == 'datamarkin':
-            # Pass bearer_token for datamarkin models
-            model = app.state.model_manager.get_model(family, variant, bearer_token=bearer_token)
-        else:
-            model = app.state.model_manager.get_model(family, variant)
+        model = app.state.model_manager.get_model(family, variant)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -142,11 +134,8 @@ async def predict(
 
     # Run prediction
     try:
-        if family in ['qwen2.5_vl', 'qwen3_vl', 'blip_vqa']:
-            # Vision-language models that require prompts
-            results = model.predict(image, prompt=prompt)
-        elif family == 'florence2':
-            # Florence-2 accepts optional prompt
+        if family in ['qwen2.5_vl', 'qwen3_vl', 'blip_vqa', 'florence2']:
+            # Vision-language models that take a text prompt
             results = model.predict(image, prompt=prompt)
         elif family == 'rfdetr':
             parsed_labels = None
@@ -179,39 +168,27 @@ def list_available_models():
     """
     List all available model families with their variants.
 
-    Variants are discovered from adapters (single source of truth).
     Also returns which variants are currently loaded in memory.
 
     Returns:
         dict: Available models organized by family, with variant lists, descriptions, and loaded status
     """
-    if not hasattr(app.state, "model_factory"):
-        raise HTTPException(status_code=503, detail="Server is starting up, model factory not initialized.")
-
-    families = get_available_families()
-    loaded_models = app.state.model_manager.list_loaded_models() if hasattr(app.state, "model_manager") else []
+    loaded_models = set(
+        app.state.model_manager.list_loaded_models() if hasattr(app.state, "model_manager") else []
+    )
     result = {}
 
-    for family in families:
+    for family in get_available_families():
         try:
-            # Get variants from adapter (single source of truth)
-            variants = app.state.model_factory.get_available_variants(family)
-
-            # Get family info from registry
             info = get_model_info(family)
-
-            # Find which variants are loaded
-            loaded_variants = [
-                variant for variant in variants
-                if f"{family}/{variant}" in loaded_models
-            ]
+            variants = info['variants']
 
             result[family] = {
                 'task_type': info['task_type'],
                 'description': info['description'],
                 'num_variants': len(variants),
                 'variants': variants,
-                'loaded': loaded_variants,
+                'loaded': [v for v in variants if f"{family}/{v}" in loaded_models],
             }
         except Exception as e:
             # If adapter fails to load, return error state
@@ -231,8 +208,6 @@ def get_family_variants(family: str):
     """
     Get available variants for a specific model family.
 
-    Variants are discovered from the adapter's SUPPORTED_VARIANTS (single source of truth).
-
     Args:
         family: Model family name (e.g., 'detectron2', 'paddleocr')
 
@@ -243,11 +218,8 @@ def get_family_variants(family: str):
         GET /models/detectron2/variants
         Returns: {"family": "detectron2", "variants": ["mask_rcnn_R_50_FPN_3x", ...]}
     """
-    if not hasattr(app.state, "model_factory"):
-        raise HTTPException(status_code=503, detail="Server is starting up, model factory not initialized.")
-
     try:
-        variants = app.state.model_factory.get_available_variants(family)
+        variants = get_available_variants(family)
         return {
             "family": family,
             "variants": variants,

@@ -117,13 +117,12 @@ class ModelManager:
         performs the loading while others wait and reuse the loaded instance.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
-                    For datamarkin family, variant is the training_id
+            family: Model family name (e.g., 'detectron2', 'depth_anything', 'rfdetr')
+            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
                    If None, automatically selects best available device
             **kwargs: Additional parameters passed to model initialization
-                     Required for some adapters (e.g., bearer_token for datamarkin)
+                     (e.g., checkpoint_path and labels for fine-tuned models)
 
         Returns:
             Model predictor instance with a predict() method for running inference
@@ -140,8 +139,9 @@ class ModelManager:
             model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
             detections = model.predict(image)
 
-            # Cloud model with authentication
-            model = manager.get_model('datamarkin', 'wings-v4', bearer_token='your_token')
+            # Fine-tuned model from a local checkpoint
+            model = manager.get_model('rfdetr', 'my-training', checkpoint_path='weights.pth',
+                                      model_size='small', project_type='detection')
             detections = model.predict(image)
 
             # Subsequent calls return cached instance (instant)
