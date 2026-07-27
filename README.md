@@ -2,7 +2,7 @@
 
 Universal computer vision model server with automatic memory management and multi-framework support.
 
-Mozo provides HTTP access to 35+ pre-configured models across 11 model families from Detectron2, HuggingFace Transformers, PaddleOCR, EasyOCR, and other frameworks. Models load on-demand and clean up automatically.
+Mozo provides HTTP access to 63 pre-configured model variants across 10 model families from Detectron2, RF-DETR, HuggingFace Transformers, PaddleOCR, EasyOCR, and other frameworks. Models load on-demand and clean up automatically.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **35+ Pre-configured Models** - 11 model families including Detectron2, RF-DETR, HuggingFace Transformers, PaddleOCR, EasyOCR, Florence-2, BLIP VQA, and more
+- **63 Pre-configured Model Variants** - 10 model families including Detectron2, RF-DETR, HuggingFace Transformers, PaddleOCR, EasyOCR, Florence-2, BLIP VQA, and more
 - **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
 - **Multi-Framework Support** - Unified API across different ML frameworks
 - **PixelFlow Integration** - Detection models return unified format for filtering and annotation
@@ -60,7 +60,7 @@ pip install 'git+https://github.com/facebookresearch/detectron2.git'
 
 ## Available Models
 
-### Detectron2 (17 variants)
+### Detectron2 (27 variants)
 Object detection, instance segmentation, keypoint detection trained on COCO dataset.
 
 Popular variants:
