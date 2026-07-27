@@ -1,7 +1,7 @@
 # Development install. Runtime dependencies are declared in pyproject.toml —
 # this file exists so `pip install -r requirements.txt` sets up a working repo
 # checkout without duplicating the dependency list.
--e .[rfdetr]
+-e .[rfdetr,test]
 
 # Optional model families (install as needed):
 #   pip install -e .[paddleocr]   # paddleocr + ppstructure adapters
