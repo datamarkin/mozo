@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from typing import Optional
 
 # Import model manager, factory, and registry utilities
+from . import __version__
 from .manager import ModelManager
 from .factory import ModelFactory
 from .registry import get_available_families, get_model_info
@@ -18,7 +19,7 @@ os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 app = FastAPI(
     title="Mozo Model Server",
     description="Dynamic model serving API with lazy loading and lifecycle management.",
-    version="0.2.0"
+    version=__version__
 )
 
 # --- Model Manager Setup ---
