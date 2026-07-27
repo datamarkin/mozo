@@ -44,7 +44,9 @@ For more information, see:
     - Documentation: https://github.com/datamarkin/mozo
 """
 
-__version__ = "0.2.0"
+# Single source of truth for the package version.
+# pyproject.toml reads this via [tool.setuptools.dynamic] version.attr
+__version__ = "0.4.0"
 
 # Public API exports
 from mozo.manager import ModelManager
