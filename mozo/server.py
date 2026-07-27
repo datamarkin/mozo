@@ -92,7 +92,7 @@ async def predict(
     prompt: str = "Describe this image in detail.",
     bearer_token: Optional[str] = None,
     threshold: float = 0.5,
-    class_names: Optional[str] = None,
+    labels: Optional[str] = None,
 ):
     """
     Universal prediction endpoint supporting all model families and variants.
@@ -104,8 +104,8 @@ async def predict(
         file: Image file to process
         prompt: Text prompt for generative models
         bearer_token: Authentication token for datamarkin models (optional)
-        class_names: Comma-separated class names for detection models (e.g., "hardhat,vest,person").
-                     Overrides default class names when provided.
+        labels: Comma-separated class labels for detection models (e.g., "hardhat,vest,person").
+                Overrides the model's default labels when provided.
 
     Returns:
         JSON response with predictions or an image
@@ -148,10 +148,10 @@ async def predict(
             # Florence-2 accepts optional prompt
             results = model.predict(image, prompt=prompt)
         elif family == 'rfdetr':
-            parsed_class_names = None
-            if class_names is not None:
-                parsed_class_names = [n.strip() for n in class_names.split(",") if n.strip()] or None
-            results = model.predict(image, threshold=threshold, class_names=parsed_class_names)
+            parsed_labels = None
+            if labels is not None:
+                parsed_labels = [n.strip() for n in labels.split(",") if n.strip()] or None
+            results = model.predict(image, threshold=threshold, labels=parsed_labels)
         else:
             results = model.predict(image)
 
