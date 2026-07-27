@@ -1,12 +1,11 @@
-fastapi
-uvicorn
-requests
-opencv-python
-transformers
-torch
-torchvision
-Pillow
-numpy
-scipy
-pixelflow
-rfdetr==1.6.2
+# Development install. Runtime dependencies are declared in pyproject.toml —
+# this file exists so `pip install -r requirements.txt` sets up a working repo
+# checkout without duplicating the dependency list.
+-e .[rfdetr]
+
+# Optional model families (install as needed):
+#   pip install -e .[paddleocr]   # paddleocr + ppstructure adapters
+#   pip install -e .[easyocr]     # easyocr adapter
+#   pip install -e .[qwen]        # qwen2.5_vl adapter
+# detectron2 must be installed per platform:
+#   https://detectron2.readthedocs.io/en/latest/tutorials/install.html
