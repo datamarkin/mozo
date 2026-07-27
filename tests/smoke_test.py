@@ -29,13 +29,6 @@ SPECIAL_MODELS = {
     'blip_vqa': {'prompt': 'What is in this image?'},
     'florence2': {'prompt': 'Describe this image'},  # For captioning variants
     'florence2/segmentation': {'prompt': 'text'},     # Segmentation needs object-specific prompt
-    'stability_inpainting/default': {'prompt': 'a cat'},  # Inpainting prompt
-}
-
-# Models that require additional files (e.g., mask for inpainting)
-# Format: {model_id: {'file_param_name': 'path/to/file'}}
-SPECIAL_FILES = {
-    'stability_inpainting/default': {'mask': 'tests/fixtures/test_mask.png'},
 }
 
 # Large models to skip (optional)
@@ -104,41 +97,14 @@ def test_model(family, variant, test_image_path):
         elif family in SPECIAL_MODELS:
             params.update(SPECIAL_MODELS[family])
 
-        # Prepare files dict
-        files_dict = {}
-
-        # Open main image file
+        # Make prediction request
         with open(test_image_path, "rb") as f:
-            files_dict["file"] = f
-
-            # Check if model needs additional files
-            if model_id in SPECIAL_FILES:
-                special_file_handles = []
-                try:
-                    for file_param, file_path in SPECIAL_FILES[model_id].items():
-                        file_handle = open(file_path, "rb")
-                        special_file_handles.append(file_handle)
-                        files_dict[file_param] = file_handle
-
-                    # Make prediction request with all files
-                    response = requests.post(
-                        f"{SERVER_URL}/predict/{family}/{variant}",
-                        files=files_dict,
-                        params=params,
-                        timeout=TIMEOUT
-                    )
-                finally:
-                    # Close additional file handles
-                    for handle in special_file_handles:
-                        handle.close()
-            else:
-                # Make prediction request with just main file
-                response = requests.post(
-                    f"{SERVER_URL}/predict/{family}/{variant}",
-                    files=files_dict,
-                    params=params,
-                    timeout=TIMEOUT
-                )
+            response = requests.post(
+                f"{SERVER_URL}/predict/{family}/{variant}",
+                files={"file": f},
+                params=params,
+                timeout=TIMEOUT
+            )
 
         # Check response
         if response.status_code == 200:
@@ -146,17 +112,7 @@ def test_model(family, variant, test_image_path):
             content_type = response.headers.get('content-type', '')
 
             if 'image' in content_type:
-                # Save image responses for visual verification
-                if model_id == 'stability_inpainting/default':
-                    output_path = Path(__file__).parent / 'fixtures' / 'inpaint_result.png'
-                    try:
-                        with open(output_path, 'wb') as f:
-                            f.write(response.content)
-                        return True, "Success (image saved)", None
-                    except Exception as e:
-                        return True, f"Success (save failed: {e})", None
-                else:
-                    return True, "Success (image response)", None
+                return True, "Success (image response)", None
             else:
                 # Try to parse as JSON
                 try:
