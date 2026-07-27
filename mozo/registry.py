@@ -121,14 +121,6 @@ MODEL_REGISTRY = {
         'variants': ['base', 'capfilt-large'],
     },
 
-    'datamarkin': {
-        'adapter_class': 'DatamarkinPredictor',
-        'module': 'mozo.adapters.datamarkin',
-        'task_type': 'online_inference',
-        'description': 'Datamarkin Vision Service - Cloud-based model inference for keypoint detection, object detection, and segmentation. Variant name is the training_id.',
-        'variants': [],  # Dynamic variants - any training_id is valid
-    },
-
     'rfdetr': {
         'adapter_class': 'RFDETRPredictor',
         'module': 'mozo.adapters.rfdetr',
@@ -202,7 +194,7 @@ def get_available_variants(family):
 
     Returns:
         list: Variant names for the family (e.g., ['mask_rcnn_R_50_FPN_3x', ...])
-             Returns empty list for families with dynamic variants (e.g., datamarkin)
+             An empty list means the family accepts any variant (dynamic variants)
 
     Raises:
         ValueError: If family name is not found in registry
@@ -261,7 +253,8 @@ def get_model_info(family, variant=None):
 
     Raises:
         ValueError: If family name not found in registry
-        ValueError: If variant provided and not found in registry (except datamarkin)
+        ValueError: If variant provided and not found in the family's variant list
+                   (families with an empty variant list accept any variant)
 
     Example:
         ```python
@@ -284,7 +277,7 @@ def get_model_info(family, variant=None):
     Note:
         - Fast metadata lookup (no adapter imports)
         - Used by REST API /models/{family}/{variant}/info endpoint
-        - Datamarkin family accepts any variant (dynamic variants)
+        - Families with an empty variant list accept any variant
         - Variant validation is advisory only - adapters are authoritative
     """
     if family not in MODEL_REGISTRY:
@@ -292,13 +285,12 @@ def get_model_info(family, variant=None):
 
     family_config = MODEL_REGISTRY[family]
 
-    # Validate variant if provided
+    # Validate variant if provided. An empty variant list means the family
+    # accepts any variant, so there is nothing to validate against.
     if variant is not None:
         variants = family_config.get('variants', [])
         if variants and variant not in variants:
-            # Special case: datamarkin accepts any variant (empty list)
-            if family != 'datamarkin':
-                raise ValueError(f"Unknown variant '{variant}' for family '{family}'. Available: {variants}")
+            raise ValueError(f"Unknown variant '{variant}' for family '{family}'. Available: {variants}")
 
     return {
         'family': family,

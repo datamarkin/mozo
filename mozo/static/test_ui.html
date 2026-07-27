@@ -337,7 +337,7 @@
             <!-- Image Upload Section -->
             <div class="panel image-section">
                 <h2>📸 Image Input</h2>
-                <img id="imagePreview" src="/static/pexels-fauxels-3182795.jpg" alt="Preview">
+                <img id="imagePreview" src="/static/example.jpg" alt="Preview">
                 <div class="file-input-wrapper">
                     <label for="imageInput" class="btn" style="width: 100%; cursor: pointer;">
                         📁 Choose Image
@@ -357,24 +357,15 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="variantSelect" id="variantLabel">Model Variant</label>
-                    <!-- Standard variant select (for most models) -->
+                    <label for="variantSelect">Model Variant</label>
                     <select id="variantSelect">
                         <option value="">Select a family first</option>
                     </select>
-                    <!-- Datamarkin variant input (for training_id) -->
-                    <input type="text" id="variantInput" style="display: none;"
-                           placeholder="Enter your training_id (e.g., wings-v4, my-custom-model)">
                 </div>
                 <div class="form-group" id="promptGroup" style="display: none;">
                     <label for="promptInput">Prompt (for vision-language models)</label>
                     <input type="text" id="promptInput" placeholder="Describe this image in detail."
                            value="Describe this image in detail.">
-                </div>
-                <div class="form-group" id="datamarkinGroup" style="display: none;">
-                    <label for="datamarkinTokenInput">Bearer Token (optional)</label>
-                    <input type="text" id="datamarkinTokenInput"
-                           placeholder="Leave empty for public models or if using DATAMARKIN_TOKEN env var">
                 </div>
                 <button id="predictBtn" class="btn" style="width: 100%;">
                     ▶️ Run Prediction
@@ -390,8 +381,14 @@
     </div>
 
     <script>
+        // Served by GET /static/example.jpg — keep in sync with the <img> preview above.
+        const DEFAULT_IMAGE = '/static/example.jpg';
+        // Families whose predict() takes a text prompt.
+        const PROMPT_FAMILIES = new Set(['qwen2.5_vl', 'qwen3_vl', 'blip_vqa', 'florence2']);
+
         let availableModels = {};
         let currentImage = null;
+        let defaultImageBlob = null;  // cached so the default image is fetched once
 
         // Fetch available models on page load
         async function loadModels() {
@@ -419,55 +416,26 @@
         document.getElementById('familySelect').addEventListener('change', function() {
             const family = this.value;
             const variantSelect = document.getElementById('variantSelect');
-            const variantInput = document.getElementById('variantInput');
-            const variantLabel = document.getElementById('variantLabel');
             const promptGroup = document.getElementById('promptGroup');
-            const datamarkinGroup = document.getElementById('datamarkinGroup');
 
             if (!family) {
                 variantSelect.innerHTML = '<option value="">Select a family first</option>';
-                variantSelect.style.display = 'block';
-                variantInput.style.display = 'none';
                 promptGroup.style.display = 'none';
-                datamarkinGroup.style.display = 'none';
                 return;
             }
 
-            // For datamarkin: show text input for training_id
-            if (family === 'datamarkin') {
-                variantSelect.style.display = 'none';
-                variantInput.style.display = 'block';
-                variantInput.value = '';  // Clear previous value
-                variantLabel.textContent = 'Training ID';
-                promptGroup.style.display = 'none';
-                datamarkinGroup.style.display = 'block';
-            }
-            // For other families: show dropdown
-            else {
-                variantSelect.style.display = 'block';
-                variantInput.style.display = 'none';
-                variantLabel.textContent = 'Model Variant';
+            const variants = availableModels[family].variants;
+            variantSelect.innerHTML = '<option value="">Select a variant</option>';
 
-                const variants = availableModels[family].variants;
-                variantSelect.innerHTML = '<option value="">Select a variant</option>';
+            variants.forEach(variant => {
+                const option = document.createElement('option');
+                option.value = variant;
+                option.textContent = variant;
+                variantSelect.appendChild(option);
+            });
 
-                variants.forEach(variant => {
-                    const option = document.createElement('option');
-                    option.value = variant;
-                    option.textContent = variant;
-                    variantSelect.appendChild(option);
-                });
-
-                // Show prompt input for vision-language models
-                if (family === 'qwen2.5_vl' || family === 'qwen3_vl' || family === 'blip_vqa' || family === 'florence2') {
-                    promptGroup.style.display = 'block';
-                    datamarkinGroup.style.display = 'none';
-                }
-                else {
-                    promptGroup.style.display = 'none';
-                    datamarkinGroup.style.display = 'none';
-                }
-            }
+            // Show prompt input for vision-language models
+            promptGroup.style.display = PROMPT_FAMILIES.has(family) ? 'block' : 'none';
         });
 
         // Handle image upload
@@ -488,37 +456,26 @@
         // Run prediction
         document.getElementById('predictBtn').addEventListener('click', async function() {
             const family = document.getElementById('familySelect').value;
-
-            // Get variant from appropriate source based on family
-            let variant;
-            if (family === 'datamarkin') {
-                variant = document.getElementById('variantInput').value.trim();
-            } else {
-                variant = document.getElementById('variantSelect').value;
-            }
+            const variant = document.getElementById('variantSelect').value;
 
             if (!family || !variant) {
-                if (family === 'datamarkin') {
-                    showError('Please enter a training_id');
-                } else {
-                    showError('Please select both model family and variant');
-                }
+                showError('Please select both model family and variant');
                 return;
             }
 
-            // Get image (either uploaded or default)
-            let imageBlob;
-            if (currentImage) {
-                imageBlob = currentImage;
-            } else {
-                // Fetch default image
-                try {
-                    const response = await fetch('/static/pexels-fauxels-3182795.jpg');
-                    imageBlob = await response.blob();
-                } catch (error) {
-                    showError('Failed to load default image');
-                    return;
+            // Get image (either uploaded or default, fetched once and cached)
+            let imageBlob = currentImage;
+            if (!imageBlob) {
+                if (!defaultImageBlob) {
+                    try {
+                        const response = await fetch(DEFAULT_IMAGE);
+                        defaultImageBlob = await response.blob();
+                    } catch (error) {
+                        showError('Failed to load default image');
+                        return;
+                    }
                 }
+                imageBlob = defaultImageBlob;
             }
 
             // Show loading
@@ -531,16 +488,10 @@
             // Build URL with parameters for specific model families
             let url = `/predict/${family}/${variant}`;
 
-            if (family === 'qwen2.5_vl' || family === 'qwen3_vl' || family === 'blip_vqa' || family === 'florence2') {
+            if (PROMPT_FAMILIES.has(family)) {
                 // Add prompt parameter for vision-language models
                 const prompt = document.getElementById('promptInput').value || 'Describe this image in detail.';
                 url += `?prompt=${encodeURIComponent(prompt)}`;
-            } else if (family === 'datamarkin') {
-                // Add bearer_token parameter for datamarkin models
-                const token = document.getElementById('datamarkinTokenInput').value;
-                if (token) {
-                    url += `?bearer_token=${encodeURIComponent(token)}`;
-                }
             }
 
             try {

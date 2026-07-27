@@ -118,13 +118,13 @@ class ModelFactory:
         adapter, not the factory. This separation of concerns makes both components simpler.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything', 'datamarkin')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'wings-v4')
+            family: Model family name (e.g., 'detectron2', 'depth_anything', 'rfdetr')
+            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
                     Variant names are adapter-specific; adapters validate variants
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
                    If None, automatically selects best available device
             **override_params: Additional parameters passed directly to adapter constructor
-                             Examples: bearer_token for datamarkin
+                             Examples: checkpoint_path, labels, confidence_threshold
 
         Returns:
             Instantiated model predictor object with a predict() method for inference
@@ -142,8 +142,9 @@ class ModelFactory:
             model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
             detections = model.predict(image)
 
-            # Cloud-based model with authentication
-            model = factory.create_model('datamarkin', 'wings-v4', bearer_token='your_token')
+            # Fine-tuned model from a local checkpoint
+            model = factory.create_model('detectron2', 'my-training',
+                                         checkpoint_path='model_final.pth')
             detections = model.predict(image)
 
             # Override device for GPU
