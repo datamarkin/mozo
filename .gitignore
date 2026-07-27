@@ -207,3 +207,11 @@ marimo/_lsp/
 __marimo__/
 **.DS_Store
 /.idea
+
+# Model weights downloaded into the working directory at runtime
+# (rfdetr caches checkpoints such as rf-detr-nano.pth in the CWD)
+*.pth
+*.pt
+
+# Smoke test output
+test_results.json
