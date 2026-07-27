@@ -4,25 +4,12 @@ Mozo Model Adapters
 This module contains adapter classes for different ML frameworks.
 Each adapter provides a unified interface for model loading and inference.
 
-Note: Adapters are imported lazily. Import errors are deferred until
-      the adapter is actually used, allowing mozo to work even if some
-      dependencies are not installed.
+Adapters are deliberately NOT imported here: ModelFactory imports them
+dynamically from the module path recorded in MODEL_REGISTRY, so a missing
+optional dependency (detectron2, paddleocr, rfdetr, ...) only fails when that
+family is actually requested rather than at package import time.
+
+Import an adapter directly if you need it without the factory:
+
+    from mozo.adapters.rfdetr import RFDETRPredictor
 """
-
-# Note: We don't pre-import adapters here to avoid import errors
-# when optional dependencies (detectron2, paddleocr, etc.) are missing.
-# The ModelFactory will import adapters dynamically when needed.
-
-__all__ = [
-    'Detectron2Predictor',
-    'DepthAnythingPredictor',
-    'Qwen2_5VLPredictor',
-    'Qwen3VLPredictor',
-    'PaddleOCRPredictor',
-    'PPStructurePredictor',
-    'EasyOCRPredictor',
-    'Florence2Predictor',
-    'BlipVqaPredictor',
-    'DatamarkinPredictor',
-    'RFDETRPredictor',
-]
