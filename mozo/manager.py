@@ -202,7 +202,7 @@ class ModelManager:
         """
         Explicitly unload a specific model to free memory immediately.
 
-        Problem: Some models consume several GB of memory (e.g., Qwen2.5-VL requires 16GB+).
+        Problem: Some models consume several GB of memory (e.g., Florence-2 large variants).
         After batch processing or when switching to different models, you need to free memory
         without waiting for automatic cleanup.
 
@@ -221,12 +221,12 @@ class ModelManager:
             manager = ModelManager()
 
             # Use a large model for batch processing
-            model = manager.get_model('qwen2.5_vl', '7b-instruct')
+            model = manager.get_model('florence2', 'ocr')
             for image in batch:
                 result = model.predict(image)
 
             # Immediately free 16GB+ memory after batch completes
-            manager.unload_model('qwen2.5_vl', '7b-instruct')
+            manager.unload_model('florence2', 'ocr')
 
             # Now load a different model for next task
             model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
@@ -322,7 +322,7 @@ class ModelManager:
             # Load and use several models
             model1 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
             model2 = manager.get_model('depth_anything', 'small')
-            model3 = manager.get_model('qwen2.5_vl', '7b-instruct')
+            model3 = manager.get_model('florence2', 'ocr')
 
             # After 10 minutes of inactivity, free memory from unused models
             unloaded_count = manager.cleanup_inactive_models(600)
