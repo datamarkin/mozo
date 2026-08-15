@@ -24,9 +24,6 @@ SKIP_LARGE_MODELS = True  # Skip 7B+ models to save time
 # Models that require special parameters
 # Can use family name for all variants or specific model_id (family/variant) for variant-specific params
 SPECIAL_MODELS = {
-    'qwen2.5_vl': {'prompt': 'What is in this image?'},
-    'qwen3_vl': {'prompt': 'What is in this image?'},
-    'blip_vqa': {'prompt': 'What is in this image?'},
     'florence2': {'prompt': 'Describe this image'},  # For captioning variants
     'florence2/segmentation': {'prompt': 'text'},     # Segmentation needs object-specific prompt
 }
