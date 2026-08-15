@@ -43,7 +43,6 @@ dependencies = [
 rfdetr = ["rfdetr>=1.6.2"]
 paddleocr = ["paddleocr>=3.0.0"]
 easyocr = ["easyocr"]
-qwen = ["qwen-vl-utils"]
 test = ["requests"]  # tests/smoke_test.py drives the server over HTTP
 
 [project.scripts]
