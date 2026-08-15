@@ -6,6 +6,5 @@
 # Optional model families (install as needed):
 #   pip install -e .[paddleocr]   # paddleocr + ppstructure adapters
 #   pip install -e .[easyocr]     # easyocr adapter
-#   pip install -e .[qwen]        # qwen2.5_vl adapter
 # detectron2 must be installed per platform:
 #   https://detectron2.readthedocs.io/en/latest/tutorials/install.html
