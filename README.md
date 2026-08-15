@@ -2,11 +2,11 @@
 
 Universal computer vision model server with automatic memory management and multi-framework support.
 
-Mozo provides HTTP access to 48 pre-configured model variants across 10 model families from RF-DETR, HuggingFace Transformers, PaddleOCR, EasyOCR, Detectron2, and other frameworks. Models load on-demand and clean up automatically.
+Mozo provides HTTP access to 44 pre-configured model variants across 7 model families from RF-DETR, Detectron2, PaddleOCR, EasyOCR, Florence-2 and other frameworks. Models load on-demand and clean up automatically.
 
 > **Note:** the Detectron2 family (12 variants) is currently unavailable while it is
 > reimplemented on exported artifacts. Loading it raises `NotImplementedError`.
-> 36 variants across the other 9 families are usable today.
+> 32 variants across the other 6 families are usable today.
 
 ## Quick Start
 
@@ -31,10 +31,10 @@ curl -X POST "http://localhost:8000/predict/depth_anything/small" \
   -F "file=@image.jpg" --output depth.png
 ```
 
-Vision-language Q&A:
+Document OCR:
 ```bash
-curl -X POST "http://localhost:8000/predict/qwen2.5_vl/7b-instruct?prompt=What%20is%20in%20this%20image" \
-  -F "file=@image.jpg"
+curl -X POST "http://localhost:8000/predict/paddleocr/mobile" \
+  -F "file=@document.jpg"
 ```
 
 List available models:
@@ -44,7 +44,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **48 Pre-configured Model Variants** - 10 model families including RF-DETR, HuggingFace Transformers, PaddleOCR, EasyOCR, Florence-2, BLIP VQA, and more
+- **44 Pre-configured Model Variants** - 7 model families including RF-DETR, Detectron2, PaddleOCR, PP-Structure, EasyOCR and Florence-2
 - **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
 - **Multi-Framework Support** - Unified API across different ML frameworks
 - **PixelFlow Integration** - Detection models return unified format for filtering and annotation
@@ -61,11 +61,10 @@ pip install mozo
 pip install 'mozo[rfdetr]'      # RF-DETR
 pip install 'mozo[paddleocr]'   # PaddleOCR + PP-Structure
 pip install 'mozo[easyocr]'     # EasyOCR
-pip install 'mozo[qwen]'        # Qwen2.5-VL
 ```
 
-Depth Anything, Florence-2 and BLIP VQA run on the core `transformers` dependency
-and need no extra.
+Depth Anything and Florence-2 run on the core `transformers` dependency and need
+no extra.
 
 ## Available Models
 
@@ -116,27 +115,6 @@ General-purpose OCR, 80+ languages.
 
 Output: PixelFlow `Detections` with recognised text
 
-### BLIP VQA (2 variants)
-Salesforce BLIP visual question answering.
-
-- `base`, `capfilt-large`
-
-Output: JSON with text response
-
-### Qwen2.5-VL (1 variant)
-Vision-language understanding for VQA, captioning, and image analysis.
-
-- `7b-instruct` - 7B parameter model (requires 16GB+ RAM)
-
-Output: JSON with text response
-
-### Qwen3-VL (1 variant)
-Vision-language understanding with chain-of-thought reasoning.
-
-- `2b-thinking`
-
-Output: JSON with text response and reasoning trace
-
 ### Detectron2 (12 variants) — currently unavailable
 Object detection, instance segmentation and keypoint detection on COCO. FPN
 backbones only.
@@ -173,12 +151,12 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (e.g., `rfdetr`, `depth_anything`, `qwen2.5_vl`)
-- `variant` - Model variant (e.g., `medium`, `small`, `7b-instruct`)
+- `family` - Model family (e.g., `rfdetr`, `depth_anything`, `paddleocr`)
+- `variant` - Model variant (e.g., `medium`, `small`, `ocr`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
 - `labels` - Comma-separated class labels overriding the model defaults (detection models only)
-- `prompt` - Text prompt (VLM models only)
+- `prompt` - Text prompt (Florence-2 only)
 
 ### Health Check
 ```http
