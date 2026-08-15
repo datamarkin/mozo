@@ -56,22 +56,6 @@ MODEL_REGISTRY = {
         'variants': ['small', 'base', 'large'],
     },
 
-    'qwen2.5_vl': {
-        'adapter_class': 'Qwen2_5VLPredictor',
-        'module': 'mozo.adapters.qwen2_5_vl',
-        'task_type': 'visual_question_answering',
-        'description': 'Qwen2.5-VL models for vision-language understanding, VQA, and image analysis',
-        'variants': ['7b-instruct'],
-    },
-
-    'qwen3_vl': {
-        'adapter_class': 'Qwen3VLPredictor',
-        'module': 'mozo.adapters.qwen3_vl',
-        'task_type': 'visual_question_answering_with_reasoning',
-        'description': 'Qwen3-VL models with chain-of-thought reasoning for explainable vision-language understanding',
-        'variants': ['2b-thinking'],
-    },
-
     'paddleocr': {
         'adapter_class': 'PaddleOCRPredictor',
         'module': 'mozo.adapters.paddleocr',
@@ -108,14 +92,6 @@ MODEL_REGISTRY = {
         ],
     },
 
-    'blip_vqa': {
-        'adapter_class': 'BlipVqaPredictor',
-        'module': 'mozo.adapters.blip_vqa',
-        'task_type': 'visual_question_answering',
-        'description': 'Salesforce BLIP for visual question answering - Answer questions about images using vision-language understanding',
-        'variants': ['base', 'capfilt-large'],
-    },
-
     'rfdetr': {
         'adapter_class': 'RFDETRPredictor',
         'module': 'mozo.adapters.rfdetr',
@@ -145,7 +121,7 @@ def get_available_families():
     a lightweight, fast operation that doesn't import or instantiate any adapters.
 
     Returns:
-        list: List of model family names (e.g., ['detectron2', 'depth_anything', 'qwen2.5_vl', ...])
+        list: List of model family names (e.g., ['detectron2', 'depth_anything', 'rfdetr', ...])
 
     Example:
         ```python
@@ -153,7 +129,7 @@ def get_available_families():
 
         families = get_available_families()
         print(f"Available model families: {families}")
-        # Output: ['detectron2', 'depth_anything', 'qwen2.5_vl', 'paddleocr', ...]
+        # Output: ['detectron2', 'depth_anything', 'paddleocr', 'rfdetr', ...]
 
         # Check if a specific family is available
         if 'detectron2' in families:
@@ -172,7 +148,7 @@ def get_available_variants(family):
     """
     Get list of variant names for a model family from registry for fast discovery.
 
-    Problem: Each model family has multiple variants (e.g., Detectron2 has 27 variants).
+    Problem: Each model family has multiple variants (e.g., Detectron2 has 12 variants).
     Users need to discover available variants without importing heavy adapter modules or
     loading models. API endpoints need to list variants quickly for documentation and
     validation.
@@ -201,7 +177,7 @@ def get_available_variants(family):
         # List all Detectron2 variants
         variants = get_available_variants('detectron2')
         print(f"Detectron2 has {len(variants)} variants")
-        print(variants[:3])  # ['mask_rcnn_R_50_FPN_3x', 'mask_rcnn_R_50_C4_1x', ...]
+        print(variants[:3])  # ['faster_rcnn_R_50_FPN_1x', 'faster_rcnn_R_50_FPN_3x', ...]
 
         # Check if specific variant exists
         if 'mask_rcnn_R_50_FPN_3x' in variants:

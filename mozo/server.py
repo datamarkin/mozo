@@ -110,7 +110,7 @@ async def predict(
     Examples:
         POST /predict/detectron2/mask_rcnn_R_50_FPN_3x
         POST /predict/rfdetr/nano?threshold=0.5
-        POST /predict/qwen3_vl/2b-thinking?prompt=What is in this image?
+        POST /predict/florence2/ocr
     """
     if not hasattr(app.state, "model_manager"):
         raise HTTPException(status_code=503, detail="Server is starting up, model manager not initialized.")
@@ -134,7 +134,7 @@ async def predict(
 
     # Run prediction
     try:
-        if family in ['qwen2.5_vl', 'qwen3_vl', 'blip_vqa', 'florence2']:
+        if family in ['florence2']:
             # Vision-language models that take a text prompt
             results = model.predict(image, prompt=prompt)
         elif family == 'rfdetr':

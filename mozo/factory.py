@@ -40,7 +40,7 @@ class ModelFactory:
 
         # List all available families
         families = factory.get_available_families()
-        print(families)  # ['detectron2', 'depth_anything', 'qwen2.5_vl', ...]
+        print(families)  # ['detectron2', 'depth_anything', 'rfdetr', ...]
         ```
 
     Note:
