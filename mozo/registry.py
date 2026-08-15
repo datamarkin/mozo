@@ -35,21 +35,16 @@ MODEL_REGISTRY = {
         'task_type': 'object_detection',
         'description': 'Detectron2 models for object detection, instance segmentation, and keypoint detection',
         'variants': [
-            # Mask R-CNN (Instance Segmentation)
-            'mask_rcnn_R_50_FPN_3x', 'mask_rcnn_R_50_C4_1x', 'mask_rcnn_R_50_C4_3x',
-            'mask_rcnn_R_50_DC5_1x', 'mask_rcnn_R_50_DC5_3x', 'mask_rcnn_R_50_FPN_1x',
-            'mask_rcnn_R_101_C4_3x', 'mask_rcnn_R_101_DC5_3x', 'mask_rcnn_R_101_FPN_3x',
-            'mask_rcnn_X_101_32x8d_FPN_3x',
+            # FPN backbones only — C4, DC5 and RetinaNet are out of scope.
             # Faster R-CNN (Object Detection)
-            'faster_rcnn_R_50_C4_1x', 'faster_rcnn_R_50_C4_3x', 'faster_rcnn_R_50_DC5_1x',
-            'faster_rcnn_R_50_DC5_3x', 'faster_rcnn_R_50_FPN_1x', 'faster_rcnn_R_50_FPN_3x',
-            'faster_rcnn_R_101_C4_3x', 'faster_rcnn_R_101_DC5_3x', 'faster_rcnn_R_101_FPN_3x',
-            'faster_rcnn_X_101_32x8d_FPN_3x',
-            # RetinaNet (Object Detection)
-            'retinanet_R_50_FPN_1x', 'retinanet_R_50_FPN_3x', 'retinanet_R_101_FPN_3x',
+            'faster_rcnn_R_50_FPN_1x', 'faster_rcnn_R_50_FPN_3x',
+            'faster_rcnn_R_101_FPN_3x', 'faster_rcnn_X_101_32x8d_FPN_3x',
+            # Mask R-CNN (Instance Segmentation)
+            'mask_rcnn_R_50_FPN_1x', 'mask_rcnn_R_50_FPN_3x',
+            'mask_rcnn_R_101_FPN_3x', 'mask_rcnn_X_101_32x8d_FPN_3x',
             # Keypoint R-CNN (Keypoint Detection)
-            'keypoint_rcnn_R_50_FPN_1x', 'keypoint_rcnn_R_50_FPN_3x', 'keypoint_rcnn_R_101_FPN_3x',
-            'keypoint_rcnn_X_101_32x8d_FPN_3x',
+            'keypoint_rcnn_R_50_FPN_1x', 'keypoint_rcnn_R_50_FPN_3x',
+            'keypoint_rcnn_R_101_FPN_3x', 'keypoint_rcnn_X_101_32x8d_FPN_3x',
         ],
     },
 
