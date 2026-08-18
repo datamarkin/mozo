@@ -40,7 +40,6 @@ dependencies = [
 # detectron2 is deliberately absent: it has no pip release and must be installed
 # per platform (https://detectron2.readthedocs.io/en/latest/tutorials/install.html).
 [project.optional-dependencies]
-rfdetr = ["rfdetr>=1.6.2"]
 paddleocr = ["paddleocr>=3.0.0"]
 easyocr = ["easyocr"]
 test = ["requests"]  # tests/smoke_test.py drives the server over HTTP
@@ -52,8 +51,8 @@ mozo = "mozo.cli:cli"
 "Homepage" = "https://github.com/datamarkin/mozo"
 "Bug Tracker" = "https://github.com/datamarkin/mozo/issues"
 
-[tool.setuptools]
-packages = ["mozo", "mozo.adapters"]
+[tool.setuptools.packages.find]
+include = ["mozo*"]
 
 # Version lives in mozo/__init__.py — single source of truth.
 [tool.setuptools.dynamic]
@@ -62,4 +61,9 @@ version = { attr = "mozo.__version__" }
 # Ship the test UI and its example image; /test-ui and /static/example.jpg
 # return errors without them (they were missing from the 0.4.0 wheel).
 [tool.setuptools.package-data]
-mozo = ["static/*"]
+mozo = ["static/*", "manifest.json"]
+# Vendored architectures carry data files their code reads at build time
+"mozo.vendors.rfdetr_deploy.models.backbone" = ["dinov2_configs/*.json"]
+# The vendored code is redistributed under its own terms, so its licence and provenance travel
+# in the wheel with it -- the same rule the weights follow.
+"mozo.vendors.rfdetr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
