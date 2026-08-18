@@ -40,6 +40,11 @@ dependencies = [
 # detectron2 is deliberately absent: it has no pip release and must be installed
 # per platform (https://detectron2.readthedocs.io/en/latest/tutorials/install.html).
 [project.optional-dependencies]
+# Runtimes beyond torch. Without these, `auto` simply does not select their artifacts; asking
+# for one by name raises with the install command.
+onnx = ["onnxruntime"]
+coreml = ["coremltools>=8.0,<10.0"]  # macOS only; the fastest RF-DETR path on Apple silicon
+
 paddleocr = ["paddleocr>=3.0.0"]
 easyocr = ["easyocr"]
 test = ["requests"]  # tests/smoke_test.py drives the server over HTTP

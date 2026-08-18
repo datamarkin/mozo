@@ -33,8 +33,20 @@ class TestSelectRuntime:
             select_runtime("cpu", BOTH, requested="onnx-fp16")
 
     def test_nothing_published_is_an_error(self):
-        with pytest.raises(RuntimeError_, match="no runnable artifacts"):
+        with pytest.raises(RuntimeError_, match="nothing runnable"):
             select_runtime("cpu", [])
+
+    def test_auto_skips_a_runtime_whose_library_is_missing(self, monkeypatch):
+        """`auto` must not hand back an artifact this machine cannot execute."""
+        import mozo.runtimes as module
+        monkeypatch.setitem(module._REQUIRES, "coreml", "a_module_that_does_not_exist")
+        assert select_runtime("mps", ["coreml-fp32", "torch-fp32"]) == "torch-fp32"
+
+    def test_asking_by_name_for_a_missing_library_still_returns_the_key(self, monkeypatch):
+        """An explicit request is honoured up to the point the runner explains what is missing."""
+        import mozo.runtimes as module
+        monkeypatch.setitem(module._REQUIRES, "coreml", "a_module_that_does_not_exist")
+        assert select_runtime("mps", ["coreml-fp32", "torch-fp32"], requested="coreml-fp32") == "coreml-fp32"
 
 
 class TestProviders:
