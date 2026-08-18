@@ -19,8 +19,8 @@ identical whichever runtime produced the numbers in between.
 
 from __future__ import annotations
 
-__all__ = ["CoreMLRunner", "OnnxRunner", "RuntimeError_", "make_runner", "providers_for",
-           "runnable", "select_runtime"]
+__all__ = ["CoreMLRunner", "OnnxRunner", "RuntimeError_", "executable", "make_runner",
+           "providers_for", "runnable", "select_runtime"]
 
 import shutil
 import zipfile
@@ -57,6 +57,11 @@ _PREFERENCE: dict[str, tuple[str, ...]] = {
 _RUNNABLE = ("torch", "onnx", "coreml", "tensorrt")
 
 
+#: What each runtime needs importable before it can execute anything. torch is a core
+#: dependency and always present; the rest are the caller's to install.
+_REQUIRES = {"onnx": "onnxruntime", "coreml": "coremltools", "tensorrt": "tensorrt"}
+
+
 def runnable(published: list[str]) -> list[str]:
     """Return only the artifact keys that name a runtime.
 
@@ -65,6 +70,20 @@ def runnable(published: list[str]) -> list[str]:
         ['onnx-fp16', 'torch-fp32']
     """
     return [key for key in published if key.split("-")[0] in _RUNNABLE]
+
+
+def executable(published: list[str]) -> list[str]:
+    """Return the runtimes this machine can actually run, not merely the ones published.
+
+    Publishing a CoreML artifact does not put ``coremltools`` on the machine reading the
+    manifest, and ``auto`` choosing a runtime whose library is missing would make the default
+    path fail on a working install. Asking for one by name still raises -- with instructions --
+    because that is a request that cannot be honoured rather than a preference to work around.
+    """
+    from importlib.util import find_spec
+
+    return [key for key in runnable(published)
+            if (module := _REQUIRES.get(key.split("-")[0])) is None or find_spec(module)]
 
 
 #: ONNX Runtime reports input types as strings; these are the ones an artifact can declare.
@@ -113,22 +132,26 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
         >>> select_runtime("cpu", ["onnx-fp32", "torch-fp32"], requested="onnx-fp32")
         'onnx-fp32'
     """
-    published = runnable(published)
     if requested != "auto":
-        if requested not in published:
+        if requested not in runnable(published):
             raise RuntimeError_(
-                f"{requested!r} is not published for this model. Available: {', '.join(published)}"
+                f"{requested!r} is not published for this model. "
+                f"Available: {', '.join(runnable(published))}"
             )
         return requested
 
+    published = executable(published)
     for key in _PREFERENCE.get(device.split(":")[0], _PREFERENCE["cpu"]):
         if key in published:
             return key
 
-    # Nothing preferred is published, but something runnable is -- take it rather than refuse.
+    # Nothing preferred is available, but something executable is -- take it rather than refuse.
     if published:
         return published[0]
-    raise RuntimeError_("this model publishes no runnable artifacts")
+    raise RuntimeError_(
+        "nothing this model publishes can run here. Published: "
+        f"{', '.join(runnable(published)) or 'nothing runnable'}"
+    )
 
 
 def make_runner(path: str | Path, key: str, device: str = "cpu"):
