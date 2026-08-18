@@ -157,12 +157,16 @@ class TestAgreesWithUpstream:
         rfdetr = pytest.importorskip("rfdetr", reason="upstream comparison needs the rfdetr package")
         return rfdetr.RFDETRSmall(device="cpu")
 
-    def test_preprocessing_antialiases_like_upstream(self, upstream, predictor_for):
-        """A heavy downscale is where disabling antialias diverged: 56 detections became 81.
+    def test_preprocessing_matches_upstream_on_a_heavy_downscale(self, upstream, predictor_for):
+        """Resizing must not antialias, because upstream's does not.
 
-        Upstream resizes through ``torchvision.transforms.functional.resize`` without passing
-        ``antialias``, which means it antialiases. Ours must too, or every large photograph
-        produces different detections while every small one looks fine.
+        This is the one preprocessing choice that changes results rather than rounding them: on a
+        2000px photograph downscaled to 384, antialiasing turns 81 detections into 56.
+
+        The version of ``rfdetr`` installed matters. Releases before 1.7 antialiased, so testing
+        against an old one asserts the opposite of the truth -- convincingly, because everything
+        matches to four decimals right up until the images get large. The vendor was extracted
+        from 1.10.0.dev; a baseline older than that is not a baseline.
         """
         _require("small", "torch-fp32")
         from PIL import Image
