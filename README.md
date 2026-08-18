@@ -58,13 +58,12 @@ curl http://localhost:8000/models
 pip install mozo
 
 # Per-family dependencies (install as needed)
-pip install 'mozo[rfdetr]'      # RF-DETR
 pip install 'mozo[paddleocr]'   # PaddleOCR + PP-Structure
 pip install 'mozo[easyocr]'     # EasyOCR
 ```
 
-Depth Anything and Florence-2 run on the core `transformers` dependency and need
-no extra.
+RF-DETR needs no extra — its architecture is vendored and runs on torch alone.
+Depth Anything and Florence-2 run on the core `transformers` dependency.
 
 ## Available Models
 
@@ -75,6 +74,19 @@ Real-time transformer detection and instance segmentation by Roboflow. Apache 2.
 - Segmentation: `seg-nano`, `seg-small`, `seg-medium`, `seg-large`
 
 Output: PixelFlow `Detections` — boxes, masks, class names, confidence scores
+
+Every variant publishes two runtimes, and they are verified to return the same
+detections:
+
+```python
+model = manager.get_model('rfdetr', 'small')                        # torch
+model = manager.get_model('rfdetr', 'small', runtime='onnx-fp32')   # ONNX Runtime
+```
+
+Class names ship with the weights, so they are the vocabulary the checkpoint was
+trained on rather than an assumption. A checkpoint of your own that carries no
+names returns `class_id` with `class_name` unset — pass `labels=[...]` to name
+them. Mozo never guesses a name.
 
 ### Depth Anything V2 (3 variants)
 Monocular depth estimation.
