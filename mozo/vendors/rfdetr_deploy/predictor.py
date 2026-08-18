@@ -131,9 +131,11 @@ class Predictor:
         """Convert *images* into a normalized batch tensor and record their original sizes.
 
         Accepts file paths, PIL images, HWC ``uint8`` / float arrays, and CHW tensors already scaled to ``[0, 1]``.
-        Resizing antialiases, which is what ``torchvision.transforms.functional.resize`` does by default and therefore
-        what upstream's own ``predict`` does. Disabling it changes results substantially rather than subtly: on a
-        2000px photograph downscaled to 384 it aliased hard enough to turn upstream's 56 detections into 81.
+        Resizing passes ``antialias=False`` because upstream does (``detr.py``: "antialias=False matches the
+        antialias-free bilinear resize (cv2.INTER_LINEAR)"), and matching upstream is the point. It is not a
+        rounding detail: on a 2000px photograph downscaled to 384, antialiasing turns 81 detections into 56.
+        Do not "fix" this against an older release of ``rfdetr`` -- versions before 1.7 antialiased, so an
+        outdated baseline will argue convincingly for the wrong behaviour.
 
         Args:
             images: Images in any accepted form.
@@ -155,7 +157,7 @@ class Predictor:
         for image in images:
             tensor = _to_chw_float_tensor(image, expected_channels=self.spec.num_channels)
             sizes.append((int(tensor.shape[1]), int(tensor.shape[2])))
-            tensors.append(F.resize(tensor, [side, side]))
+            tensors.append(F.resize(tensor, [side, side], antialias=False))
 
         batch = torch.stack(tensors).to(self.device)
         return F.normalize(batch, list(_MEAN[: self.spec.num_channels]), list(_STD[: self.spec.num_channels])), sizes
