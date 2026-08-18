@@ -18,8 +18,31 @@ and ONNX legitimately select different queries and 90% of the output disagrees w
 correct. On a photograph the scores separate and selection is stable. Raw-tensor tolerances test
 the tie-breaking of ``topk``; only the detections test the model.
 
-The output lands at ``weights/rfdetr/<variant>/<revision>/onnx-fp32.onnx``, where the manifest
-generator picks it up with no configuration -- the file's stem is its artifact key.
+Three artifacts are produced per variant, all landing in
+``weights/rfdetr/<variant>/<revision>/`` where the manifest generator picks them up by stem:
+
+``onnx-fp32``    the graph, exported from the torch model.
+``coreml-fp32``  the same model as a CoreML package, via upstream's own exporter, zipped because
+                 an ``.mlpackage`` is a directory and an artifact is a file. Five times faster
+                 than torch on Apple silicon (10.8 ms against 53.3 ms on nano) at a worst output
+                 delta of 0.001.
+
+``--fp16`` additionally writes ``onnx-fp16`` and ``torch-fp16``. It is off by default because
+measurement said not to publish them: against upstream on ten photographs, fp16 lost a detection
+on three of eight variants and moved a score by 0.1119 on ``large`` (fp32's worst is 0.0005),
+while being no faster on Apple silicon (torch-fp16 52 ms vs fp32 53 ms on nano) and 3-9x *slower*
+on CPU (2097 ms vs 236 ms on ``large``). fp16's case is CUDA tensor cores, which nothing here can
+measure -- so the exporter keeps the capability and the artifacts stay unpublished until there is
+hardware to justify them.
+
+CoreML goes through ``rfdetr[coreml]`` rather than coremltools directly. Calling coremltools
+straight fails on this architecture -- ``meshgrid`` via the traced path, an unsupported ``__and__``
+node via ``torch.export`` -- because several ops need registering into
+``coremltools._TORCH_OPS_REGISTRY`` first. Upstream already does that, so importing their
+converter is what makes the vendored model convertible; there is no reason to rediscover it.
+
+CoreML is exported at fp32 deliberately. At fp16 it is both wrong and slower: worst delta 5.06
+against 0.001, at 16.5 ms against 10.8.
 """
 
 from __future__ import annotations
@@ -33,6 +56,8 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+# This file is called rfdetr.py, so its own directory would shadow the package it imports.
+sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(ROOT))
 
 from mozo.runtimes import OnnxRunner  # noqa: E402
@@ -154,7 +179,67 @@ def _verify(predictor: Predictor, path: Path, reference: list[tuple]) -> list[st
     return report
 
 
-def export_variant(variant: str, revision: str | None, weights_dir: Path) -> None:
+def _export_coreml(predictor: Predictor, destination: Path, names: tuple[str, ...]) -> None:
+    """Export the model as a CoreML package, with its inputs and outputs named like the graph's.
+
+    CoreML takes its names from the traced program, so the input arrives as ``tensors`` (the
+    parameter name of ``forward_export``) and the outputs as whatever MIL called them
+    (``concat_3``, ``linear_102``). Renaming them to match the ONNX artifact means a consumer
+    reads output names off the artifact and never needs a per-runtime table.
+    """
+    import coremltools as ct
+    from rfdetr.export._coreml.converter import export_coreml
+
+    resolution = predictor.spec.resolution
+    with tempfile.TemporaryDirectory() as scratch:
+        produced = export_coreml(
+            predictor.model, torch.randn(1, 3, resolution, resolution), scratch,
+            variant_name="model", verbose=False, compute_precision=ct.precision.FLOAT32,
+        )
+        model = ct.models.MLModel(str(produced))
+        spec = model.get_spec()
+        ct.utils.rename_feature(spec, spec.description.input[0].name, INPUT_NAME)
+        for output, wanted in zip(list(spec.description.output), names):
+            ct.utils.rename_feature(spec, output.name, wanted)
+
+        renamed = Path(scratch) / "renamed.mlpackage"
+        ct.models.MLModel(spec, weights_dir=model.weights_dir).save(str(renamed))
+        shutil.make_archive(str(destination.with_suffix("")), "zip", root_dir=renamed)
+
+
+def _export_onnx_fp16(predictor: Predictor, destination: Path, names: tuple[str, ...]) -> None:
+    """Export the model again at half width.
+
+    Exported directly rather than converted from the fp32 graph: ``onnxconverter_common``'s
+    float16 pass crashes on this graph inside ``remove_unnecessary_cast_node``. Exporting the
+    halved model is fewer moving parts anyway, and the result declares fp16 inputs -- which
+    ``OnnxRunner`` handles, so callers still hand over the same fp32 batch.
+
+    The model is left halved; callers must not reuse it for an fp32 export afterwards.
+    """
+    resolution = predictor.spec.resolution
+    predictor.model.half()
+    dummy = torch.randn(1, 3, resolution, resolution).half()
+    torch.onnx.export(
+        predictor.model, (dummy,), str(destination),
+        input_names=[INPUT_NAME], output_names=list(names),
+        dynamic_axes={name: {0: "batch"} for name in (INPUT_NAME, *names)},
+        opset_version=OPSET, dynamo=False,
+    )
+
+
+def _write_torch_fp16(source: Path, destination: Path) -> None:
+    """Write the checkpoint's weights at half width.
+
+    Only ``model`` is carried over: the optimizer state that makes these checkpoints three times
+    larger than their parameters has no role in inference.
+    """
+    checkpoint = torch.load(source, map_location="cpu", weights_only=False)
+    state = {k: (v.half() if torch.is_floating_point(v) else v) for k, v in checkpoint["model"].items()}
+    torch.save({"model": state, "args": checkpoint.get("args")}, destination)
+
+
+def export_variant(variant: str, revision: str | None, weights_dir: Path, fp16: bool = False) -> None:
     """Export one variant, verify it against its own torch detections, and place it in the tree."""
     print(f"\n=== rfdetr/{variant}")
     checkpoint = resolve("rfdetr", variant, revision=revision)
@@ -183,8 +268,24 @@ def export_variant(variant: str, revision: str | None, weights_dir: Path) -> Non
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(staged, destination)
 
-    size = destination.stat().st_size
-    print(f"  wrote     {destination.relative_to(ROOT)}  ({size / 1e6:.1f} MB)")
+    revision_dir = destination.parent
+    print(f"  onnx-fp32 {destination.stat().st_size / 1e6:.1f} MB")
+
+    coreml = revision_dir / "coreml-fp32.zip"
+    _export_coreml(predictor, coreml, names)
+    print(f"  coreml-fp32 {coreml.stat().st_size / 1e6:.1f} MB")
+
+    if not fp16:
+        return
+
+    half = revision_dir / "onnx-fp16.onnx"
+    _export_onnx_fp16(predictor, half, names)
+    print(f"  onnx-fp16 {half.stat().st_size / 1e6:.1f} MB")
+
+    torch_half = revision_dir / "torch-fp16.pth"
+    _write_torch_fp16(checkpoint, torch_half)
+    print(f"  torch-fp16 {torch_half.stat().st_size / 1e6:.1f} MB "
+          f"(from {checkpoint.stat().st_size / 1e6:.1f} MB)")
 
 
 def main() -> int:
@@ -193,10 +294,12 @@ def main() -> int:
     parser.add_argument("--revision", default=None, help="published revision to export (default: latest)")
     parser.add_argument("--weights-dir", type=Path, default=ROOT / "weights",
                         help="local weights tree to write into (default: ./weights)")
+    parser.add_argument("--fp16", action="store_true",
+                        help="also write the fp16 artifacts (see the module docstring first)")
     args = parser.parse_args()
 
     for variant in args.variants:
-        export_variant(variant, args.revision, args.weights_dir)
+        export_variant(variant, args.revision, args.weights_dir, fp16=args.fp16)
 
     print("\nRun tools/generate_manifest.py to pick these up.")
     return 0
