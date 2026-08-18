@@ -1,0 +1,48 @@
+rfdetr_deploy
+Copyright (c) 2025 Roboflow, Inc.
+
+This product includes software developed at Roboflow, Inc. (https://roboflow.com/),
+extracted from the RF-DETR project (https://github.com/roboflow/rf-detr) and reduced
+to its inference path. It is licensed under the Apache License, Version 2.0; see the
+LICENSE file in this directory.
+
+RF-DETR itself derives from several earlier works, whose copyright notices are
+preserved in the headers of the files that carry their code:
+
+  - DETR
+    Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+    https://github.com/facebookresearch/detr
+    Apache License 2.0
+
+  - Deformable DETR
+    Copyright (c) 2020 SenseTime. All Rights Reserved.
+    https://github.com/fundamentalvision/Deformable-DETR
+    Apache License 2.0
+
+  - Conditional DETR
+    Copyright (c) 2021 Microsoft. All Rights Reserved.
+    https://github.com/Atten4Vis/ConditionalDETR
+    Apache License 2.0
+
+  - LW-DETR
+    Copyright (c) 2024 Baidu. All Rights Reserved.
+    https://github.com/Atten4Vis/LW-DETR
+    Apache License 2.0
+
+  - HuggingFace Transformers (DINOv2 with Registers, backbone utilities,
+    modeling and configuration base classes)
+    Copyright 2022-2024 The HuggingFace Inc. team. All rights reserved.
+    Copyright 2024 Meta Inc. All rights reserved.
+    https://github.com/huggingface/transformers
+    Apache License 2.0
+
+    models/backbone/dinov2_with_windowed_attn.py is a modified copy of the
+    Transformers DINOv2-with-Registers implementation. models/backbone/_hf_compat.py
+    reimplements the small set of Transformers base classes that file depends on, so
+    that `transformers` is not required at runtime.
+
+NOT INCLUDED
+------------
+The RF-DETR XLarge and 2XLarge detection models are not part of this package. They
+ship in the separate `rfdetr_plus` distribution under the Roboflow PML 1.0 license,
+not Apache 2.0, and none of their code or weights is vendored here.
