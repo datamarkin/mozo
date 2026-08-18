@@ -38,9 +38,9 @@ import numpy as np
 #: has no MPS path at all and quietly runs on the CPU. Defaulting to a guess would have shipped
 #: that regression silently to everyone on a Mac.
 #:
-#: fp16 is absent for the same reason: measured against upstream it lost a detection on three of
-#: eight RF-DETR variants and moved a score by 0.1119 where fp32 moves 0.0005. It may still be
-#: the right choice on CUDA tensor cores, but ``auto`` will not reach for it on that hope.
+#: fp16 does not appear because mozo does not publish it -- it measured worse on accuracy and
+#: no better on speed everywhere it was tried. Keys are still matched by prefix, so a future
+#: fp16 artifact would be selectable by name without changing anything here.
 #:
 #: CoreML leads on Apple silicon because it was measured to: RF-DETR nano runs 10.8 ms through
 #: CoreML against 53.3 ms on torch MPS, five times faster, at a worst output delta of 0.001.

@@ -117,10 +117,6 @@ class RFDETRPredictor:
                        else resolve("rfdetr", variant, self.runtime, revision=revision))
             self._predictor = Predictor.from_pretrained(
                 f"rfdetr-{variant}", weights=weights, device=self.device)
-            if self.runtime.endswith("-fp16"):
-                # The published fp16 checkpoint is a bandwidth saving; loading it into an fp32
-                # model upcasts it back, so the cast is what actually makes the model half.
-                self._predictor.model.half()
 
         self._labels = labels_for(
             "rfdetr", variant, caller=labels, checkpoint=self._predictor.class_names,
