@@ -215,3 +215,6 @@ __marimo__/
 
 # Smoke test output
 test_results.json
+
+# Local weight tree — the bucket source of truth. Published via rsync; mozo/manifest.json is what ships.
+weights/
