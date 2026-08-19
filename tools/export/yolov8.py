@@ -26,12 +26,21 @@ the vendor's own :func:`~mozo.vendors.yolov8_deploy.detect`, so every runtime sh
                  against 7.9 ms on torch MPS and 52.2 ms on torch CPU, and xlarge 41.1 ms against
                  48.8 and 330.2 -- at a worst box error of 0.0004 px.
 
-There is deliberately no fp16 path, in either format. It was measured across four variants and is
-a loss everywhere: torch fp16 on MPS is *slower* than fp32 (8.2 ms against 7.9 on nano) and moves
-boxes 0.76 px; ONNX fp16 is slower too (43.2 against 34.4). CoreML fp16 is the one that is
-genuinely faster, 1.3-1.6x, but it is wrong by 1.5 px on small, 108 px on xlarge, 341 on medium
-and 636 on nano -- erratic rather than degrading with size, so the error cannot be bounded. Should
-CUDA tensor cores ever justify revisiting it, start from measurements rather than from this note.
+There is deliberately no fp16 path, in either format. torch fp16 on MPS is *slower* than fp32
+(8.2 ms against 7.9 on nano) and moves boxes 0.76 px; ONNX fp16 is slower too (43.2 against 34.4).
+CoreML fp16 is genuinely faster, about 1.4x, and costs 2.3 px on nano, 1.5 on small, 1.4 on medium
+and 7.4 on xlarge -- measured by pairing detections by IoU at a serving threshold, where fp16 finds
+every object fp32 finds, same count, all paired.
+
+An earlier version of this note reported 636 px on nano and 341 on medium and called the error
+unbounded. Those numbers were wrong, and the way they were produced is worth recording: they came
+from :func:`_compare` below, which pairs detections by position. At ``CONF`` the head emits
+hundreds of near-tied noise boxes whose order any perturbation reshuffles, so position-pairing
+subtracts unrelated boxes. "636 px" was simply the largest box coordinate in the tensor. Moving the
+decode out of the fp16 graph and running it in fp32 was tried as a fix and is not one -- 2.6 px,
+and 2.3 ms slower -- so the error is in the convolutions, not the anchor arithmetic. Should CUDA
+tensor cores justify revisiting fp16, start from measurements, and pair by IoU.
+
 The class names a graph cannot carry are published by ``tools/labels/yolov8.py``, which runs over
 every variant you fetched rather than only the ones exported here -- a vocabulary is needed by any
 runtime that does not record its own, and tying it to this tool would skip the ones you never
@@ -70,10 +79,17 @@ FIXTURES = ROOT / "tests" / "fixtures" / "images"
 #: property of the artifact, not something a caller should be able to vary per run.
 OPSET = 17
 
-#: Thresholds the comparison runs at. Deliberately far below any sensible serving threshold: a
-#: divergence that only shows up on marginal detections is still a divergence, and a strict
-#: threshold would hide it by discarding exactly the boxes where the two artifacts disagree.
-CONF = 0.001
+#: Thresholds the comparison runs at. Well below any sensible serving threshold, because a
+#: divergence that only shows up on marginal detections is still a divergence and a strict
+#: threshold would hide it by discarding exactly the boxes where the two artifacts disagree --
+#: but not arbitrarily low, which is what 0.001 was.
+#:
+#: Below roughly 0.005 the comparison stops measuring the model: hundreds of anchors have their
+#: winning class decided by float noise rather than by the image. ``tools/export/yolov11.py``
+#: carries the measurement, on the family where 0.001 actually failed an export that was correct.
+#: Raised here for the same reason before it bites; the artifacts already published were verified
+#: at 0.001 and passed, which is a stricter bar than this, so none needed re-exporting.
+CONF = 0.01
 IOU = 0.7
 MAX_DET = 300
 
@@ -110,7 +126,15 @@ def _detections(source: np.ndarray, forward, imgsz: int) -> tuple[np.ndarray, ..
 
 
 def _compare(image: Path, want: tuple, got: tuple, kind: str) -> str:
-    """Return a one-line report, or raise if the two artifacts disagree beyond tolerance."""
+    """Return a one-line report, or raise if the two artifacts disagree beyond tolerance.
+
+    Detections are paired by position, which is sound only because both sides are full precision
+    and their suppression order is therefore identical. It would not be sound for a reduced
+    precision artifact: perturbing scores reorders near-tied boxes, and pairing by position then
+    subtracts unrelated boxes and reports an error in the hundreds of pixels that is an artefact
+    of the pairing rather than of the model. That mistake is recorded in this module's docstring.
+    Any future fp16 artifact needs IoU matching here.
+    """
     (want_boxes, want_scores, want_ids), (got_boxes, got_scores, got_ids) = want, got
     if len(want_boxes) != len(got_boxes):
         raise SystemExit(
