@@ -72,3 +72,4 @@ mozo = ["static/*", "manifest.json"]
 # The vendored code is redistributed under its own terms, so its licence and provenance travel
 # in the wheel with it -- the same rule the weights follow.
 "mozo.vendors.rfdetr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
+"mozo.vendors.depth_anything_v2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
