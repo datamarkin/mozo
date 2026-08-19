@@ -9,14 +9,14 @@ Quick Start (Server):
     >>> mozo start
     >>>
     >>> # Then use any model via HTTP:
-    >>> curl -X POST "http://localhost:8000/predict/detectron2/mask_rcnn_R_50_FPN_3x" \\
+    >>> curl -X POST "http://localhost:8000/predict/rfdetr/nano" \\
     >>>   -F "file=@image.jpg"
 
 Quick Start (Python SDK):
     >>> from mozo import get_model
     >>>
     >>> # Load model with simple one-liner
-    >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x')
+    >>> model = get_model('rfdetr/nano')
     >>>
     >>> # Run prediction - accepts file path or numpy array
     >>> detections = model.predict('image.jpg')
@@ -26,14 +26,14 @@ Advanced Usage (with ModelManager):
     >>> from mozo import ModelManager
     >>>
     >>> manager = ModelManager()
-    >>> model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+    >>> model = manager.get_model('rfdetr', 'nano')
     >>> detections = model.predict('image.jpg')
     >>>
     >>> # Advanced: cleanup inactive models
     >>> manager.cleanup_inactive_models(inactive_seconds=600)
 
 Features:
-    - 35+ models from Detectron2, HuggingFace Transformers, PaddleOCR, EasyOCR
+    - 17 published variants across RF-DETR and Depth Anything V2
     - Zero deployment - no Docker, Kubernetes, or cloud needed
     - Automatic memory management with lazy loading
     - PixelFlow integration for unified detection format
@@ -83,13 +83,13 @@ def get_model(identifier, variant=None, device=None):
         >>> from mozo import get_model
         >>>
         >>> # Auto-selects best device (GPU if available)
-        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x')
+        >>> model = get_model('rfdetr/nano')
         >>>
         >>> # Force CPU (e.g., for memory reasons)
-        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x', device='cpu')
+        >>> model = get_model('rfdetr/nano', device='cpu')
         >>>
         >>> # Force specific GPU
-        >>> model = get_model('detectron2/mask_rcnn_R_50_FPN_3x', device='cuda:1')
+        >>> model = get_model('rfdetr/nano', device='cuda:1')
         >>>
         >>> # Run prediction
         >>> detections = model.predict('image.jpg')
