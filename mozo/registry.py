@@ -53,6 +53,20 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
             'seg-nano', 'seg-small', 'seg-medium', 'seg-large',
         ],
     },
+
+    'yolov8': {
+        'adapter_class': 'YOLOv8Predictor',
+        'module': 'mozo.adapters.yolov8',
+        'task_type': 'object_detection',
+        'description': (
+            'YOLOv8 by Ultralytics -- real-time object detection. '
+            '5 variants (nano/small/medium/large/xlarge). '
+            'The weights are AGPL-3.0, unlike the rest of mozo: serving predictions from them '
+            'over a network places obligations on you. See the NOTICE published beside each '
+            'checkpoint.'
+        ),
+        'variants': ['nano', 'small', 'medium', 'large', 'xlarge'],
+    },
 }
 
 
