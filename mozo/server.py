@@ -1,15 +1,15 @@
-import io
 import cv2
 import numpy as np
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, Response, FileResponse
 from typing import Optional
 
 # Import model manager, factory, and registry utilities
 from . import __version__
 from .manager import ModelManager
 from .registry import get_available_families, get_available_variants, get_model_info
+from .utils import load_image
 
 import os
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -81,14 +81,53 @@ def serve_example_image():
 
 # --- Prediction Endpoints ---
 
+def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
+    """Encode a depth map as a 16-bit PNG, with what is needed to read it back in the headers.
+
+    An 8-bit PNG is what the old adapter returned, and it is the wrong answer here: six of the
+    nine Depth Anything V2 variants predict metres, and metres are the entire point of choosing
+    one. Quantising them to 256 levels and calling it an image discards the measurement.
+
+    16-bit is lossless enough to be honest -- over an 80 m range one step is 1.2 mm -- and PNG
+    stays viewable in any tool. The values are min-max normalised into the full 16-bit range and
+    the endpoints travel in the headers, so a client recovers the original with
+
+        depth = X-Depth-Min + png / 65535 * (X-Depth-Max - X-Depth-Min)
+
+    ``unit`` is ``"metres"`` or ``None``; ``None`` means inverse depth on an arbitrary per-image
+    scale, where larger is nearer. The server does not decide that a unitless map is metres any
+    more than mozo decides a class id is a name.
+    """
+    low, high = float(depth.min()), float(depth.max())
+    # One pass into one buffer. The arithmetic spelling of this allocates a full-size float32
+    # temporary per operator -- four of them, ~34 MB of churn on a 1920x1281 map -- for the same
+    # rounding, and needs a special case for a flat map that NORM_MINMAX handles itself.
+    scaled = cv2.normalize(depth, None, 0, 65535, cv2.NORM_MINMAX, dtype=cv2.CV_16U)
+
+    success, encoded = cv2.imencode(".png", scaled)
+    if not success:
+        raise HTTPException(status_code=500, detail="Could not encode the depth map.")
+
+    # Response rather than StreamingResponse: the bytes are already in hand, so streaming only
+    # buys an extra copy and a chunked transfer with no Content-Length.
+    return Response(
+        content=encoded.tobytes(),
+        media_type="image/png",
+        headers={
+            "X-Depth-Unit": unit or "none",
+            "X-Depth-Min": repr(low),
+            "X-Depth-Max": repr(high),
+        },
+    )
+
+
 @app.post("/predict/{family}/{variant}",
           summary="Run Model Prediction",
           description="Upload an image and get predictions from any available model variant.")
-async def predict(
+def predict(
     family: str,
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
-    prompt: str = "Describe this image in detail.",
     threshold: float = 0.5,
     labels: Optional[str] = None,
 ):
@@ -96,67 +135,62 @@ async def predict(
     Universal prediction endpoint supporting all model families and variants.
 
     Args:
-        family: Model family (e.g., 'detectron2', 'rfdetr')
-        variant: Model variant (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
+        family: Model family (e.g., 'rfdetr', 'depth_anything_v2')
+        variant: Model variant (e.g., 'nano', 'indoor-small')
         file: Image file to process
-        prompt: Text prompt for generative models
         threshold: Confidence threshold for detection models
         labels: Comma-separated class labels for detection models (e.g., "hardhat,vest,person").
                 Overrides the model's default labels when provided.
 
     Returns:
-        JSON response with predictions or an image
+        Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
 
     Examples:
-        POST /predict/detectron2/mask_rcnn_R_50_FPN_3x
         POST /predict/rfdetr/nano?threshold=0.5
-        POST /predict/florence2/ocr
+        POST /predict/depth_anything_v2/indoor-small
     """
     if not hasattr(app.state, "model_manager"):
         raise HTTPException(status_code=503, detail="Server is starting up, model manager not initialized.")
 
-    # Read and decode image
+    # Whether a model exists is answerable from the registry alone -- no adapter import, no
+    # torch, no weights, no image decode. Answering it first makes an unknown name free, and
+    # keeps it from being confused with a model that exists and failed to load. The registry
+    # raises with the available names, so its message is the answer rather than a second copy
+    # of one.
     try:
-        contents = await file.read()
-        image = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
-        if image is None:
-            raise HTTPException(status_code=400, detail="Invalid image file.")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read or decode the image file: {e}")
-
-    # Get or load model (lazy loading happens here)
-    try:
-        model = app.state.model_manager.get_model(family, variant)
+        task = get_model_info(family, variant)["task_type"]
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    # Decode through the same function the Python API uses, so both entry points agree on
+    # channel order. A second decoder here is how the two drift apart without anyone noticing.
+    try:
+        image = load_image(file.file.read())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Could not read or decode the image file: {e}")
+
+    # Existence was settled above, so anything raised here is a genuine failure to load a
+    # model that does exist.
+    try:
+        model = app.state.model_manager.get_model(family, variant)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
 
-    # Run prediction
+    # How a task is called and how its result is encoded are the same decision, so each task
+    # is named exactly once. The registry declares which one applies; a task with no branch
+    # here is a family the registry knows and this endpoint has not been taught to serve.
     try:
-        if family in ['florence2']:
-            # Vision-language models that take a text prompt
-            results = model.predict(image, prompt=prompt)
-        elif family == 'rfdetr':
-            parsed_labels = None
-            if labels is not None:
-                parsed_labels = [n.strip() for n in labels.split(",") if n.strip()] or None
-            results = model.predict(image, threshold=threshold, labels=parsed_labels)
-        else:
-            results = model.predict(image)
-
-        # Handle different return types
-        if hasattr(results, 'save'):  # It's a PIL Image
-            buffer = io.BytesIO()
-            results.save(buffer, format="PNG")
-            buffer.seek(0)
-            return StreamingResponse(buffer, media_type="image/png")
-        elif hasattr(results, 'to_dict'):  # It's a PixelFlow Detections object
-            return JSONResponse(content=results.to_dict())
-        else:  # It's a dict (VLM results)
-            return JSONResponse(content=results)
+        if task == "object_detection":
+            parsed = [n.strip() for n in labels.split(",") if n.strip()] if labels else None
+            return JSONResponse(
+                content=model.predict(image, threshold=threshold, labels=parsed or None).to_dict())
+        if task == "depth_estimation":
+            return _depth_response(model.predict(image), model.unit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+    raise HTTPException(
+        status_code=501, detail=f"{family} performs {task!r}, which this endpoint cannot encode.")
 
 
 # --- Model Management Endpoints ---
@@ -209,14 +243,14 @@ def get_family_variants(family: str):
     Get available variants for a specific model family.
 
     Args:
-        family: Model family name (e.g., 'detectron2', 'paddleocr')
+        family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
 
     Returns:
         dict: Family name and list of available variants
 
     Example:
-        GET /models/detectron2/variants
-        Returns: {"family": "detectron2", "variants": ["mask_rcnn_R_50_FPN_3x", ...]}
+        GET /models/rfdetr/variants
+        Returns: {"family": "rfdetr", "variants": ["nano", "small", ...]}
     """
     try:
         variants = get_available_variants(family)
