@@ -18,10 +18,15 @@ their own exporter, a fix that decoded the fixture photographs once per run inst
 variant was made in one of them and never reached the other two, so two of the three re-decoded
 every photograph five times while carrying a comment saying they did not.
 
-The families differ in exactly one thing: whether they publish CoreML. YOLOv8 and YOLO12 do; YOLO11
-does not, because its ``C2PSA`` block makes Apple's Metal graph compiler abort the process rather
-than raise. That is one boolean, and the reasoning behind each family's answer stays in that
-family's own module where someone attempting the conversion would look.
+The families differ in two things, both booleans. Whether they publish CoreML -- YOLOv8 and YOLO12
+do; YOLO11 and YOLO26 do not, both because of the ``C2PSA`` block that makes Apple's Metal graph
+compiler abort the process rather than raise. And whether their head is end-to-end: YOLO26's graph
+carries its own decode and top-k and returns a detection list, where the others return a raw head
+that still needs suppression. The reasoning behind each family's answer stays in that family's own
+module, where someone attempting the conversion would look.
+
+The second one is read from the model rather than passed in, because the vendor already validated
+it against the checkpoint and a fact with one source cannot disagree with itself.
 """
 
 from __future__ import annotations
@@ -62,9 +67,13 @@ OPSET = 17
 #: essentially zero, while two faithful artifacts agree on scores only to 4.7e-06 -- so which
 #: class "wins" there is float noise, differs run to run, and says nothing about whether the graph
 #: is faithful. At 0.001 that failed a YOLO11 export whose raw head agreed to 2.2e-03 px.
+#:
+#: The threshold is the only condition set here. Overlap and detection count are the vendor's own
+#: defaults, because those are what mozo serves under -- the adapter passes a threshold and
+#: nothing else -- and restating them would verify the graph under conditions no user runs. It
+#: also lets an NMS-free family, whose ``detect`` has no overlap to set, share this unchanged.
+#: ``tests/test_vendor_agreement.py`` pins the vendors to the same defaults.
 CONF = 0.01
-IOU = 0.7
-MAX_DET = 300
 
 #: Names every artifact declares, so nothing downstream needs a per-runtime or per-family table.
 INPUT_NAME = "images"
@@ -91,14 +100,17 @@ def _detections(vendor, source: np.ndarray, forward, imgsz: int) -> tuple[np.nda
     module and nothing else.
     """
     with torch.no_grad():
-        return tuple(t.numpy() for t in vendor.detect(source, forward, imgsz, CONF, IOU, MAX_DET))
+        return tuple(t.numpy() for t in vendor.detect(source, forward, imgsz, CONF))
 
 
 def _compare(image: Path, want: tuple, got: tuple, kind: str) -> str:
     """Return a one-line report, or raise if the two artifacts disagree beyond tolerance.
 
     Detections are paired by position, which is sound only because both sides are full precision
-    and their suppression order is therefore identical. It would not be sound for a reduced
+    and their ordering -- suppression for a classic head, an in-graph top-k for an end-to-end one
+    -- is therefore identical. ``tools/export/yolov26.py`` records what that costs when it is not:
+    across all 300 rows of an end-to-end graph, position pairing reads 0.54 px where content
+    pairing reads 0.001, because two executors of the same top-k may break ties differently. It would not be sound for a reduced
     precision artifact: perturbing scores reorders near-tied boxes, and pairing by position then
     subtracts unrelated boxes and reports an error in the hundreds of pixels that is an artefact
     of the pairing rather than of the model. That mistake is recorded in ``tools/export/yolov8.py``,
@@ -121,9 +133,39 @@ def _compare(image: Path, want: tuple, got: tuple, kind: str) -> str:
             f"boxes {box_error:.2e} px, scores {score_error:.2e}")
 
 
+def compare_by_content(left: np.ndarray, right: np.ndarray) -> tuple[float, float]:
+    """Pair two ``[x1, y1, x2, y2, score, class]`` sets one-to-one; report the worst box and score gap.
+
+    Rows are matched by class and geometry, never by position. Two implementations that rank
+    equally scoring detections differently have not found different things, and comparing them
+    index by index would say they had.
+
+    Not on any path today: above ``CONF`` every family's two artifacts rank identically and
+    :func:`_compare` pairs by position, which is cheaper and stricter. This is what that becomes
+    when the assumption breaks -- a reduced-precision artifact, or a threshold low enough to admit
+    the noise rows an end-to-end graph pads its output with. Measured on YOLO26's full 300-row
+    output, position pairing reports 0.54 px where this reports 0.001.
+
+    It lives here rather than in the vendor that first needed it: no shipping code path compares
+    detection sets, and a comparison the wheel carries but never runs is a tool in the wrong layer.
+    """
+    if left.shape != right.shape:
+        raise ValueError(f"detection sets differ in size: {left.shape} against {right.shape}")
+    order = [np.lexsort((rows[:, 1], rows[:, 0], rows[:, 5])) for rows in (left, right)]
+    left, right = left[order[0]], right[order[1]]
+    if not np.array_equal(left[:, 5], right[:, 5]):
+        raise ValueError("detection sets disagree on which classes were found")
+    return float(np.abs(left[:, :4] - right[:, :4]).max()), float(np.abs(left[:, 4] - right[:, 4]).max())
+
+
 def _export_onnx(detector, destination: Path) -> None:
     """Write the graph, then record what a consumer outside mozo would otherwise have to guess."""
     imgsz = detector.imgsz
+    # Whether the graph returns a detection list or a raw head. A family whose network records no
+    # ``end2end`` has a classic head; YOLO26 records it, and its builder refuses a checkpoint that
+    # does not. Stamping a constant here would tell a consumer of an end-to-end graph to suppress
+    # an already-suppressed list, and mozo reads none of this metadata, so nothing would notice.
+    end2end = bool(getattr(detector.network, "end2end", False))
     with torch.no_grad():
         torch.onnx.export(
             detector.network,
@@ -143,8 +185,7 @@ def _export_onnx(detector, destination: Path) -> None:
     graph.metadata_props.append(onnx.StringStringEntryProto(
         key="imgsz", value=json.dumps([imgsz, imgsz])))
     graph.metadata_props.append(onnx.StringStringEntryProto(key="task", value="detect"))
-    # A classic head: whoever runs this graph must apply non-maximum suppression themselves.
-    graph.metadata_props.append(onnx.StringStringEntryProto(key="end2end", value="False"))
+    graph.metadata_props.append(onnx.StringStringEntryProto(key="end2end", value=str(end2end)))
     onnx.save(graph, destination)
 
 
