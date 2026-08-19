@@ -20,7 +20,7 @@ import pytest
 
 from mozo.adapters.depth_anything_v2 import DepthAnythingV2Predictor
 from mozo.adapters.rfdetr import RFDETRPredictor
-from mozo.utils import load_image
+from mozo.image import load_image
 from mozo.weights import WeightsError
 
 from conftest import FIXTURE, ROOT
@@ -33,8 +33,8 @@ ADAPTERS = {"rfdetr": (RFDETRPredictor, "nano"), "depth_anything_v2": (DepthAnyt
 #: Matched on the final name, so an alias or a ``from cv2 import imdecode`` is caught too.
 DECODERS = {"imread", "imdecode", "decode_image", "decode_jpeg", "read_image"}
 
-#: mozo.utils is where the contract is declared; vendored code keeps its upstream's own.
-EXEMPT = {ROOT / "mozo" / "utils.py"}
+#: mozo.image is where the contract is declared; vendored code keeps its upstream's own.
+EXEMPT = {ROOT / "mozo" / "image.py"}
 
 
 @pytest.fixture(scope="module")
@@ -126,7 +126,7 @@ class TestOneDecodeBoundary:
         # otherwise pass green while checking nothing.
         assert scanned > 5, f"only scanned {scanned} files under {ROOT / 'mozo'}"
         assert not offenders, (
-            "these decode images outside mozo.utils.load_image, so mozo would have more than "
+            "these decode images outside mozo.image.load_image, so mozo would have more than "
             f"one place deciding channel order: {offenders}"
         )
 

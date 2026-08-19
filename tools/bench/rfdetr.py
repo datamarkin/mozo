@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(ROOT))
 
-from mozo.utils import load_image
+from mozo.image import load_image
 from mozo.runtimes import runnable  # noqa: E402
 from mozo.weights import WeightsError, artifacts  # noqa: E402
 

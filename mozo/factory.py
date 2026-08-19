@@ -7,7 +7,7 @@ Handles loading adapter classes and creating model instances from registry confi
 
 import importlib
 from .registry import MODEL_REGISTRY
-from .device import get_default_device
+from .runtimes import get_default_device
 
 
 class ModelFactory:

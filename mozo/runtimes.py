@@ -19,8 +19,8 @@ identical whichever runtime produced the numbers in between.
 
 from __future__ import annotations
 
-__all__ = ["CoreMLRunner", "OnnxRunner", "RuntimeError_", "executable", "make_runner",
-           "providers_for", "runnable", "select_runtime"]
+__all__ = ["CoreMLRunner", "OnnxRunner", "RuntimeError_", "executable", "get_default_device",
+           "make_runner", "providers_for", "runnable", "select_runtime"]
 
 import shutil
 import zipfile
@@ -28,6 +28,37 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+#: Cached: the answer cannot change within a process, and ``torch.cuda.is_available()`` costs
+#: real time the first time it is asked.
+_default_device: str | None = None
+
+
+def get_default_device() -> str:
+    """Return the best device this machine has: ``cuda``, else ``mps``, else ``cpu``.
+
+    Which artifact to run and what to run it on are one question -- :func:`select_runtime` takes
+    the answer as its first argument -- so they are answered in one place.
+
+    Examples:
+        >>> get_default_device() in {"cuda", "mps", "cpu"}
+        True
+    """
+    global _default_device
+    if _default_device is None:
+        # torch is an unconditional dependency, and every caller of this is an adapter that has
+        # already imported it. The module that must answer without torch is mozo.registry, and
+        # it earns that by importing nothing at all.
+        import torch
+
+        if torch.cuda.is_available():
+            _default_device = "cuda"
+        elif torch.backends.mps.is_available():
+            _default_device = "mps"
+        else:
+            _default_device = "cpu"
+    return _default_device
+
 
 #: Preferred artifact per device, best first.
 #:
