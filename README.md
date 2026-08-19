@@ -27,7 +27,7 @@ curl -X POST "http://localhost:8000/predict/rfdetr/medium" \
 
 Depth estimation:
 ```bash
-curl -X POST "http://localhost:8000/predict/depth_anything/small" \
+curl -X POST "http://localhost:8000/predict/depth_anything_v2/small" \
   -F "file=@image.jpg" --output depth.png
 ```
 
@@ -44,7 +44,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **44 Pre-configured Model Variants** - 7 model families including RF-DETR, Detectron2, PaddleOCR, PP-Structure, EasyOCR and Florence-2
+- **50 Pre-configured Model Variants** - 7 model families including RF-DETR, Depth Anything V2, Detectron2, PaddleOCR, PP-Structure, EasyOCR and Florence-2
 - **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
 - **Multi-Framework Support** - Unified API across different ML frameworks
 - **PixelFlow Integration** - Detection models return unified format for filtering and annotation
@@ -62,8 +62,8 @@ pip install 'mozo[paddleocr]'   # PaddleOCR + PP-Structure
 pip install 'mozo[easyocr]'     # EasyOCR
 ```
 
-RF-DETR needs no extra — its architecture is vendored and runs on torch alone.
-Depth Anything and Florence-2 run on the core `transformers` dependency.
+RF-DETR and Depth Anything V2 need no extra — their architectures are vendored and
+run on torch alone. Florence-2 runs on the core `transformers` dependency.
 
 ## Available Models
 
@@ -88,14 +88,27 @@ trained on rather than an assumption. A checkpoint of your own that carries no
 names returns `class_id` with `class_name` unset — pass `labels=[...]` to name
 them. Mozo never guesses a name.
 
-### Depth Anything V2 (3 variants)
-Monocular depth estimation.
+### Depth Anything V2 (9 variants)
+Monocular depth estimation, in two groups that are not interchangeable.
 
-- `small` - Fastest, lowest memory
-- `base` - Balanced performance
-- `large` - Best accuracy
+**Relative depth** — output is inverse depth on an arbitrary per-image scale: larger
+means nearer, and that is all it means. Two images cannot be compared to each other,
+and no value is a distance.
 
-Output: PNG grayscale depth map
+- `small` - Fastest, lowest memory (Apache-2.0)
+- `base` - Balanced performance (**CC-BY-NC-4.0**, non-commercial)
+- `large` - Best accuracy (**CC-BY-NC-4.0**, non-commercial)
+
+**Metric depth** — output is in metres, from fine-tunes on Hypersim (indoor, 0–20 m)
+and Virtual KITTI 2 (outdoor, 0–80 m). All Apache-2.0 per their model cards.
+
+- `indoor-small`, `indoor-base`, `indoor-large`
+- `outdoor-small`, `outdoor-base`, `outdoor-large`
+
+`predictor.unit` is `"metres"` for the metric variants and `None` for the relative
+ones — mozo never guesses a unit.
+
+Output: `HxW` float32 array at the input's resolution
 
 ### Florence-2 (8 variants)
 Microsoft Florence-2 multi-task vision.
@@ -163,7 +176,7 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (e.g., `rfdetr`, `depth_anything`, `paddleocr`)
+- `family` - Model family (e.g., `rfdetr`, `depth_anything_v2`, `paddleocr`)
 - `variant` - Model variant (e.g., `medium`, `small`, `ocr`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
