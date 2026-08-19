@@ -43,7 +43,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **32 Published Variants** - RF-DETR (8), Depth Anything V2 (9), YOLOv8 (5), YOLO11 (5) and YOLO12 (5), weights hosted and hash-verified
+- **37 Published Variants** - RF-DETR (8), Depth Anything V2 (9) and four YOLO generations (5 each), weights hosted and hash-verified
 - **Vendored Architectures** - no upstream package needed, each verified bit-identical to it
 - **Multiple Runtimes** - the same model as torch, ONNX or CoreML, chosen automatically per device
 - **Lazy Loading** - Models load on first use and are reused across requests
@@ -88,11 +88,16 @@ trained on rather than an assumption. A checkpoint of your own that carries no
 names returns `class_id` with `class_name` unset — pass `labels=[...]` to name
 them. Mozo never guesses a name.
 
-### YOLOv8, YOLO11 and YOLO12 (5 variants each)
+### YOLOv8, YOLO11, YOLO12 and YOLO26 (5 variants each)
 Real-time detection by Ultralytics. **The weights are AGPL-3.0**, unlike the rest of
 mozo — see the licensing note below.
 
-- All three families: `nano`, `small`, `medium`, `large`, `xlarge`
+- All four families: `nano`, `small`, `medium`, `large`, `xlarge`
+
+YOLO26 is NMS-free: its head fires once per object and the network returns a ranked
+detection list, so there is no overlap threshold to tune. The others suppress in the
+usual way. Either way `predict` takes a confidence threshold and returns the same
+PixelFlow result.
 
 Output: PixelFlow `Detections` — boxes, class names, confidence scores
 
@@ -102,10 +107,11 @@ model = manager.get_model('yolov11', 'nano', runtime='onnx-fp32')   # ONNX Runti
 ```
 
 YOLOv8 and YOLO12 also publish a CoreML artifact, which is by far the fastest way to run
-them on Apple silicon. YOLO11 does not: its `C2PSA` block makes Apple's Metal graph
-compiler abort the process, and the configuration that avoids that is slower than torch
-on MPS. `runtime="auto"` handles this by itself — it only ever chooses among what a
-variant actually publishes, so nothing in mozo carries a per-family exception.
+them on Apple silicon. YOLO11 and YOLO26 do not: the `C2PSA` block they share makes
+Apple's Metal graph compiler abort the process, and the configuration that avoids that is
+slower than torch on MPS. `runtime="auto"` handles this by itself — it only ever chooses
+among what a variant actually publishes, so nothing in mozo carries a per-family
+exception.
 
 Class names come from the checkpoint, so a fine-tuned model publishes its own
 vocabulary. Mozo never guesses a name.
@@ -164,7 +170,7 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12` or `depth_anything_v2`)
+- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
