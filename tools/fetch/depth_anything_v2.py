@@ -23,9 +23,11 @@ fine-tunes of the relative ones, so metric base and large descend from CC-BY-NC-
 while their cards claim Apache-2.0. mozo publishes what the card says and records the ancestry
 in the NOTICE beside it; it does not launder the one into the other.
 
-The output is ``weights/depth_anything_v2/<variant>/<revision>/torch-fp32.pth``, alongside the
-licence text and a NOTICE naming the authors and source -- attribution that CC-BY-NC requires to
-travel with the copy, and that Apache-2.0 asks for too.
+The output is ``weights/depth_anything_v2/<variant>/<revision>/torch-fp32.pth`` and a NOTICE
+naming the authors and source -- attribution that CC-BY-NC requires to travel with the copy, and
+that Apache-2.0 asks for too. The LICENSE beside them is not written by this script: a licence is
+part of what is published, so it lives in the weights tree like any other artifact. If one is
+missing this script says so and prints the command to fetch it.
 """
 
 from __future__ import annotations
@@ -38,14 +40,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-
-#: Upstream's own Apache-2.0 text, already vendored beside the code it covers -- the same rule
-#: ``tools/fetch/rfdetr.py`` follows. CC-BY-NC-4.0 has no vendored counterpart, so its text is
-#: kept under ``tools/licences/``.
-_LICENCE_TEXTS = {
-    "Apache-2.0": ROOT / "mozo" / "vendors" / "depth_anything_v2_deploy" / "LICENSE",
-    "CC-BY-NC-4.0": ROOT / "tools" / "licences" / "CC-BY-NC-4.0.txt",
-}
 
 _HF = "https://huggingface.co/depth-anything"
 
@@ -163,6 +157,33 @@ def _notice(variant: str, entry: Checkpoint) -> str:
     )
 
 
+#: Where each licence's canonical text lives. The text itself is deliberately *not* kept in this
+#: repository: a licence is part of what gets published, so it belongs in the weights tree beside
+#: the checkpoint it covers -- which is where ``tools/generate_manifest.py`` looks for it, and
+#: what ends up in the bucket. Upstream ships no licence file for these weights (the HF repos hold
+#: only a README and the ``.pth``), so the text is placed once per revision.
+LICENCE_SOURCES = {
+    "Apache-2.0": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "CC-BY-NC-4.0": "https://creativecommons.org/licenses/by-nc/4.0/legalcode.txt",
+}
+
+
+def require_licence(revision_dir: Path, licence: str) -> None:
+    """Fail if the revision has no LICENSE, saying exactly how to supply one.
+
+    Deliberately not carried forward from a previous revision. A new revision is where an
+    upstream relicence would show up, and silently copying the old terms is how that gets
+    missed.
+    """
+    if (revision_dir / "LICENSE").is_file():
+        return
+    raise SystemExit(
+        f"{revision_dir} has no LICENSE, and every published revision ships one.\n"
+        f"This checkpoint is {licence}:\n"
+        f"    curl -sL {LICENCE_SOURCES[licence]} -o {revision_dir / 'LICENSE'}"
+    )
+
+
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
     """Download one variant's checkpoint, verify it, and place it with its licence and notice."""
     entry = CHECKPOINTS[variant]
@@ -196,8 +217,8 @@ def fetch(variant: str, revision: str, weights_dir: Path) -> None:
             staged.unlink(missing_ok=True)
         print(f"  {variant:<15} ok, {target.stat().st_size / 1e6:.1f} MB, {entry.licence}", flush=True)
 
-    shutil.copyfile(_LICENCE_TEXTS[entry.licence], target.parent / "LICENSE")
     (target.parent / "NOTICE").write_text(_notice(variant, entry))
+    require_licence(target.parent, entry.licence)
 
 
 def main() -> int:

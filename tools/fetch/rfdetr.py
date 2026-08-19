@@ -13,9 +13,10 @@ digests were transcribed from upstream's own ``ModelWeights`` manifest, so a mis
 bytes changed under us -- a re-release, a truncated transfer, or the wrong file entirely. None
 of those should pass silently into a tree we then hash and publish.
 
-The output is ``weights/rfdetr/<variant>/<revision>/torch-fp32.pth``, alongside upstream's
-LICENSE. Run ``tools/export/rfdetr.py`` next for the ONNX artifacts, then
-``tools/generate_manifest.py``.
+The output is ``weights/rfdetr/<variant>/<revision>/torch-fp32.pth``. The LICENSE beside it is
+not written here: a licence is part of what is published, so it lives in the weights tree like
+any other artifact, and this script only checks that one is present. Run
+``tools/export/rfdetr.py`` next for the ONNX artifacts, then ``tools/generate_manifest.py``.
 """
 
 from __future__ import annotations
@@ -47,8 +48,10 @@ CHECKPOINTS: dict[str, tuple[str, str]] = {
         f"{_BUCKET}/rf-detr-keypoint-preview-xlarge.pth", "6de511943ee85a547d4c5cb527daf0eb"),
 }
 
-#: Upstream's Apache-2.0 text, already vendored with the code it covers.
-LICENSE_SOURCE = ROOT / "mozo" / "vendors" / "rfdetr_deploy" / "LICENSE"
+#: Where the licence's canonical text lives. Not kept in this repository: a licence is part of
+#: what gets published, so it belongs in the weights tree beside the checkpoint it covers, which
+#: is where ``tools/generate_manifest.py`` looks for it.
+LICENCE_SOURCE_URL = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 
 _CHUNK = 1 << 20
 
@@ -61,13 +64,25 @@ def _md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def require_licence(revision_dir: Path) -> None:
+    """Fail if the revision has no LICENSE, saying exactly how to supply one."""
+    if (revision_dir / "LICENSE").is_file():
+        return
+    raise SystemExit(
+        f"{revision_dir} has no LICENSE, and every published revision ships one.\n"
+        f"RF-DETR is Apache-2.0:\n"
+        f"    curl -sL {LICENCE_SOURCE_URL} -o {revision_dir / 'LICENSE'}"
+    )
+
+
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
-    """Download one variant's checkpoint, verify it, and place it with its licence."""
+    """Download one variant's checkpoint and verify it, then check its licence is in place."""
     url, expected = CHECKPOINTS[variant]
     target = weights_dir / "rfdetr" / variant / revision / "torch-fp32.pth"
 
     if target.is_file() and _md5(target) == expected:
         print(f"  {variant:<17} already present, md5 matches")
+        require_licence(target.parent)
         return
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -86,8 +101,8 @@ def fetch(variant: str, revision: str, weights_dir: Path) -> None:
             )
         shutil.move(str(staged), target)
 
-    shutil.copyfile(LICENSE_SOURCE, target.parent / "LICENSE")
     print(f"  {variant:<17} ok, {target.stat().st_size / 1e6:.1f} MB, md5 {actual}")
+    require_licence(target.parent)
 
 
 def main() -> int:
