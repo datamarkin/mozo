@@ -42,11 +42,11 @@ class ModelManager:
         manager = ModelManager()
 
         # First access loads the model (takes time)
-        model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        model = manager.get_model('rfdetr', 'nano')
         detections = model.predict(image)
 
         # Subsequent access reuses cached model (instant)
-        model2 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        model2 = manager.get_model('rfdetr', 'nano')
         more_detections = model2.predict(another_image)
 
         # Automatically clean up models inactive for 10+ minutes
@@ -96,7 +96,7 @@ class ModelManager:
         if '/' not in model_id:
             raise ValueError(
                 f"Invalid model_id format: '{model_id}'. "
-                f"Expected format: 'family/variant' (e.g., 'detectron2/mask_rcnn_R_50_FPN_3x')"
+                f"Expected format: 'family/variant' (e.g., 'rfdetr/nano')"
             )
 
         parts = model_id.split('/', 1)
@@ -117,7 +117,7 @@ class ModelManager:
         performs the loading while others wait and reuse the loaded instance.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything_v2', 'rfdetr')
+            family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
                    If None, automatically selects best available device
@@ -136,7 +136,7 @@ class ModelManager:
             manager = ModelManager()
 
             # Standard model - loads on first call
-            model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            model = manager.get_model('rfdetr', 'nano')
             detections = model.predict(image)
 
             # Fine-tuned model from a local checkpoint
@@ -145,7 +145,7 @@ class ModelManager:
             detections = model.predict(image)
 
             # Subsequent calls return cached instance (instant)
-            same_model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            same_model = manager.get_model('rfdetr', 'nano')
             ```
 
         Note:
@@ -173,7 +173,7 @@ class ModelManager:
                     print(f"[ModelManager] Model {model_id} loaded successfully.")
                 except Exception as e:
                     print(f"[ModelManager] ERROR: Failed to load model {model_id}: {e}")
-                    raise RuntimeError(f"Failed to load model {model_id}") from e
+                    raise RuntimeError(f"Failed to load model {model_id}: {e}") from e
             else:
                 print(f"[ModelManager] Model {model_id} already loaded, reusing existing instance.")
 
@@ -187,7 +187,7 @@ class ModelManager:
         Get a model instance by its full ID (family/variant format).
 
         Args:
-            model_id: Full model identifier (e.g., 'detectron2/mask_rcnn_R_50_FPN_3x')
+            model_id: Full model identifier (e.g., 'rfdetr/nano')
 
         Returns:
             Model predictor instance
@@ -202,7 +202,7 @@ class ModelManager:
         """
         Explicitly unload a specific model to free memory immediately.
 
-        Problem: Some models consume several GB of memory (e.g., Florence-2 large variants).
+        Problem: Some models consume several GB of memory (e.g. the vitl depth variants, 1.3 GB each).
         After batch processing or when switching to different models, you need to free memory
         without waiting for automatic cleanup.
 
@@ -210,7 +210,7 @@ class ModelManager:
         reclaim memory. The model can be reloaded later if needed through lazy loading.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
+            family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
 
         Returns:
@@ -221,15 +221,15 @@ class ModelManager:
             manager = ModelManager()
 
             # Use a large model for batch processing
-            model = manager.get_model('florence2', 'ocr')
+            model = manager.get_model('depth_anything_v2', 'indoor-small')
             for image in batch:
                 result = model.predict(image)
 
             # Immediately free 16GB+ memory after batch completes
-            manager.unload_model('florence2', 'ocr')
+            manager.unload_model('depth_anything_v2', 'indoor-small')
 
             # Now load a different model for next task
-            model = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            model = manager.get_model('rfdetr', 'nano')
             ```
 
         Note:
@@ -320,9 +320,9 @@ class ModelManager:
             manager = ModelManager()
 
             # Load and use several models
-            model1 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            model1 = manager.get_model('rfdetr', 'nano')
             model2 = manager.get_model('depth_anything_v2', 'small')
-            model3 = manager.get_model('florence2', 'ocr')
+            model3 = manager.get_model('depth_anything_v2', 'indoor-small')
 
             # After 10 minutes of inactivity, free memory from unused models
             unloaded_count = manager.cleanup_inactive_models(600)

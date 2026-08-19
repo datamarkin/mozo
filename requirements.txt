@@ -3,8 +3,6 @@
 # checkout without duplicating the dependency list.
 -e .[test]
 
-# Optional model families (install as needed):
-#   pip install -e .[paddleocr]   # paddleocr + ppstructure adapters
-#   pip install -e .[easyocr]     # easyocr adapter
-# detectron2 must be installed per platform:
-#   https://detectron2.readthedocs.io/en/latest/tutorials/install.html
+# Optional runtimes (install as needed):
+#   pip install -e .[onnx]     # onnxruntime
+#   pip install -e .[coreml]   # coremltools, macOS only

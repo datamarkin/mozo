@@ -14,7 +14,7 @@ class ModelFactory:
     """
     Factory class for creating model instances dynamically from registry configuration.
 
-    Problem: Different ML frameworks (Detectron2, HuggingFace, PaddleOCR, etc.) have
+    Problem: Different upstream projects (RF-DETR, Depth Anything V2, ...) each have
     completely different APIs and initialization patterns. Hard-coding model instantiation
     for each framework creates rigid, difficult-to-extend code.
 
@@ -32,34 +32,26 @@ class ModelFactory:
 
         factory = ModelFactory()
 
-        # Factory looks up 'detectron2' in registry, imports adapter, instantiates
-        model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+        # Factory looks up 'rfdetr' in the registry, imports its adapter, instantiates
+        model = factory.create_model('rfdetr', 'nano')
 
         # Factory handles completely different framework transparently
         model = factory.create_model('depth_anything_v2', 'small')
 
-        # List all available families
-        families = factory.get_available_families()
-        print(families)  # ['detectron2', 'depth_anything_v2', 'rfdetr', ...]
         ```
 
-    Note:
-        - Adapter classes are cached after first import for performance
-        - Registry is for discovery; adapters are source of truth for variants
-        - Factory delegates all validation and configuration to adapters
+    Discovery lives in :mod:`mozo.registry`, which answers without importing an adapter and
+    therefore without importing torch. This class is the other half: it is the only thing that
+    turns a registry entry into a live object, and it delegates all validation to the adapter.
     """
-
-    def __init__(self):
-        """Initialize the model factory."""
-        self._adapter_cache = {}  # Cache for loaded adapter classes
 
     def _get_adapter_class(self, module_path, class_name):
         """
         Dynamically import and return an adapter class.
 
         Args:
-            module_path: Python module path (e.g., 'mozo.adapters.detectron2')
-            class_name: Class name to import (e.g., 'Detectron2Predictor')
+            module_path: Python module path (e.g., 'mozo.adapters.rfdetr')
+            class_name: Class name to import (e.g., 'RFDETRPredictor')
 
         Returns:
             The adapter class
@@ -67,24 +59,10 @@ class ModelFactory:
         Raises:
             ImportError: If module or class cannot be loaded
         """
-        cache_key = f"{module_path}.{class_name}"
-
-        # Return cached class if available
-        if cache_key in self._adapter_cache:
-            return self._adapter_cache[cache_key]
-
+        # No cache: ``importlib.import_module`` is a ``sys.modules`` lookup after the first
+        # call, so caching the result only duplicated the interpreter's own.
         try:
-            # Dynamically import the module
-            module = importlib.import_module(module_path)
-
-            # Get the class from the module
-            adapter_class = getattr(module, class_name)
-
-            # Cache for future use
-            self._adapter_cache[cache_key] = adapter_class
-
-            return adapter_class
-
+            return getattr(importlib.import_module(module_path), class_name)
         except ImportError as e:
             raise ImportError(
                 f"Failed to import module '{module_path}': {e}"
@@ -118,7 +96,7 @@ class ModelFactory:
         adapter, not the factory. This separation of concerns makes both components simpler.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything_v2', 'rfdetr')
+            family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
                     Variant names are adapter-specific; adapters validate variants
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
@@ -132,18 +110,17 @@ class ModelFactory:
         Raises:
             ValueError: If family name is not found in MODEL_REGISTRY
             ImportError: If adapter module or class cannot be imported
-            RuntimeError: If adapter instantiation fails (wrapped exception from adapter)
 
         Example:
             ```python
             factory = ModelFactory()
 
             # Standard detection model
-            model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            model = factory.create_model('rfdetr', 'nano')
             detections = model.predict(image)
 
             # Fine-tuned model from a local checkpoint
-            model = factory.create_model('detectron2', 'my-training',
+            model = factory.create_model('rfdetr', 'my-training',
                                          checkpoint_path='model_final.pth')
             detections = model.predict(image)
 
@@ -153,8 +130,7 @@ class ModelFactory:
             ```
 
         Note:
-            - Adapter classes are imported once and cached for performance
-            - Factory warns if variant not in registry but still attempts (adapter validates)
+                - Factory warns if variant not in registry but still attempts (adapter validates)
             - Registry is for discovery; adapters are authoritative on supported variants
         """
         # Validate family exists
@@ -187,47 +163,6 @@ class ModelFactory:
               (" (auto-detected)" if device is None else " (user-specified)"))
 
         # Let adapter handle everything - pass device in params
-        try:
-            model_instance = adapter_class(variant=variant, device=effective_device, **override_params)
-            return model_instance
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to instantiate {class_name} for variant '{variant}': {e}"
-            ) from e
-
-    def get_available_families(self):
-        """
-        Get list of all available model families.
-
-        Returns:
-            list: Model family names
-        """
-        return list(MODEL_REGISTRY.keys())
-
-    def get_available_variants(self, family):
-        """
-        Get list of all available variants for a model family from registry.
-
-        NOTE: Registry is for fast discovery only. Adapters are source of truth.
-        Some adapters may support additional variants not listed in registry.
-
-        Args:
-            family: Model family name
-
-        Returns:
-            list: Variant names for the family
-
-        Raises:
-            ValueError: If family not found
-        """
-        if family not in MODEL_REGISTRY:
-            raise ValueError(f"Unknown model family: '{family}'")
-
-        family_config = MODEL_REGISTRY[family]
-        variants = family_config.get('variants', [])
-
-        return variants
-
-    def clear_cache(self):
-        """Clear the adapter class cache."""
-        self._adapter_cache.clear()
+        # Not wrapped: ModelManager already reports which model failed to load, and wrapping
+        # here only buried the adapter's own message one exception deeper.
+        return adapter_class(variant=variant, device=effective_device, **override_params)

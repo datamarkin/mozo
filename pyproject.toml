@@ -27,27 +27,26 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "opencv-python-headless",
-    "transformers",
     "torch",
     "Pillow",
     "numpy",
     "pixelflow",
     "click",
+    # FastAPI needs this to accept the multipart upload every /predict endpoint takes. Without
+    # it mozo.server raises at import, not at request time -- so it was never optional.
+    "python-multipart",
 ]
 
-# Optional, per-family dependencies. Adapters raise ImportError with install
-# instructions when their framework is missing, so the core install stays light.
-# detectron2 is deliberately absent: it has no pip release and must be installed
-# per platform (https://detectron2.readthedocs.io/en/latest/tutorials/install.html).
+# Optional runtimes. Every model family ships as a vendored, deployment-only extraction, so
+# no family needs its upstream package installed -- the only extras are alternative ways to
+# execute the same graph.
 [project.optional-dependencies]
 # Runtimes beyond torch. Without these, `auto` simply does not select their artifacts; asking
 # for one by name raises with the install command.
 onnx = ["onnxruntime"]
 coreml = ["coremltools>=8.0,<10.0"]  # macOS only; the fastest RF-DETR path on Apple silicon
 
-paddleocr = ["paddleocr>=3.0.0"]
-easyocr = ["easyocr"]
-test = ["requests"]  # tests/smoke_test.py drives the server over HTTP
+test = ["httpx"]  # fastapi's TestClient drives the endpoints in tests/test_server_responses.py
 
 [project.scripts]
 mozo = "mozo.cli:cli"
