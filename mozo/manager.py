@@ -1,408 +1,108 @@
-"""
-Model Manager for Mozo
+"""Load each model once, and keep it.
 
-Manages the lifecycle of model instances including:
-- Lazy loading (models loaded on-demand, not at startup)
-- Thread-safe access
-- Usage tracking
-- Automatic cleanup of inactive models
-- Memory management
+Loading costs seconds and hundreds of megabytes, so a server that loads per request is unusable.
+This holds a model after its first use and hands the same object to every later caller. Nothing
+is evicted.
+
+An earlier version bounded the cache by model count. That was the wrong question twice over: a
+count cannot tell 0.10 GB from 1.34 GB, and mozo publishes both, so "two models" meant anywhere
+from 0.20 GB to 2.68 GB. The same number could not be right for a 6 GB laptop and an 80 GB
+accelerator, and a hundred 100 MB models are no problem at all while two large ones may already
+be too many. Measured, it also broke the obvious deployment -- detection, segmentation and depth
+from one instance, 0.60 GB between them -- into an eviction on every request: 762 ms each,
+silently, instead of free.
+
+Memory is therefore the caller's, and the lever is which models you ask for. For a separate
+lifetime build a separate :class:`ModelManager` and drop it; for no cache at all, import an
+adapter directly.
+
+    >>> from mozo.manager import ModelManager
+    >>> models = ModelManager()
+    >>> models.get_model("rfdetr", "nano")     # doctest: +SKIP
 """
 
-import time
-import gc
+from __future__ import annotations
+
+__all__ = ["ModelManager"]
+
+from importlib import import_module
 from threading import Lock
-from typing import Dict, List, Optional
-from .factory import ModelFactory
+from typing import Any
+
+from .registry import get_model_info
+
+
+def _build(family: str, variant: str, **kwargs: Any) -> Any:
+    """Import the family's adapter class and instantiate it.
+
+    The registry says which class to import and nothing more. In particular the *variant* is not
+    checked here: RF-DETR accepts an unpublished variant name when you bring your own checkpoint,
+    because there the variant names an architecture rather than a published model, and only the
+    adapter knows that. The registry's own message names the families that do exist.
+    """
+    info = get_model_info(family)
+    adapter = getattr(import_module(info["module"]), info["adapter_class"])
+    return adapter(variant=variant, **kwargs)
 
 
 class ModelManager:
-    """
-    Manages the lifecycle of model instances with automatic memory optimization.
+    """A thread-safe cache of loaded models, one entry per distinct request.
 
-    Problem: Loading all ML models at startup wastes gigabytes of memory and slows
-    initialization to minutes. Traditional model serving requires complex deployment
-    infrastructure (Docker, Kubernetes) to manage this efficiently.
-
-    Solution: ModelManager loads models only when first requested (lazy loading) and
-    automatically unloads inactive models to free memory. This keeps your server fast
-    and memory-efficient without manual intervention.
-
-    Features:
-    - Lazy loading: Models load on first access, not at startup (startup takes seconds, not minutes)
-    - Thread-safe: Multiple concurrent requests handled correctly without race conditions
-    - Usage tracking: Automatic timestamping of every model access for cleanup decisions
-    - Memory management: Automatic or manual model unloading to reclaim memory
-
-    Example:
-        ```python
-        from mozo import ModelManager
-
-        # Initialize manager (fast - no models loaded yet)
-        manager = ModelManager()
-
-        # First access loads the model (takes time)
-        model = manager.get_model('rfdetr', 'nano')
-        detections = model.predict(image)
-
-        # Subsequent access reuses cached model (instant)
-        model2 = manager.get_model('rfdetr', 'nano')
-        more_detections = model2.predict(another_image)
-
-        # Automatically clean up models inactive for 10+ minutes
-        manager.cleanup_inactive_models(600)
-        ```
-
-    Note:
-        - Only requested models consume memory
-        - Thread-safe: safe to call from multiple threads/requests simultaneously
-        - Cleanup can be manual (unload_model) or automatic (cleanup_inactive_models)
+    Examples:
+        >>> models = ModelManager()
+        >>> models.loaded()
+        []
     """
 
-    def __init__(self):
-        """Initialize the model manager."""
-        self._models: Dict[str, object] = {}  # model_id → model instance
-        self._last_used: Dict[str, float] = {}  # model_id → timestamp
-        self._locks: Dict[str, Lock] = {}  # model_id → Lock (for thread-safe loading)
-        self._global_lock = Lock()  # Lock for managing _locks dict
-        self._factory = ModelFactory()
+    def __init__(self) -> None:
+        #: model id -> model, in the order they were first asked for.
+        self._models: dict[str, Any] = {}
+        #: Held across a build, so two threads cannot load the same model twice. Reads are not
+        #: locked: a single dict lookup needs no help to be atomic, and there is no longer any
+        #: read-modify-write to protect -- the bookkeeping that needed one was the eviction
+        #: order, and nothing is evicted.
+        self._load_lock = Lock()
 
-    def _get_model_id(self, family: str, variant: str) -> str:
-        """
-        Generate a unique model ID from family and variant.
-
-        Args:
-            family: Model family name
-            variant: Model variant name
-
-        Returns:
-            str: Unique model identifier in format 'family/variant'
-        """
-        return f"{family}/{variant}"
-
-    def _parse_model_id(self, model_id: str) -> tuple:
-        """
-        Parse a model ID into family and variant components.
+    def get_model(self, family: str, variant: str, device: str | None = None, **kwargs: Any) -> Any:
+        """Return a loaded model, building it on first use.
 
         Args:
-            model_id: Model identifier in format 'family/variant'
-
-        Returns:
-            tuple: (family, variant)
+            family: Model family, e.g. ``"rfdetr"``.
+            variant: Variant within that family, e.g. ``"nano"``.
+            device: Where to run. ``None`` lets the adapter pick the best this machine has.
+            **kwargs: Passed to the adapter -- ``checkpoint_path``, ``labels``, ``revision``,
+                ``runtime``. Part of the cache key, so two checkpoints under one variant name
+                are two entries rather than one.
 
         Raises:
-            ValueError: If model_id format is invalid
+            ValueError: If the family is not registered, or the adapter rejects the variant.
         """
-        if '/' not in model_id:
-            raise ValueError(
-                f"Invalid model_id format: '{model_id}'. "
-                f"Expected format: 'family/variant' (e.g., 'rfdetr/nano')"
-            )
+        # Everything that changes what gets built belongs in the identity. A checkpoint of your
+        # own, a pinned revision, a different runtime -- each is a different model wearing the
+        # same name, and handing back the first build for the second request is the kind of wrong
+        # answer that never raises. RF-DETR accepts unpublished variant names precisely so that
+        # two people's "my-training" can be two different models.
+        extra = "".join(f"|{key}={value!r}" for key, value in sorted(kwargs.items()))
+        model_id = f"{family}/{variant}" + (f"@{device}" if device else "") + extra
 
-        parts = model_id.split('/', 1)
-        return parts[0], parts[1]
+        resident = self._models.get(model_id)
+        if resident is not None:
+            return resident
 
-    def get_model(self, family: str, variant: str, device: str = None, **kwargs):
-        """
-        Get a model instance, loading it on first access if not already cached.
+        # The lock is held across the build and nowhere else. A load takes seconds, and a request
+        # for a model already in memory is answered above without waiting for it -- that is the
+        # case that has to stay fast. Distinct models therefore load one at a time, a warm-up
+        # cost paid once.
+        with self._load_lock:
+            resident = self._models.get(model_id)
+            if resident is not None:
+                return resident  # another thread loaded it while this one queued
 
-        Problem: Model loading can take seconds or even minutes depending on model size.
-        Waiting for every model to load at server startup is impractical when you have
-        35+ models available. Additionally, concurrent requests need safe access to shared
-        model instances.
+            print(f"[mozo] loading {model_id}", flush=True)
+            model = _build(family, variant, device=device, **kwargs)
+            self._models[model_id] = model
+            return model
 
-        Solution: This method implements lazy loading - models are loaded only when first
-        requested, then cached for instant subsequent access. Thread-safe locking ensures
-        that if multiple requests arrive simultaneously for the same model, only one
-        performs the loading while others wait and reuse the loaded instance.
-
-        Args:
-            family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
-            device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
-                   If None, automatically selects best available device
-            **kwargs: Additional parameters passed to model initialization
-                     (e.g., checkpoint_path and labels for fine-tuned models)
-
-        Returns:
-            Model predictor instance with a predict() method for running inference
-
-        Raises:
-            ValueError: If family or variant name is invalid or not found in registry
-            RuntimeError: If model fails to load due to missing dependencies or initialization errors
-
-        Example:
-            ```python
-            manager = ModelManager()
-
-            # Standard model - loads on first call
-            model = manager.get_model('rfdetr', 'nano')
-            detections = model.predict(image)
-
-            # Fine-tuned model from a local checkpoint
-            model = manager.get_model('rfdetr', 'my-training', checkpoint_path='weights.pth',
-                                      model_size='small', project_type='detection')
-            detections = model.predict(image)
-
-            # Subsequent calls return cached instance (instant)
-            same_model = manager.get_model('rfdetr', 'nano')
-            ```
-
-        Note:
-            - First call to a model loads it (slow), subsequent calls reuse cached instance (fast)
-            - Thread-safe: multiple simultaneous requests for same model wait and share the loaded instance
-            - Usage timestamp is updated on every access for cleanup tracking
-        """
-        # Include device in model_id for caching different device configurations
-        model_id = self._get_model_id(family, variant)
-        if device:
-            model_id = f"{model_id}@{device}"
-
-        # Ensure a lock exists for this model (thread-safe lock creation)
-        with self._global_lock:
-            if model_id not in self._locks:
-                self._locks[model_id] = Lock()
-
-        # Only one thread can load a given model at a time
-        with self._locks[model_id]:
-            # Check if model is already loaded
-            if model_id not in self._models:
-                print(f"[ModelManager] Loading model: {model_id} (family={family}, variant={variant}, device={device or 'auto'})...")
-                try:
-                    self._models[model_id] = self._factory.create_model(family, variant, device=device, **kwargs)
-                    print(f"[ModelManager] Model {model_id} loaded successfully.")
-                except Exception as e:
-                    print(f"[ModelManager] ERROR: Failed to load model {model_id}: {e}")
-                    raise RuntimeError(f"Failed to load model {model_id}: {e}") from e
-            else:
-                print(f"[ModelManager] Model {model_id} already loaded, reusing existing instance.")
-
-            # Update last used timestamp
-            self._last_used[model_id] = time.time()
-
-            return self._models[model_id]
-
-    def get_model_by_id(self, model_id: str):
-        """
-        Get a model instance by its full ID (family/variant format).
-
-        Args:
-            model_id: Full model identifier (e.g., 'rfdetr/nano')
-
-        Returns:
-            Model predictor instance
-
-        Raises:
-            ValueError: If model_id format is invalid
-        """
-        family, variant = self._parse_model_id(model_id)
-        return self.get_model(family, variant)
-
-    def unload_model(self, family: str, variant: str) -> bool:
-        """
-        Explicitly unload a specific model to free memory immediately.
-
-        Problem: Some models consume several GB of memory (e.g. the vitl depth variants, 1.3 GB each).
-        After batch processing or when switching to different models, you need to free memory
-        without waiting for automatic cleanup.
-
-        Solution: Immediately unload the specified model and trigger garbage collection to
-        reclaim memory. The model can be reloaded later if needed through lazy loading.
-
-        Args:
-            family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
-            variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
-
-        Returns:
-            bool: True if model was loaded and successfully unloaded, False if model was not loaded
-
-        Example:
-            ```python
-            manager = ModelManager()
-
-            # Use a large model for batch processing
-            model = manager.get_model('depth_anything_v2', 'indoor-small')
-            for image in batch:
-                result = model.predict(image)
-
-            # Immediately free 16GB+ memory after batch completes
-            manager.unload_model('depth_anything_v2', 'indoor-small')
-
-            # Now load a different model for next task
-            model = manager.get_model('rfdetr', 'nano')
-            ```
-
-        Note:
-            - Unloaded models can be reloaded on next get_model() call
-            - Triggers garbage collection to ensure memory is actually freed
-            - Returns False if model wasn't loaded (safe to call multiple times)
-        """
-        model_id = self._get_model_id(family, variant)
-        return self.unload_model_by_id(model_id)
-
-    def unload_model_by_id(self, model_id: str) -> bool:
-        """
-        Explicitly unload a model by its ID to free memory.
-
-        Args:
-            model_id: Full model identifier
-
-        Returns:
-            bool: True if model was unloaded, False if it wasn't loaded
-        """
-        if model_id in self._models:
-            print(f"[ModelManager] Unloading model: {model_id}...")
-            del self._models[model_id]
-            if model_id in self._last_used:
-                del self._last_used[model_id]
-
-            # Explicitly trigger garbage collection to free memory
-            gc.collect()
-
-            print(f"[ModelManager] Model {model_id} unloaded successfully.")
-            return True
-        else:
-            print(f"[ModelManager] Model {model_id} not loaded, nothing to unload.")
-            return False
-
-    def list_loaded_models(self) -> List[str]:
-        """
-        Get list of currently loaded model IDs.
-
-        Returns:
-            list: Model IDs of all loaded models
-        """
-        return list(self._models.keys())
-
-    def get_inactive_models(self, inactive_seconds: int = 600) -> List[str]:
-        """
-        Find models that haven't been used in the specified time period.
-
-        Args:
-            inactive_seconds: Time threshold in seconds (default: 600 = 10 minutes)
-
-        Returns:
-            list: Model IDs of inactive models
-        """
-        current_time = time.time()
-        inactive = []
-
-        for model_id, last_used in self._last_used.items():
-            if current_time - last_used > inactive_seconds:
-                inactive.append(model_id)
-
-        return inactive
-
-    def cleanup_inactive_models(self, inactive_seconds: int = 600) -> int:
-        """
-        Automatically unload models that haven't been used in the specified time period.
-
-        Problem: ML models consume significant memory (hundreds of MB to several GB each).
-        Running multiple models simultaneously can exhaust available RAM, causing system
-        slowdowns or crashes. Manually tracking which models to unload is impractical in
-        production environments with varying request patterns.
-
-        Solution: This method automatically identifies and unloads models that haven't
-        been accessed recently, freeing memory for active models. The unloaded models
-        can be reloaded on-demand if needed later, balancing memory efficiency with
-        availability.
-
-        Args:
-            inactive_seconds: Time threshold in seconds for considering a model inactive.
-                             Default is 600 seconds (10 minutes). Models not accessed
-                             within this period are candidates for unloading.
-
-        Returns:
-            int: Number of models successfully unloaded
-
-        Example:
-            ```python
-            manager = ModelManager()
-
-            # Load and use several models
-            model1 = manager.get_model('rfdetr', 'nano')
-            model2 = manager.get_model('depth_anything_v2', 'small')
-            model3 = manager.get_model('depth_anything_v2', 'indoor-small')
-
-            # After 10 minutes of inactivity, free memory from unused models
-            unloaded_count = manager.cleanup_inactive_models(600)
-            print(f"Freed memory from {unloaded_count} inactive models")
-
-            # More aggressive cleanup for memory-constrained environments
-            unloaded_count = manager.cleanup_inactive_models(60)  # 1 minute threshold
-            ```
-
-        Note:
-            - Unloaded models can be reloaded on next access (lazy loading applies)
-            - Triggers garbage collection to ensure memory is actually freed
-            - Safe to call periodically (no effect if all models are active)
-            - Useful for long-running servers with varying workload patterns
-        """
-        inactive_models = self.get_inactive_models(inactive_seconds)
-        count = 0
-
-        for model_id in inactive_models:
-            if self.unload_model_by_id(model_id):
-                count += 1
-
-        if count > 0:
-            print(f"[ModelManager] Cleanup: Unloaded {count} inactive model(s).")
-
-        return count
-
-    def get_model_info(self, model_id: Optional[str] = None) -> dict:
-        """
-        Get information about loaded models.
-
-        Args:
-            model_id: Optional model ID. If None, returns info about all loaded models
-
-        Returns:
-            dict: Model information including load status and last used time
-        """
-        if model_id is None:
-            # Return info for all loaded models
-            result = {}
-            current_time = time.time()
-            for mid in self._models.keys():
-                last_used = self._last_used.get(mid, 0)
-                result[mid] = {
-                    'loaded': True,
-                    'last_used': last_used,
-                    'inactive_seconds': int(current_time - last_used) if last_used > 0 else 0
-                }
-            return result
-        else:
-            # Return info for specific model
-            if model_id in self._models:
-                last_used = self._last_used.get(model_id, 0)
-                current_time = time.time()
-                return {
-                    'model_id': model_id,
-                    'loaded': True,
-                    'last_used': last_used,
-                    'inactive_seconds': int(current_time - last_used) if last_used > 0 else 0
-                }
-            else:
-                return {
-                    'model_id': model_id,
-                    'loaded': False
-                }
-
-    def unload_all_models(self) -> int:
-        """
-        Unload all currently loaded models.
-
-        Useful for cleanup or testing.
-
-        Returns:
-            int: Number of models unloaded
-        """
-        model_ids = list(self._models.keys())
-        count = 0
-
-        for model_id in model_ids:
-            if self.unload_model_by_id(model_id):
-                count += 1
-
-        return count
+    def loaded(self) -> list[str]:
+        """Resident model ids, in the order they were first asked for."""
+        return list(self._models)
