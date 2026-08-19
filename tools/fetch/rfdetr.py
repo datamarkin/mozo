@@ -22,13 +22,13 @@ any other artifact, and this script only checks that one is present. Run
 from __future__ import annotations
 
 import argparse
-import hashlib
-import shutil
-import tempfile
-import urllib.request
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+
+from common import download_verified, require_licence  # noqa: E402
 
 _BUCKET = "https://storage.googleapis.com/rfdetr"
 
@@ -53,56 +53,13 @@ CHECKPOINTS: dict[str, tuple[str, str]] = {
 #: is where ``tools/generate_manifest.py`` looks for it.
 LICENCE_SOURCE_URL = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 
-_CHUNK = 1 << 20
-
-
-def _md5(path: Path) -> str:
-    digest = hashlib.md5()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(_CHUNK), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def require_licence(revision_dir: Path) -> None:
-    """Fail if the revision has no LICENSE, saying exactly how to supply one."""
-    if (revision_dir / "LICENSE").is_file():
-        return
-    raise SystemExit(
-        f"{revision_dir} has no LICENSE, and every published revision ships one.\n"
-        f"RF-DETR is Apache-2.0:\n"
-        f"    curl -sL {LICENCE_SOURCE_URL} -o {revision_dir / 'LICENSE'}"
-    )
-
-
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
     """Download one variant's checkpoint and verify it, then check its licence is in place."""
     url, expected = CHECKPOINTS[variant]
     target = weights_dir / "rfdetr" / variant / revision / "torch-fp32.pth"
-
-    if target.is_file() and _md5(target) == expected:
-        print(f"  {variant:<17} already present, md5 matches")
-        require_licence(target.parent)
-        return
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as scratch:
-        staged = Path(scratch) / "torch-fp32.pth"
-        print(f"  {variant:<17} downloading {url}")
-        with urllib.request.urlopen(url, timeout=120) as response, staged.open("wb") as out:
-            shutil.copyfileobj(response, out, _CHUNK)
-
-        actual = _md5(staged)
-        if actual != expected:
-            raise SystemExit(
-                f"{variant}: md5 mismatch. Expected {expected}, got {actual}. "
-                f"Upstream may have re-released this checkpoint; do not publish it until the "
-                f"change is understood."
-            )
-        shutil.move(str(staged), target)
-
-    print(f"  {variant:<17} ok, {target.stat().st_size / 1e6:.1f} MB, md5 {actual}")
-    require_licence(target.parent)
+    download_verified(url, target, expected, algorithm="md5", label=variant,
+                      width=17, timeout=120, detail=f"md5 {expected}")
+    require_licence(target.parent, "Apache-2.0", LICENCE_SOURCE_URL)
 
 
 def main() -> int:
