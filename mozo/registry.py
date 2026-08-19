@@ -5,49 +5,25 @@ Lightweight registry for model discovery and routing.
 Variant names are listed here for fast discovery without importing adapters.
 Full variant configuration lives in adapters (single source of truth).
 
-NOTE: Registry can be out of sync with adapters - this is acceptable.
-If a variant exists in adapter but not registry, it will still work.
-Registry is primarily for fast /models API endpoint.
+It exists so /models can answer without importing an adapter -- and therefore without importing
+torch. That is the whole reason the variant lists are written out twice.
 
-Usage:
-    # To add a new model family, add an entry to MODEL_REGISTRY
-    # To add a new variant, add it to the 'variants' list AND the adapter's SUPPORTED_VARIANTS
+To add a family: add an entry here, and add the same variants to its adapter's ``VARIANTS``.
+The two are kept in step by a test rather than by importing one from the other -- this module
+must stay importable without torch, and every adapter pulls torch in.
 
 Example:
-    'detectron2': {
-        'adapter_class': 'Detectron2Predictor',
-        'module': 'mozo.adapters.detectron2',
+    'rfdetr': {
+        'adapter_class': 'RFDETRPredictor',
+        'module': 'mozo.adapters.rfdetr',
         'task_type': 'object_detection',
-        'description': 'Detectron2 models...',
-        'variants': [
-            'mask_rcnn_R_50_FPN_3x',
-            'faster_rcnn_R_50_FPN_3x',
-            # ... just variant names
-        ]
+        'description': '...',
+        'variants': ['nano', 'small'],
     }
 """
 
 # Main model registry - maps family names to adapter configurations
 MODEL_REGISTRY = {
-    'detectron2': {
-        'adapter_class': 'Detectron2Predictor',
-        'module': 'mozo.adapters.detectron2',
-        'task_type': 'object_detection',
-        'description': 'Detectron2 models for object detection, instance segmentation, and keypoint detection',
-        'variants': [
-            # FPN backbones only — C4, DC5 and RetinaNet are out of scope.
-            # Faster R-CNN (Object Detection)
-            'faster_rcnn_R_50_FPN_1x', 'faster_rcnn_R_50_FPN_3x',
-            'faster_rcnn_R_101_FPN_3x', 'faster_rcnn_X_101_32x8d_FPN_3x',
-            # Mask R-CNN (Instance Segmentation)
-            'mask_rcnn_R_50_FPN_1x', 'mask_rcnn_R_50_FPN_3x',
-            'mask_rcnn_R_101_FPN_3x', 'mask_rcnn_X_101_32x8d_FPN_3x',
-            # Keypoint R-CNN (Keypoint Detection)
-            'keypoint_rcnn_R_50_FPN_1x', 'keypoint_rcnn_R_50_FPN_3x',
-            'keypoint_rcnn_R_101_FPN_3x', 'keypoint_rcnn_X_101_32x8d_FPN_3x',
-        ],
-    },
-
     'depth_anything_v2': {
         'adapter_class': 'DepthAnythingV2Predictor',
         'module': 'mozo.adapters.depth_anything_v2',
@@ -62,42 +38,6 @@ MODEL_REGISTRY = {
             'small', 'base', 'large',
             'indoor-small', 'indoor-base', 'indoor-large',
             'outdoor-small', 'outdoor-base', 'outdoor-large',
-        ],
-    },
-
-    'paddleocr': {
-        'adapter_class': 'PaddleOCRPredictor',
-        'module': 'mozo.adapters.paddleocr',
-        'task_type': 'ocr',
-        'description': 'PaddleOCR PP-OCRv5 - Universal scene text recognition supporting 80+ languages with mobile and server variants',
-        'variants': ['mobile', 'server', 'mobile-chinese', 'server-chinese', 'mobile-multilingual'],
-    },
-
-    'ppstructure': {
-        'adapter_class': 'PPStructurePredictor',
-        'module': 'mozo.adapters.ppstructure',
-        'task_type': 'document_analysis',
-        'description': 'PP-StructureV3 - Document structure analysis with layout detection, table recognition, and formula extraction',
-        'variants': ['layout-only', 'full', 'table-analysis', 'formula-analysis'],
-    },
-
-    'easyocr': {
-        'adapter_class': 'EasyOCRPredictor',
-        'module': 'mozo.adapters.easyocr',
-        'task_type': 'ocr',
-        'description': 'EasyOCR - User-friendly OCR with 80+ languages, easy setup, and good general-purpose accuracy',
-        'variants': ['english-light', 'english-full', 'multilingual', 'chinese'],
-    },
-
-    'florence2': {
-        'adapter_class': 'Florence2Predictor',
-        'module': 'mozo.adapters.florence2',
-        'task_type': 'multi_task_vision',
-        'description': 'Microsoft Florence-2 for vision tasks including captioning and OCR (detection/segmentation not yet implemented)',
-        'variants': [
-            'detection', 'detection_with_caption', 'segmentation',
-            'captioning', 'detailed_captioning', 'more_detailed_captioning',
-            'ocr', 'ocr_with_region',
         ],
     },
 
@@ -130,7 +70,7 @@ def get_available_families():
     a lightweight, fast operation that doesn't import or instantiate any adapters.
 
     Returns:
-        list: List of model family names (e.g., ['detectron2', 'depth_anything_v2', 'rfdetr', ...])
+        list: List of model family names (e.g., ['depth_anything_v2', 'rfdetr'])
 
     Example:
         ```python
@@ -138,11 +78,11 @@ def get_available_families():
 
         families = get_available_families()
         print(f"Available model families: {families}")
-        # Output: ['detectron2', 'depth_anything_v2', 'paddleocr', 'rfdetr', ...]
+        # Output: ['depth_anything_v2', 'rfdetr']
 
         # Check if a specific family is available
-        if 'detectron2' in families:
-            print("Detectron2 models are available")
+        if 'rfdetr' in families:
+            print("RF-DETR models are available")
         ```
 
     Note:
@@ -157,7 +97,7 @@ def get_available_variants(family):
     """
     Get list of variant names for a model family from registry for fast discovery.
 
-    Problem: Each model family has multiple variants (e.g., Detectron2 has 12 variants).
+    Problem: Each model family has multiple variants (e.g. Depth Anything V2 has 9).
     Users need to discover available variants without importing heavy adapter modules or
     loading models. API endpoints need to list variants quickly for documentation and
     validation.
@@ -170,7 +110,7 @@ def get_available_variants(family):
     in the registry - the adapter will still work, this list is just for convenience.
 
     Args:
-        family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
+        family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
 
     Returns:
         list: Variant names for the family (e.g., ['mask_rcnn_R_50_FPN_3x', ...])
@@ -183,9 +123,9 @@ def get_available_variants(family):
         ```python
         from mozo.registry import get_available_variants
 
-        # List all Detectron2 variants
-        variants = get_available_variants('detectron2')
-        print(f"Detectron2 has {len(variants)} variants")
+        # List all Depth Anything V2 variants
+        variants = get_available_variants('depth_anything_v2')
+        print(f"Depth Anything V2 has {len(variants)} variants")
         print(variants[:3])  # ['faster_rcnn_R_50_FPN_1x', 'faster_rcnn_R_50_FPN_3x', ...]
 
         # Check if specific variant exists
@@ -218,7 +158,7 @@ def get_model_info(family, variant=None):
     that a specific variant exists in the registry.
 
     Args:
-        family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
+        family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
         variant: Optional variant name for validation. If provided, checks if variant
                 exists in registry (raises ValueError if not found)
 
@@ -241,14 +181,14 @@ def get_model_info(family, variant=None):
         from mozo.registry import get_model_info
 
         # Get family information
-        info = get_model_info('detectron2')
+        info = get_model_info('rfdetr')
         print(f"Task: {info['task_type']}")  # 'object_detection'
         print(f"Description: {info['description']}")
         print(f"Variants: {len(info['variants'])}")  # 27
 
         # Validate a specific variant exists
         try:
-            info = get_model_info('detectron2', 'mask_rcnn_R_50_FPN_3x')
+            info = get_model_info('rfdetr', 'nano')
             print("Variant is valid")
         except ValueError as e:
             print(f"Variant not found: {e}")
