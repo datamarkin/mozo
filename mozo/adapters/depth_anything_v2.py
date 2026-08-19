@@ -33,9 +33,8 @@ from typing import Union
 import cv2
 import numpy as np
 
-from ..device import get_default_device
-from ..runtimes import select_runtime
-from ..utils import load_image
+from ..runtimes import get_default_device, select_runtime
+from ..image import load_image
 from ..vendors.depth_anything_v2_deploy import MODEL_SPECS, Predictor
 from ..weights import artifacts, resolve
 

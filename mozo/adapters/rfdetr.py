@@ -23,10 +23,9 @@ from typing import Any, Union
 import numpy as np
 import torch
 
-from ..device import get_default_device
 from ..labels import resolve as labels_for
-from ..runtimes import make_runner, select_runtime
-from ..utils import load_image
+from ..runtimes import get_default_device, make_runner, select_runtime
+from ..image import load_image
 from ..vendors.rfdetr_deploy import Predictor, get_spec
 from ..vendors.rfdetr_deploy.models.postprocess import PostProcess
 from ..weights import artifacts, resolve
