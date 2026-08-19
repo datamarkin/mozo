@@ -1,0 +1,859 @@
+{
+  "base_url": "https://dtmfiles.com/mozo/v1",
+  "models": {
+    "depth_anything_v2/base": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/base/2026-08-19/LICENSE",
+              "sha256": "41003d4a74749c0220e33dd415042164b5a1093ed401f36277234f772d22d3d0",
+              "size": 19347
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/base/2026-08-19/NOTICE",
+              "sha256": "e2056918e401f157c47b971971b0b6b0dd695ed165dbe66817fea0f0db5930b9",
+              "size": 493
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/base/2026-08-19/torch-fp32.pth",
+              "sha256": "0d2b7002e62d39d655571c371333340bd88f67ab95050c03591555aa05645328",
+              "size": 389961218
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/indoor-base": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/indoor-base/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/indoor-base/2026-08-19/NOTICE",
+              "sha256": "313460609317aec55823ac63b54f5879ca3d6c471a38534bfcd34fadfcfed4b5",
+              "size": 688
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/indoor-base/2026-08-19/torch-fp32.pth",
+              "sha256": "9dc9e274c5eff55c6daf27b660c0ced0eca4e8593a6da90cdcb04d2b4d3f3fa2",
+              "size": 389965138
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/indoor-large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/indoor-large/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/indoor-large/2026-08-19/NOTICE",
+              "sha256": "cee69a9f3af667ec6352376a2a22f50a32da7b91c76b7ceb0e46c5e419771dfc",
+              "size": 691
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/indoor-large/2026-08-19/torch-fp32.pth",
+              "sha256": "6f82ff2bc543ac02ddff4aa31fa363676a8305dd3ccf04e80e2af115a044cb6d",
+              "size": 1341401882
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/indoor-small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/indoor-small/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/indoor-small/2026-08-19/NOTICE",
+              "sha256": "f84d65a5599e08f7788d5a09f63f068de392b5aaec61989297953892bd695ecf",
+              "size": 512
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/indoor-small/2026-08-19/torch-fp32.pth",
+              "sha256": "b782898d8a3e8be1f639de33837ed85e9b4b73e40f8f5e5cd99067588d722545",
+              "size": 99222290
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/large/2026-08-19/LICENSE",
+              "sha256": "41003d4a74749c0220e33dd415042164b5a1093ed401f36277234f772d22d3d0",
+              "size": 19347
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/large/2026-08-19/NOTICE",
+              "sha256": "55158c24be4c50aeef2f3b3dccaf27d3454454ffdddc50ece3daf73ebb541fee",
+              "size": 495
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/large/2026-08-19/torch-fp32.pth",
+              "sha256": "a7ea19fa0ed99244e67b624c72b8580b7e9553043245905be58796a608eb9345",
+              "size": 1341395338
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/outdoor-base": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/outdoor-base/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/outdoor-base/2026-08-19/NOTICE",
+              "sha256": "a300698397804378858edd45d338229cc67e87ff06596c058126c74d46085391",
+              "size": 693
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/outdoor-base/2026-08-19/torch-fp32.pth",
+              "sha256": "4dad67a7cc10b462bca48e6b8569c762b8eb3c1adada170a3851a6d3ba37bb3e",
+              "size": 389964656
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/outdoor-large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/outdoor-large/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/outdoor-large/2026-08-19/NOTICE",
+              "sha256": "bc91f93886ad662e598c9c35d391d6730a4a4a1bcb8951679c981d63353804b1",
+              "size": 696
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/outdoor-large/2026-08-19/torch-fp32.pth",
+              "sha256": "239b1054a369e66da2576e9a118d6d7c12d90dc8ebe609579a9a09cd8e05fe38",
+              "size": 1341401064
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/outdoor-small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/outdoor-small/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/outdoor-small/2026-08-19/NOTICE",
+              "sha256": "b5811d9049e6eb007f93caa56d6afecebb2d4b530317c9a04fa2a24b719789ac",
+              "size": 517
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/outdoor-small/2026-08-19/torch-fp32.pth",
+              "sha256": "9203e538d35255c90dda4b7fedb47ff33fe725497bcca3b1e53b3a65ee63f0cb",
+              "size": 99221808
+            }
+          }
+        }
+      }
+    },
+    "depth_anything_v2/small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "depth_anything_v2/small/2026-08-19/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "depth_anything_v2/small/2026-08-19/NOTICE",
+              "sha256": "acae66ca6f20410a1723fa1e5461e99e0495d3fff89f4b5e49062bdcb24204d1",
+              "size": 493
+            },
+            "torch-fp32": {
+              "path": "depth_anything_v2/small/2026-08-19/torch-fp32.pth",
+              "sha256": "715fade13be8f229f8a70cc02066f656f2423a59effd0579197bbf57860e1378",
+              "size": 99218434
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/large": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/large/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/large/2026-08-18/coreml-fp32.zip",
+              "sha256": "598297283c17ba152cabb9acec0739f182d19bd983f18d0955960b111545229c",
+              "size": 112767009
+            },
+            "labels": {
+              "path": "rfdetr/large/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/large/2026-08-18/onnx-fp32.onnx",
+              "sha256": "f8f45dbaf0afe5f7ea674ec591a1d7b317dc4609dcb236632568d7d9f00ea007",
+              "size": 122101712
+            },
+            "torch-fp32": {
+              "path": "rfdetr/large/2026-08-18/torch-fp32.pth",
+              "sha256": "0f4e20e19a99c0f8a62b5685f57f6c8b5c371c59081feda6752a0561a79ccf38",
+              "size": 135954129
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/medium": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/medium/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/medium/2026-08-18/coreml-fp32.zip",
+              "sha256": "ca5195985a18c4355121ddcd3f7c4e06e2a489f5460a6cd7e61b7c39d75f3ff3",
+              "size": 111849078
+            },
+            "labels": {
+              "path": "rfdetr/medium/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/medium/2026-08-18/onnx-fp32.onnx",
+              "sha256": "cf478545e367ff5ed64f64664508ec4fa53b8d3cf4aff4769671ba0a5221b15e",
+              "size": 121118670
+            },
+            "torch-fp32": {
+              "path": "rfdetr/medium/2026-08-18/torch-fp32.pth",
+              "sha256": "749ff6071828aaffac63e204c4f4135ed3d6cdae4d702e086c360edc3b5768c8",
+              "size": 404992918
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/nano": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/nano/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/nano/2026-08-18/coreml-fp32.zip",
+              "sha256": "c73101e782418bb7bf70174ccda85a99fc9c8dc58bf096b8a89edbcdbe01b69d",
+              "size": 99893869
+            },
+            "labels": {
+              "path": "rfdetr/nano/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/nano/2026-08-18/onnx-fp32.onnx",
+              "sha256": "dc88c9e761285c8e78c26689181c33b6543b3d95322a16f129c20fdcf87e770c",
+              "size": 108128782
+            },
+            "torch-fp32": {
+              "path": "rfdetr/nano/2026-08-18/torch-fp32.pth",
+              "sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+              "size": 366287238
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/seg-large": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/seg-large/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/seg-large/2026-08-18/coreml-fp32.zip",
+              "sha256": "05e14f24fe046221fa77578947133423b10058a95a874c5007719193e90c8565",
+              "size": 120708077
+            },
+            "labels": {
+              "path": "rfdetr/seg-large/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/seg-large/2026-08-18/onnx-fp32.onnx",
+              "sha256": "11f97bbcc7ebed1873183efa5b196d8003aaf7b5aa5530fea33129d89af3cd80",
+              "size": 131191107
+            },
+            "torch-fp32": {
+              "path": "rfdetr/seg-large/2026-08-18/torch-fp32.pth",
+              "sha256": "ca7b7c630ba22496067cc4f034c4e70c8e47fd7adcea04c3a49aa8c1755cbe6b",
+              "size": 145055866
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/seg-medium": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/seg-medium/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/seg-medium/2026-08-18/coreml-fp32.zip",
+              "sha256": "16814f5624870a66f6331f409b60878ac31b31186fb5570c4b697bdc9c897d4e",
+              "size": 120350086
+            },
+            "labels": {
+              "path": "rfdetr/seg-medium/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/seg-medium/2026-08-18/onnx-fp32.onnx",
+              "sha256": "cae3df5a0765bf55df92fa63f43ac35dbfa9d4b82cad71c9097256cce2cbc26f",
+              "size": 130472257
+            },
+            "torch-fp32": {
+              "path": "rfdetr/seg-medium/2026-08-18/torch-fp32.pth",
+              "sha256": "3ad325094735f431aee9962a8d204d68eb5bfc393d53e7e836e70998fef5ea58",
+              "size": 143024058
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/seg-nano": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/seg-nano/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/seg-nano/2026-08-18/coreml-fp32.zip",
+              "sha256": "66a4e649418b3976fc4d86c890dd8ecdd15be00ad28e0387e744257b654f29ba",
+              "size": 113552623
+            },
+            "labels": {
+              "path": "rfdetr/seg-nano/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/seg-nano/2026-08-18/onnx-fp32.onnx",
+              "sha256": "566ee000ef3fca3f7bdb72817ec5a4e293f0a4deee37ac55e5dbce640442b968",
+              "size": 123145407
+            },
+            "torch-fp32": {
+              "path": "rfdetr/seg-nano/2026-08-18/torch-fp32.pth",
+              "sha256": "a44613a4ecd6b5ba61a62002c600b0b6cb7a9da2936a45317ec4b62c635fb99b",
+              "size": 134545398
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/seg-small": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/seg-small/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/seg-small/2026-08-18/coreml-fp32.zip",
+              "sha256": "60080452027f57fbbec6e0f6d6d25a5242dd54486067300cd250e91d1a203c86",
+              "size": 113737239
+            },
+            "labels": {
+              "path": "rfdetr/seg-small/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/seg-small/2026-08-18/onnx-fp32.onnx",
+              "sha256": "bc2b40085ea47681254b401b27477a9d00eed1653bf0e689b34d51437de94d34",
+              "size": 123729933
+            },
+            "torch-fp32": {
+              "path": "rfdetr/seg-small/2026-08-18/torch-fp32.pth",
+              "sha256": "6de3da31b2572cac214a1c76cce4a92a13966d56390ac2b3a3de9a8dc2b2bca3",
+              "size": 135042342
+            }
+          }
+        }
+      }
+    },
+    "rfdetr/small": {
+      "latest": "2026-08-18",
+      "revisions": {
+        "2026-08-18": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/small/2026-08-18/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "coreml-fp32": {
+              "path": "rfdetr/small/2026-08-18/coreml-fp32.zip",
+              "sha256": "54a358630bfececed9a69d0d45c50024b8fe2ed609d11f3b37ec9947307fd5b1",
+              "size": 106000874
+            },
+            "labels": {
+              "path": "rfdetr/small/2026-08-18/labels.json",
+              "sha256": "cfd019047d8954a0e8e17bfd69720e5cfe0242cc3126224df7b8bb6c9984640a",
+              "size": 3575
+            },
+            "onnx-fp32": {
+              "path": "rfdetr/small/2026-08-18/onnx-fp32.onnx",
+              "sha256": "409792d74b806bfc82a3f1c61208b0acfe916dff15bb35e56d68376f29b450f2",
+              "size": 114758894
+            },
+            "torch-fp32": {
+              "path": "rfdetr/small/2026-08-18/torch-fp32.pth",
+              "sha256": "d81979a9213a2109345158ce9232668df4c1ae52e9b8db3f2ec0a8cbad959b33",
+              "size": 386045550
+            }
+          }
+        }
+      }
+    },
+    "yolov11/large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/large/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/large/2026-08-19/NOTICE",
+              "sha256": "864826ad79f0c8fd7e3d0e7d9603b0a8ce7685a9ba8c8e75674e3cd7336bc675",
+              "size": 932
+            },
+            "labels": {
+              "path": "yolov11/large/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/large/2026-08-19/onnx-fp32.onnx",
+              "sha256": "afc34745294895649334491031d6cfcc5ba23c55873f9694bf05f1955f5bd491",
+              "size": 101664045
+            },
+            "torch-fp32": {
+              "path": "yolov11/large/2026-08-19/torch-fp32.pth",
+              "sha256": "9ebd0e09d59811db4b1d61e2bc6730649608b1ac47f8dd01e2da6bca7c20023f",
+              "size": 51387343
+            }
+          }
+        }
+      }
+    },
+    "yolov11/medium": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/medium/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/medium/2026-08-19/NOTICE",
+              "sha256": "b8f304fcdf75821cc76fa721faab1b4c5df3f11cd0ed64466fb631ca901b18c1",
+              "size": 933
+            },
+            "labels": {
+              "path": "yolov11/medium/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/medium/2026-08-19/onnx-fp32.onnx",
+              "sha256": "1b3978be54366819f796cd638bc12d4eba41acb1fe44a6b871ec39f7be320937",
+              "size": 80621640
+            },
+            "torch-fp32": {
+              "path": "yolov11/medium/2026-08-19/torch-fp32.pth",
+              "sha256": "d5ffc1a674953a08e11a8d21e022781b1b23a19b730afc309290bd9fb5305b95",
+              "size": 40684120
+            }
+          }
+        }
+      }
+    },
+    "yolov11/nano": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/nano/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/nano/2026-08-19/NOTICE",
+              "sha256": "e5f76f0de1264fa11e144d7045909476c6d5c1ea30cf1795f024347cd0128825",
+              "size": 931
+            },
+            "labels": {
+              "path": "yolov11/nano/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/nano/2026-08-19/onnx-fp32.onnx",
+              "sha256": "a8c81b1e99226f2f5c3922130533f53ea601d50abef9c80f17ac7acffc2167dd",
+              "size": 10701315
+            },
+            "torch-fp32": {
+              "path": "yolov11/nano/2026-08-19/torch-fp32.pth",
+              "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+              "size": 5613764
+            }
+          }
+        }
+      }
+    },
+    "yolov11/small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/small/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/small/2026-08-19/NOTICE",
+              "sha256": "f8149a3a882d1d20c80e15f3c801ff92b41092379c7068d5875855200a0004b2",
+              "size": 932
+            },
+            "labels": {
+              "path": "yolov11/small/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/small/2026-08-19/onnx-fp32.onnx",
+              "sha256": "802510698c4ba4780eb8725c324a6cfd0c7eb89aff72813afede14eea44e0b3e",
+              "size": 38011485
+            },
+            "torch-fp32": {
+              "path": "yolov11/small/2026-08-19/torch-fp32.pth",
+              "sha256": "85a76fe86dd8afe384648546b56a7a78580c7cb7b404fc595f97969322d502d5",
+              "size": 19313732
+            }
+          }
+        }
+      }
+    },
+    "yolov11/xlarge": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/xlarge/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/xlarge/2026-08-19/NOTICE",
+              "sha256": "e60bc20b81211c4cd3a6cf5070e185ba58b6028df5b9bba5b234f7f30e327189",
+              "size": 933
+            },
+            "labels": {
+              "path": "yolov11/xlarge/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/xlarge/2026-08-19/onnx-fp32.onnx",
+              "sha256": "10c96aab2041245091ab31cfbca24612ad55d7ff488fecff263d6dca93ec8300",
+              "size": 227977799
+            },
+            "torch-fp32": {
+              "path": "yolov11/xlarge/2026-08-19/torch-fp32.pth",
+              "sha256": "7bc158aa95c0ebfdd87f70f01653c1131b93e92522dbe15c228bcd742e773a24",
+              "size": 114636239
+            }
+          }
+        }
+      }
+    },
+    "yolov8/large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov8/large/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov8/large/2026-08-19/NOTICE",
+              "sha256": "45778f6d055e1aeeaad7190c6f39347a11a7e3fff9b12ecc89cf03158dc54bdd",
+              "size": 940
+            },
+            "coreml-fp32": {
+              "path": "yolov8/large/2026-08-19/coreml-fp32.zip",
+              "sha256": "9165398bbb3eaa4ea165c5aa8c251f0d6df1ec02221834844998c3580c6e84c8",
+              "size": 144629592
+            },
+            "labels": {
+              "path": "yolov8/large/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov8/large/2026-08-19/onnx-fp32.onnx",
+              "sha256": "e6253b7e025fc590e2a54c1082d99fad8985d6227c516d4072829e2b7308ef79",
+              "size": 174791938
+            },
+            "torch-fp32": {
+              "path": "yolov8/large/2026-08-19/torch-fp32.pth",
+              "sha256": "64c9115303f6a25575f82200d1b22ec409fa6bd7d08d0313884fc20d919478cd",
+              "size": 87792836
+            }
+          }
+        }
+      }
+    },
+    "yolov8/medium": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov8/medium/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov8/medium/2026-08-19/NOTICE",
+              "sha256": "f6f6a5906379656a60537807d99fa84df1293c6380991a8f9d2780f6259c6976",
+              "size": 941
+            },
+            "coreml-fp32": {
+              "path": "yolov8/medium/2026-08-19/coreml-fp32.zip",
+              "sha256": "38433d1d725ee506bfd67deb89627441421fe37c01947b8a791cd4e3875061f1",
+              "size": 86498492
+            },
+            "labels": {
+              "path": "yolov8/medium/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov8/medium/2026-08-19/onnx-fp32.onnx",
+              "sha256": "fd925aea079166204fd2c52626869db412d0a324c32e93c2417e891afb237d13",
+              "size": 103649466
+            },
+            "torch-fp32": {
+              "path": "yolov8/medium/2026-08-19/torch-fp32.pth",
+              "sha256": "5d4a90cdc7a21786cc59cd19778e9eafff836df9e2da32524737c7ee6efe4fe5",
+              "size": 52136884
+            }
+          }
+        }
+      }
+    },
+    "yolov8/nano": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov8/nano/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov8/nano/2026-08-19/NOTICE",
+              "sha256": "ec710d55993906d1fc4f938c56e520cc2e7fad32db69d410cc89bdc18bd077e5",
+              "size": 939
+            },
+            "coreml-fp32": {
+              "path": "yolov8/nano/2026-08-19/coreml-fp32.zip",
+              "sha256": "c7be51c25c7a5bfbf786b40d86827ba5128c14cf032e32f6938180f27c946ef8",
+              "size": 11062749
+            },
+            "labels": {
+              "path": "yolov8/nano/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov8/nano/2026-08-19/onnx-fp32.onnx",
+              "sha256": "85543ac99e0fca8262c32871ca4871f3f7d5a3abccf313a6893fc6ef38be40e2",
+              "size": 12699149
+            },
+            "torch-fp32": {
+              "path": "yolov8/nano/2026-08-19/torch-fp32.pth",
+              "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+              "size": 6549796
+            }
+          }
+        }
+      }
+    },
+    "yolov8/small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov8/small/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov8/small/2026-08-19/NOTICE",
+              "sha256": "d8fa29929da23bb97e0cc035928e0555de57d9200c279079c061ceb802bc2a04",
+              "size": 940
+            },
+            "coreml-fp32": {
+              "path": "yolov8/small/2026-08-19/coreml-fp32.zip",
+              "sha256": "ed97764312ce121d0d6c234b6b0dcf386307f34c9dfa6faacce23008ceae0988",
+              "size": 37881074
+            },
+            "labels": {
+              "path": "yolov8/small/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov8/small/2026-08-19/onnx-fp32.onnx",
+              "sha256": "c65947fe93673d58edb9b142c2a1979a3efb16d3061ae73c78b101f8401e86ac",
+              "size": 44717799
+            },
+            "torch-fp32": {
+              "path": "yolov8/small/2026-08-19/torch-fp32.pth",
+              "sha256": "1f47a78bf100391c2a140b7ac73a1caae18c32779be7d310658112f7ac9aa78a",
+              "size": 22588772
+            }
+          }
+        }
+      }
+    },
+    "yolov8/xlarge": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov8/xlarge/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov8/xlarge/2026-08-19/NOTICE",
+              "sha256": "fd8da7286d0337fff7acb127ef1195d234603c0dd4e79cec769b18d6f7522731",
+              "size": 941
+            },
+            "coreml-fp32": {
+              "path": "yolov8/xlarge/2026-08-19/coreml-fp32.zip",
+              "sha256": "9571afc8c31483542e6e801e38687bf561b033299315cd3ece1d5190a14a2e82",
+              "size": 222658127
+            },
+            "labels": {
+              "path": "yolov8/xlarge/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov8/xlarge/2026-08-19/onnx-fp32.onnx",
+              "sha256": "e0ab1adf18c788ebed72025a6a432090a3bdd9dc5f28b71dd0d43315309ce4e9",
+              "size": 272921221
+            },
+            "torch-fp32": {
+              "path": "yolov8/xlarge/2026-08-19/torch-fp32.pth",
+              "sha256": "3df4ada6b4dad6d657868f2fdf7faecfb34dcfccf3a25c4b82079064718524c8",
+              "size": 136890692
+            }
+          }
+        }
+      }
+    }
+  },
+  "schema": 1
+}
