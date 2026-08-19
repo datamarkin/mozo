@@ -1,0 +1,27 @@
+yolov11
+Copyright 2026 the yolov11 authors
+
+This product includes software developed for standalone YOLO11 detection inference.
+
+CODE LICENSE
+------------
+All source code in this package is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full text.
+
+This package does not bundle, vendor, import or depend on the `ultralytics` package,
+and it contains no model weights.
+
+MODEL WEIGHTS ARE LICENSED SEPARATELY
+-------------------------------------
+The Apache-2.0 license above covers this package's code ONLY. It does NOT cover any
+model checkpoint (`.pt` file) you load with it, and it grants you no rights whatsoever
+in any such checkpoint.
+
+Model weights are separately licensed by whoever produced them. In particular,
+checkpoints published by Ultralytics — including the YOLO11 weights this package was
+developed against — are licensed under AGPL-3.0, or under a commercial license obtained
+from Ultralytics.
+
+You are responsible for complying with the license of whatever weights you load, and for
+the license consequences of anything you export from them (an exported ONNX file contains
+the weights and inherits their license, not this package's).
