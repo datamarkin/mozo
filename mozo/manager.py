@@ -117,7 +117,7 @@ class ModelManager:
         performs the loading while others wait and reuse the loaded instance.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything', 'rfdetr')
+            family: Model family name (e.g., 'detectron2', 'depth_anything_v2', 'rfdetr')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
                    If None, automatically selects best available device
@@ -210,7 +210,7 @@ class ModelManager:
         reclaim memory. The model can be reloaded later if needed through lazy loading.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything')
+            family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'small')
 
         Returns:
@@ -321,7 +321,7 @@ class ModelManager:
 
             # Load and use several models
             model1 = manager.get_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
-            model2 = manager.get_model('depth_anything', 'small')
+            model2 = manager.get_model('depth_anything_v2', 'small')
             model3 = manager.get_model('florence2', 'ocr')
 
             # After 10 minutes of inactivity, free memory from unused models

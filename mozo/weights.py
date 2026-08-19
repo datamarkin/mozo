@@ -41,6 +41,14 @@ _TIMEOUT_SECONDS = 60.0
 
 #: Fetched alongside every artifact, so a cached model is never separated from its terms.
 _LICENCE_KEY = "LICENSE"
+_NOTICE_KEY = "NOTICE"
+# Artifacts that ship *with* whichever one you asked for, rather than being a choice. The licence
+# is always published; a NOTICE only where the upstream terms ask for attribution to travel with
+# the copy, which for CC-BY-NC weights they do.
+_ACCOMPANYING = (_LICENCE_KEY, _NOTICE_KEY)
+#: Of those, the ones every revision must publish. A model may have nothing to attribute, but it
+#: always has terms.
+_REQUIRED = frozenset({_LICENCE_KEY})
 
 _manifest: dict[str, Any] | None = None
 
@@ -101,7 +109,7 @@ def _artifact(entry: dict[str, Any], model_id: str, revision: str, key: str) -> 
     """
     artifact = entry["artifacts"].get(key)
     if artifact is None:
-        available = ", ".join(sorted(k for k in entry["artifacts"] if k != _LICENCE_KEY))
+        available = ", ".join(sorted(k for k in entry["artifacts"] if k not in _ACCOMPANYING))
         raise WeightsError(
             f"{model_id} revision {revision} does not publish {key!r}. Available: {available}"
         )
@@ -174,7 +182,8 @@ def _obtain(artifact: dict[str, Any], revision_dir: Path) -> Path:
 def artifacts(family: str, variant: str, *, revision: str | None = None) -> list[str]:
     """Return the artifact keys a revision publishes, e.g. ``["onnx-fp32", "torch-fp32"]``.
 
-    ``LICENSE`` is omitted -- it ships with every artifact rather than being one you choose.
+    ``LICENSE`` and ``NOTICE`` are omitted -- they ship with every artifact rather than being
+    ones you choose.
     Callers use this to find out what a model can actually be run as before asking for it.
 
     Raises:
@@ -185,7 +194,7 @@ def artifacts(family: str, variant: str, *, revision: str | None = None) -> list
         ['torch-fp32']
     """
     _, entry = _lookup(family, variant, revision)
-    return sorted(k for k in entry["artifacts"] if k != _LICENCE_KEY)
+    return sorted(k for k in entry["artifacts"] if k not in _ACCOMPANYING)
 
 
 def resolve(
@@ -197,8 +206,9 @@ def resolve(
 ) -> Path:
     """Return a local path to one published artifact, downloading and verifying it if needed.
 
-    The artifact's licence is fetched into the same directory, so a cached model always sits
-    beside the terms it was published under.
+    The artifact's licence is fetched into the same directory, along with its NOTICE where one
+    is published, so a cached model always sits beside the terms it was published under and the
+    attribution those terms require.
 
     Args:
         family: Model family, e.g. ``"rfdetr"``.
@@ -226,9 +236,14 @@ def resolve(
     model_id = f"{family}/{variant}"
 
     artifact = _artifact(entry, model_id, revision_name, key)
-    licence = _artifact(entry, model_id, revision_name, _LICENCE_KEY)
 
     revision_dir = cache_dir() / family / variant / revision_name
     path = _obtain(artifact, revision_dir)
-    _obtain(licence, revision_dir)
+    for companion in _ACCOMPANYING:
+        # The licence is required of every revision and _artifact says so if it is missing; a
+        # NOTICE is published only where the terms ask for attribution to travel with the copy.
+        published = entry["artifacts"].get(companion)
+        if published is None and companion not in _REQUIRED:
+            continue
+        _obtain(_artifact(entry, model_id, revision_name, companion), revision_dir)
     return path

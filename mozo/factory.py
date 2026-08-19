@@ -36,11 +36,11 @@ class ModelFactory:
         model = factory.create_model('detectron2', 'mask_rcnn_R_50_FPN_3x')
 
         # Factory handles completely different framework transparently
-        model = factory.create_model('depth_anything', 'small')
+        model = factory.create_model('depth_anything_v2', 'small')
 
         # List all available families
         families = factory.get_available_families()
-        print(families)  # ['detectron2', 'depth_anything', 'rfdetr', ...]
+        print(families)  # ['detectron2', 'depth_anything_v2', 'rfdetr', ...]
         ```
 
     Note:
@@ -118,7 +118,7 @@ class ModelFactory:
         adapter, not the factory. This separation of concerns makes both components simpler.
 
         Args:
-            family: Model family name (e.g., 'detectron2', 'depth_anything', 'rfdetr')
+            family: Model family name (e.g., 'detectron2', 'depth_anything_v2', 'rfdetr')
             variant: Model variant name (e.g., 'mask_rcnn_R_50_FPN_3x', 'nano')
                     Variant names are adapter-specific; adapters validate variants
             device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
@@ -148,7 +148,7 @@ class ModelFactory:
             detections = model.predict(image)
 
             # Override device for GPU
-            model = factory.create_model('depth_anything', 'small', device='cuda')
+            model = factory.create_model('depth_anything_v2', 'small', device='cuda')
             depth_map = model.predict(image)
             ```
 

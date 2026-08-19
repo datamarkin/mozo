@@ -48,12 +48,21 @@ MODEL_REGISTRY = {
         ],
     },
 
-    'depth_anything': {
-        'adapter_class': 'DepthAnythingPredictor',
-        'module': 'mozo.adapters.depth_anything',
+    'depth_anything_v2': {
+        'adapter_class': 'DepthAnythingV2Predictor',
+        'module': 'mozo.adapters.depth_anything_v2',
         'task_type': 'depth_estimation',
-        'description': 'Depth Anything V2 models for monocular depth estimation',
-        'variants': ['small', 'base', 'large'],
+        'description': (
+            'Depth Anything V2 by TikTok & HKU — monocular depth estimation. '
+            '3 relative-depth variants (small/base/large) and the same three sizes '
+            'fine-tuned for metric depth indoors (indoor-*) and outdoors (outdoor-*). '
+            'Relative base/large are CC-BY-NC-4.0; the rest are Apache 2.0.'
+        ),
+        'variants': [
+            'small', 'base', 'large',
+            'indoor-small', 'indoor-base', 'indoor-large',
+            'outdoor-small', 'outdoor-base', 'outdoor-large',
+        ],
     },
 
     'paddleocr': {
@@ -121,7 +130,7 @@ def get_available_families():
     a lightweight, fast operation that doesn't import or instantiate any adapters.
 
     Returns:
-        list: List of model family names (e.g., ['detectron2', 'depth_anything', 'rfdetr', ...])
+        list: List of model family names (e.g., ['detectron2', 'depth_anything_v2', 'rfdetr', ...])
 
     Example:
         ```python
@@ -129,7 +138,7 @@ def get_available_families():
 
         families = get_available_families()
         print(f"Available model families: {families}")
-        # Output: ['detectron2', 'depth_anything', 'paddleocr', 'rfdetr', ...]
+        # Output: ['detectron2', 'depth_anything_v2', 'paddleocr', 'rfdetr', ...]
 
         # Check if a specific family is available
         if 'detectron2' in families:
@@ -161,7 +170,7 @@ def get_available_variants(family):
     in the registry - the adapter will still work, this list is just for convenience.
 
     Args:
-        family: Model family name (e.g., 'detectron2', 'depth_anything')
+        family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
 
     Returns:
         list: Variant names for the family (e.g., ['mask_rcnn_R_50_FPN_3x', ...])
@@ -209,7 +218,7 @@ def get_model_info(family, variant=None):
     that a specific variant exists in the registry.
 
     Args:
-        family: Model family name (e.g., 'detectron2', 'depth_anything')
+        family: Model family name (e.g., 'detectron2', 'depth_anything_v2')
         variant: Optional variant name for validation. If provided, checks if variant
                 exists in registry (raises ValueError if not found)
 
