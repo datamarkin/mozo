@@ -1,0 +1,101 @@
+[
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      1305,
+      18,
+      1920,
+      1266
+    ],
+    "confidence": 0.947
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      2,
+      121,
+      767,
+      1264
+    ],
+    "confidence": 0.933
+  },
+  {
+    "class_id": 67,
+    "class_name": "cell phone",
+    "bbox": [
+      1164,
+      1083,
+      1452,
+      1186
+    ],
+    "confidence": 0.891
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      838,
+      220,
+      1454,
+      818
+    ],
+    "confidence": 0.826
+  },
+  {
+    "class_id": 63,
+    "class_name": "laptop",
+    "bbox": [
+      737,
+      775,
+      1359,
+      1137
+    ],
+    "confidence": 0.797
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      665,
+      146,
+      1076,
+      794
+    ],
+    "confidence": 0.74
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      336,
+      280,
+      622,
+      846
+    ],
+    "confidence": 0.434
+  },
+  {
+    "class_id": 41,
+    "class_name": "cup",
+    "bbox": [
+      635,
+      592,
+      703,
+      695
+    ],
+    "confidence": 0.33
+  },
+  {
+    "class_id": 60,
+    "class_name": "dining table",
+    "bbox": [
+      509,
+      1005,
+      1655,
+      1267
+    ],
+    "confidence": 0.308
+  }
+]
