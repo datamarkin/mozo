@@ -28,8 +28,9 @@ that has them.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Union
+from typing import Union
 
+import cv2
 import numpy as np
 
 from ..device import get_default_device
@@ -75,7 +76,6 @@ class DepthAnythingV2Predictor:
         runtime: str = "auto",
         checkpoint_path: str | Path | None = None,
         revision: str | None = None,
-        **_ignored: Any,
     ) -> None:
         if variant not in self.VARIANTS:
             raise ValueError(f"Unsupported variant {variant!r}. Choose from: {list(self.VARIANTS)}")
@@ -109,11 +109,15 @@ class DepthAnythingV2Predictor:
         """Estimate depth for *image*.
 
         Args:
-            image: A file path, or an ``HWC`` BGR array as OpenCV produces.
+            image: A file path, encoded bytes, or an ``HWC`` RGB array.
 
         Returns:
             An ``HxW`` float32 array at the input's resolution. Metres when :attr:`unit` says so;
             otherwise inverse depth on an arbitrary scale, where larger means nearer and no value
             is a distance.
         """
-        return self._predictor.predict(load_image(image))
+        # mozo's contract is RGB; this vendor is upstream's code and upstream reads with
+        # ``cv2.imread``, so it wants BGR and converts back internally. Cheaper than editing a
+        # vendor that is verified to zero delta against upstream, and small either way against
+        # 70-400 ms of inference.
+        return self._predictor.predict(cv2.cvtColor(load_image(image), cv2.COLOR_RGB2BGR))

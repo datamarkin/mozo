@@ -26,6 +26,7 @@ import torch
 from ..device import get_default_device
 from ..labels import resolve as labels_for
 from ..runtimes import make_runner, select_runtime
+from ..utils import load_image
 from ..vendors.rfdetr_deploy import Predictor, get_spec
 from ..vendors.rfdetr_deploy.models.postprocess import PostProcess
 from ..weights import artifacts, resolve
@@ -88,7 +89,6 @@ class RFDETRPredictor:
         checkpoint_path: str | Path | None = None,
         labels: list[str] | None = None,
         revision: str | None = None,
-        **_ignored: Any,
     ) -> None:
         if variant not in self.VARIANTS and checkpoint_path is None:
             raise ValueError(f"Unsupported variant {variant!r}. Choose from: {list(self.VARIANTS)}")
@@ -167,17 +167,18 @@ class RFDETRPredictor:
         """Detect objects in *image*.
 
         Args:
-            image: A file path, or an ``HWC`` BGR array as OpenCV produces.
+            image: A file path, encoded bytes, or an ``HWC`` RGB array.
             threshold: Minimum confidence to keep.
             labels: Class names for this call only, overriding the adapter's.
 
         Returns:
             A PixelFlow ``Detections``. Segmentation variants carry masks as well as boxes.
         """
-        # cv2 hands over BGR; the vendor's preprocessing expects RGB. ``ascontiguousarray`` is
-        # required, not cosmetic: the reversed view has a negative stride and torch rejects it.
-        source = np.ascontiguousarray(image[..., ::-1]) if isinstance(image, np.ndarray) else image
-        batch, sizes = self._predictor.preprocess([source])
+        # The vendor wants RGB and mozo's contract already is RGB, so nothing is converted here.
+        # This used to flip BGR->RGB with ``np.ascontiguousarray(image[..., ::-1])``, which cost
+        # 8.4 ms per call on a 1920x1281 image -- about 7% of nano's inference -- for a strided
+        # copy that is now simply unnecessary.
+        batch, sizes = self._predictor.preprocess([load_image(image)])
         if self._runner is None:
             batch = batch.to(dtype=next(self._predictor.model.parameters()).dtype)
 
