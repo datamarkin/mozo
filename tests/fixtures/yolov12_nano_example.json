@@ -1,0 +1,123 @@
+[
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      0,
+      119,
+      777,
+      1262
+    ],
+    "confidence": 0.932
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      1304,
+      16,
+      1919,
+      1264
+    ],
+    "confidence": 0.919
+  },
+  {
+    "class_id": 67,
+    "class_name": "cell phone",
+    "bbox": [
+      1164,
+      1082,
+      1451,
+      1184
+    ],
+    "confidence": 0.822
+  },
+  {
+    "class_id": 63,
+    "class_name": "laptop",
+    "bbox": [
+      730,
+      778,
+      1368,
+      1133
+    ],
+    "confidence": 0.812
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      663,
+      145,
+      1063,
+      793
+    ],
+    "confidence": 0.745
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      845,
+      217,
+      1447,
+      816
+    ],
+    "confidence": 0.732
+  },
+  {
+    "class_id": 0,
+    "class_name": "person",
+    "bbox": [
+      304,
+      281,
+      643,
+      864
+    ],
+    "confidence": 0.677
+  },
+  {
+    "class_id": 41,
+    "class_name": "cup",
+    "bbox": [
+      776,
+      640,
+      868,
+      776
+    ],
+    "confidence": 0.554
+  },
+  {
+    "class_id": 67,
+    "class_name": "cell phone",
+    "bbox": [
+      933,
+      489,
+      1049,
+      604
+    ],
+    "confidence": 0.477
+  },
+  {
+    "class_id": 41,
+    "class_name": "cup",
+    "bbox": [
+      632,
+      590,
+      705,
+      700
+    ],
+    "confidence": 0.457
+  },
+  {
+    "class_id": 60,
+    "class_name": "dining table",
+    "bbox": [
+      506,
+      1000,
+      1650,
+      1266
+    ],
+    "confidence": 0.367
+  }
+]
