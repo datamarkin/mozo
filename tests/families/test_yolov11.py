@@ -89,7 +89,7 @@ class TestPublished:
     def test_a_graph_is_published_with_the_names_it_cannot_carry(self, variant):
         """A graph records no class names, so publishing one without labels leaves ids unnamed."""
         keys = published("yolov11", variant)
-        if not [k for k in keys if k.startswith("onnx")]:
+        if not [k for k in keys if k.split("-")[0] in {"onnx", "coreml"}]:
             pytest.skip(f"yolov11/{variant} publishes no graph artifact")
         assert "labels" in keys
 
