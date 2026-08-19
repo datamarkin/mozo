@@ -1,118 +1,61 @@
-"""
-Mozo - Universal Computer Vision Model Server
+"""mozo -- computer vision models that run from a pip install.
 
-35+ pre-configured models ready to use. No deployment, no configuration.
-Just `mozo start` and make HTTP requests.
+Seventeen published variants across two families, served over HTTP or called from Python. No
+Docker, no cluster, no configuration: weights are fetched and verified on first use and cached
+under ``~/.cache/mozo``.
 
-Quick Start (Server):
-    >>> # From terminal:
-    >>> mozo start
-    >>>
-    >>> # Then use any model via HTTP:
-    >>> curl -X POST "http://localhost:8000/predict/rfdetr/nano" \\
-    >>>   -F "file=@image.jpg"
+Server:
 
-Quick Start (Python SDK):
+    $ mozo start
+    $ curl -X POST http://localhost:8000/predict/rfdetr/nano -F file=@image.jpg
+
+Python:
+
     >>> from mozo import get_model
-    >>>
-    >>> # Load model with simple one-liner
-    >>> model = get_model('rfdetr/nano')
-    >>>
-    >>> # Run prediction - accepts file path or numpy array
-    >>> detections = model.predict('image.jpg')
-    >>> print(f"Found {len(detections)} objects")
+    >>> model = get_model("rfdetr/nano")             # doctest: +SKIP
+    >>> detections = model.predict("image.jpg")      # doctest: +SKIP
 
-Advanced Usage (with ModelManager):
-    >>> from mozo import ModelManager
-    >>>
-    >>> manager = ModelManager()
-    >>> model = manager.get_model('rfdetr', 'nano')
-    >>> detections = model.predict('image.jpg')
-    >>>
-    >>> # Advanced: cleanup inactive models
-    >>> manager.cleanup_inactive_models(inactive_seconds=600)
+:func:`get_model` shares one cache, so asking twice loads once and the model stays for the life
+of the process. Build a :class:`~mozo.manager.ModelManager` of your own for a separate cache and
+a separate lifetime, or import an adapter directly for no cache at all.
 
-Features:
-    - 17 published variants across RF-DETR and Depth Anything V2
-    - Zero deployment - no Docker, Kubernetes, or cloud needed
-    - Automatic memory management with lazy loading
-    - PixelFlow integration for unified detection format
-    - Thread-safe concurrent access
-    - Path support: pass file paths directly to predict()
-
-For more information, see:
-    - Documentation: https://github.com/datamarkin/mozo
+See https://github.com/datamarkin/mozo.
 """
+
+from __future__ import annotations
 
 # Single source of truth for the package version.
 # pyproject.toml reads this via [tool.setuptools.dynamic] version.attr
 __version__ = "0.4.0"
 
-# Public API exports
+__all__ = ["MODEL_REGISTRY", "ModelManager", "__version__", "get_model", "get_model_info"]
+
 from mozo.manager import ModelManager
-from mozo.registry import (
-    MODEL_REGISTRY,
-    get_available_families,
-    get_available_variants,
-    get_model_info,
-)
+from mozo.registry import MODEL_REGISTRY, get_model_info
 
-# Module-level singleton manager for convenience API
-_default_manager = None
+#: The cache behind :func:`get_model`. A dict and a lock; it loads nothing until asked.
+_shared = ModelManager()
 
 
-def get_model(identifier, variant=None, device=None):
-    """
-    Load a model without explicitly creating a ModelManager.
-
-    This is a convenience function that uses a shared ModelManager instance.
-    For advanced use cases (cleanup, unloading, multiple managers), use
-    ModelManager directly.
+def get_model(identifier: str, variant: str | None = None, device: str | None = None):
+    """Load a model from a shared cache.
 
     Args:
-        identifier: Either "family/variant" string or just "family"
-        variant: Variant name (optional if identifier contains "/")
-        device: Compute device - 'cuda', 'mps', 'cpu', or None (auto-detect)
-                If None, automatically selects best available device:
-                CUDA GPU > Apple MPS > CPU
+        identifier: ``"family/variant"``, or just the family when *variant* is given.
+        variant: The variant, if *identifier* did not carry it.
+        device: ``"cuda"``, ``"mps"``, ``"cpu"``, or ``None`` to take the best available.
 
     Returns:
-        Loaded model predictor instance
+        The family's predictor, with a ``predict()`` method.
 
     Examples:
-        >>> from mozo import get_model
-        >>>
-        >>> # Auto-selects best device (GPU if available)
-        >>> model = get_model('rfdetr/nano')
-        >>>
-        >>> # Force CPU (e.g., for memory reasons)
-        >>> model = get_model('rfdetr/nano', device='cpu')
-        >>>
-        >>> # Force specific GPU
-        >>> model = get_model('rfdetr/nano', device='cuda:1')
-        >>>
-        >>> # Run prediction
-        >>> detections = model.predict('image.jpg')
+        >>> get_model("rfdetr/nano")                    # doctest: +SKIP
+        >>> get_model("rfdetr", "nano", device="cpu")   # doctest: +SKIP
     """
-    global _default_manager
-    if _default_manager is None:
-        _default_manager = ModelManager()
+    if variant is None:
+        if "/" not in identifier:
+            raise ValueError(
+                f"Expected 'family/variant' or a separate variant argument, got {identifier!r}")
+        identifier, variant = identifier.split("/", 1)
 
-    # Support "family/variant" format
-    if variant is None and "/" in identifier:
-        family, variant = identifier.split("/", 1)
-    else:
-        family = identifier
-
-    return _default_manager.get_model(family, variant, device=device)
-
-
-__all__ = [
-    "ModelManager",
-    "MODEL_REGISTRY",
-    "get_available_families",
-    "get_available_variants",
-    "get_model_info",
-    "get_model",
-    "__version__",
-]
+    return _shared.get_model(identifier, variant, device=device)
