@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 from conftest import FIXTURE, as_pixelflow_reports, published, require_weights
-from mozo.runtimes import select_runtime
+from mozo.runtimes import executable, select_runtime
 from mozo.weights import WeightsError, artifacts, companions, resolve
 
 #: Where the recorded reference lives, beside the photograph it was recorded on.
@@ -91,12 +91,22 @@ class TestPublished:
         assert "NOTICE" in accompanying, "AGPL-3.0 weights published without a source pointer"
 
     @pytest.mark.parametrize("variant", ALL)
-    def test_an_onnx_graph_is_published_with_the_names_it_cannot_carry(self, variant):
+    def test_a_graph_is_published_with_the_names_it_cannot_carry(self, variant):
         """A graph records no class names, so publishing one without labels leaves ids unnamed."""
         keys = published("yolov8", variant)
-        if "onnx-fp32" not in keys:
-            pytest.skip(f"yolov8/{variant} publishes no onnx-fp32")
+        if not [k for k in keys if k.split("-")[0] in {"onnx", "coreml"}]:
+            pytest.skip(f"yolov8/{variant} publishes no graph artifact")
         assert "labels" in keys
+
+    @pytest.mark.parametrize("variant", ALL)
+    def test_no_fp16_is_published(self, variant):
+        """Measured across four variants and a loss every time, so mozo does not ship it.
+
+        torch fp16 on MPS is *slower* than fp32 and moves boxes 0.76 px; ONNX fp16 is slower too.
+        CoreML fp16 is genuinely faster but wrong by 1.5 px on small and 636 px on nano -- erratic
+        rather than degrading with size, so the error cannot be bounded. See tools/export/yolov8.py.
+        """
+        assert not [k for k in published("yolov8", variant) if k.endswith("fp16")]
 
 
 class TestDetections:
@@ -190,34 +200,53 @@ class TestRuntimeAgreement:
     """The artifact you pick must not change the answer."""
 
     @pytest.mark.parametrize("variant", ALL)
-    def test_torch_and_onnx_agree(self, predictor_for, image, variant):
+    @pytest.mark.parametrize("runtime", ["onnx-fp32", "coreml-fp32"])
+    def test_every_published_graph_agrees_with_torch(self, predictor_for, image, variant, runtime):
+        """Parametrized over runtimes rather than naming one, so a new artifact is covered by
+        publishing it rather than by remembering to write another test."""
         require_weights("yolov8", variant, "torch-fp32")
-        require_weights("yolov8", variant, "onnx-fp32")
+        require_weights("yolov8", variant, runtime)
+        if runtime not in executable(published("yolov8", variant)):
+            pytest.skip(f"{runtime} is published but not runnable here")
 
         torch_out = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
-        onnx_out = predictor_for(variant, "onnx-fp32").predict(image, threshold=THRESHOLD)
+        other = predictor_for(variant, runtime).predict(image, threshold=THRESHOLD)
 
-        assert len(torch_out) == len(onnx_out)
-        assert [d.class_name for d in torch_out] == [d.class_name for d in onnx_out]
+        assert len(torch_out) == len(other)
+        assert [d.class_name for d in torch_out] == [d.class_name for d in other]
 
         # Boxes are truncated to integers, so a sub-pixel float difference between the runtimes
         # can always straddle the boundary and move one edge by one. Anything larger is the model
         # disagreeing with itself. The float-level check lives in tools/export.
         worst = max(
-            (max(abs(a - b) for a, b in zip(x.bbox, y.bbox)) for x, y in zip(torch_out, onnx_out)),
+            (max(abs(a - b) for a, b in zip(x.bbox, y.bbox)) for x, y in zip(torch_out, other)),
             default=0,
         )
-        assert worst <= 1, f"boxes moved {worst} px between runtimes"
+        assert worst <= 1, f"boxes moved {worst} px between torch-fp32 and {runtime}"
 
-    def test_auto_picks_torch(self):
-        """Asserted against the real manifest rather than by loading a duplicate predictor."""
+    def test_auto_picks_the_runtime_that_was_measured_fastest(self):
+        """Asserted against the real manifest rather than by loading duplicate predictors.
+
+        CoreML on Apple silicon is 8-12x torch CPU and 1.2-1.9x torch MPS at 0.0004 px, which is
+        why it leads there; ONNX beats torch on CPU for nano and loses for every larger variant,
+        so the shared preference table keeps torch first.
+        """
         require_weights("yolov8", "nano", "torch-fp32")
         assert select_runtime("cpu", artifacts("yolov8", "nano")) == "torch-fp32"
+        if "coreml-fp32" in executable(published("yolov8", "nano")):
+            assert select_runtime("mps", artifacts("yolov8", "nano")) == "coreml-fp32"
 
-    def test_the_onnx_path_takes_its_size_from_the_graph(self, predictor_for):
-        """Letterboxing to anything else would feed the session a shape it cannot accept."""
-        require_weights("yolov8", "nano", "onnx-fp32")
-        assert predictor_for("nano", "onnx-fp32").imgsz == 640
+    @pytest.mark.parametrize("runtime", ["onnx-fp32", "coreml-fp32"])
+    def test_a_graph_runtime_takes_its_size_from_the_artifact(self, predictor_for, runtime):
+        """Letterboxing to anything else would feed the runtime a shape it cannot accept.
+
+        Both runners report ``input_shape``, so the adapter asks rather than assuming, and does
+        not need to know which kind of artifact it is holding.
+        """
+        require_weights("yolov8", "nano", runtime)
+        if runtime not in executable(published("yolov8", "nano")):
+            pytest.skip(f"{runtime} is published but not runnable here")
+        assert predictor_for("nano", runtime).imgsz == 640
 
 
 class TestCallerSuppliedNames:
