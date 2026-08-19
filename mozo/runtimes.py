@@ -236,6 +236,8 @@ class CoreMLRunner:
     Attributes:
         inputs: Input tensor names, in the order the package declares them.
         outputs: Output tensor names, in the order the package declares them.
+        input_shape: The first input's declared shape, as :class:`OnnxRunner` reports it -- so an
+            adapter can ask any runner what size to letterbox to without knowing which it holds.
 
     Examples:
         >>> run = CoreMLRunner("model.mlpackage")             # doctest: +SKIP
@@ -254,6 +256,7 @@ class CoreMLRunner:
         description = self._model.get_spec().description
         self.inputs: list[str] = [i.name for i in description.input]
         self.outputs: list[str] = [o.name for o in description.output]
+        self.input_shape: tuple = tuple(description.input[0].type.multiArrayType.shape)
 
     def __call__(self, batch: np.ndarray, **extra: Any) -> tuple[np.ndarray, ...]:
         """Run the package and return its outputs in declaration order."""
