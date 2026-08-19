@@ -1,0 +1,90 @@
+[
+ {
+  "class_id": 0,
+  "class_name": "person",
+  "bbox": [
+   0,
+   113,
+   763,
+   1269
+  ],
+  "confidence": 0.917
+ },
+ {
+  "class_id": 0,
+  "class_name": "person",
+  "bbox": [
+   1295,
+   17,
+   1920,
+   1269
+  ],
+  "confidence": 0.917
+ },
+ {
+  "class_id": 63,
+  "class_name": "laptop",
+  "bbox": [
+   709,
+   773,
+   1366,
+   1143
+  ],
+  "confidence": 0.849
+ },
+ {
+  "class_id": 41,
+  "class_name": "cup",
+  "bbox": [
+   632,
+   589,
+   704,
+   724
+  ],
+  "confidence": 0.636
+ },
+ {
+  "class_id": 0,
+  "class_name": "person",
+  "bbox": [
+   671,
+   147,
+   1070,
+   800
+  ],
+  "confidence": 0.586
+ },
+ {
+  "class_id": 0,
+  "class_name": "person",
+  "bbox": [
+   868,
+   220,
+   1448,
+   817
+  ],
+  "confidence": 0.484
+ },
+ {
+  "class_id": 0,
+  "class_name": "person",
+  "bbox": [
+   294,
+   265,
+   661,
+   829
+  ],
+  "confidence": 0.464
+ },
+ {
+  "class_id": 67,
+  "class_name": "cell phone",
+  "bbox": [
+   1163,
+   1081,
+   1451,
+   1183
+  ],
+  "confidence": 0.447
+ }
+]
