@@ -1,3 +1,15 @@
+"""mozo's image contract: RGB, ``uint8``, ``HxWx3``.
+
+One function, because there is one decision to make and it must be made once. Channel order is
+created when bytes are decoded and invisible afterwards, so a second decoder somewhere else is
+not a duplicate -- it is a second answer, and the wrong one fails silently. A channel swap cost
+Depth Anything V2 0.166 m of mean error and 1.84 m at worst, with nothing raised.
+
+    >>> from mozo.image import load_image
+    >>> load_image("photo.jpg").shape          # doctest: +SKIP
+    (1281, 1920, 3)
+"""
+
 import os
 from typing import Union
 

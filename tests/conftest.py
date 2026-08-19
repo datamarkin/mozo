@@ -48,7 +48,7 @@ def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> N
 @pytest.fixture(scope="session")
 def image():
     """The fixture photograph, decoded to mozo's contract (RGB)."""
-    from mozo.utils import load_image
+    from mozo.image import load_image
 
     return load_image(str(FIXTURE))
 

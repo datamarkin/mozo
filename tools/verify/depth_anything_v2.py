@@ -249,7 +249,7 @@ def main() -> int:
 
     # mozo's own detection, not a second copy of it: these numbers describe the device mozo
     # would have picked, so the two must not be able to disagree.
-    from mozo.device import get_default_device
+    from mozo.runtimes import get_default_device
 
     device = args.device or get_default_device()
 

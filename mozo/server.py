@@ -9,7 +9,7 @@ from typing import Optional
 from . import __version__
 from .manager import ModelManager
 from .registry import get_available_families, get_available_variants, get_model_info
-from .utils import load_image
+from .image import load_image
 
 import os
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
