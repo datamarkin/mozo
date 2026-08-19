@@ -30,12 +30,21 @@ The output is ``weights/yolov11/<variant>/<revision>/torch-fp32.pth`` plus a NOT
 
 from __future__ import annotations
 
-import argparse
-import hashlib
-import urllib.request
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+
+from common import (  # noqa: E402
+    download_verified, require_licence, ultralytics_notice, variant_parser,
+)
+
+#: Family name, which is the directory the weights land in and the key the manifest uses.
+FAMILY = "yolov11"
+
+#: What to call this family to a reader, in the NOTICE.
+DISPLAY = "YOLO11"
 
 #: The release these checkpoints were taken from. Pinned rather than tracking "latest": a release
 #: tag is what makes the corresponding source identifiable, and AGPL-3.0 section 6 asks for a
@@ -64,96 +73,20 @@ CHECKPOINTS: dict[str, tuple[str, str]] = {
 #: which is where ``tools/generate_manifest.py`` looks for it.
 LICENCE_SOURCE_URL = "https://www.gnu.org/licenses/agpl-3.0.txt"
 
-_CHUNK = 1 << 20
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(_CHUNK), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _notice(variant: str, filename: str) -> str:
-    """Attribution and the source pointer that AGPL-3.0 requires to travel with the copy."""
-    return (
-        f"YOLO11 -- {variant}\n\n"
-        "Copyright (c) Ultralytics.\n\n"
-        f"Source:  {_ASSETS}/{filename}\n"
-        f"Release: {RELEASE} of https://github.com/ultralytics/assets\n"
-        f"Project: {SOURCE_URL}\n"
-        "Licence: AGPL-3.0-only (full text in the LICENSE file beside this one)\n\n"
-        "These weights are licensed under the GNU Affero General Public License v3.0, or under a\n"
-        "commercial licence obtained from Ultralytics. mozo redistributes them unmodified and\n"
-        "under those same terms; mozo's own code is Apache-2.0 and is a separate work.\n\n"
-        "The corresponding source for these weights is the Ultralytics project at the URL above.\n\n"
-        "Any ONNX or other export in this directory contains these weights and is covered by\n"
-        "this same licence, not by mozo's.\n\n"
-        "If you serve predictions from these weights over a network, AGPL-3.0 section 13 places\n"
-        "obligations on you. Complying with them is your responsibility, not mozo's.\n"
-    )
-
-
-def require_licence(revision_dir: Path) -> None:
-    """Fail if the revision has no LICENSE, saying exactly how to supply one.
-
-    Deliberately not carried forward from a previous revision. A new revision is where an upstream
-    relicence would show up, and silently copying the old terms is how that gets missed.
-    """
-    if (revision_dir / "LICENSE").is_file():
-        return
-    raise SystemExit(
-        f"{revision_dir} has no LICENSE, and every published revision ships one.\n"
-        f"These weights are AGPL-3.0:\n"
-        f"    curl -sL {LICENCE_SOURCE_URL} -o {revision_dir / 'LICENSE'}"
-    )
-
 
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
     """Download one variant's checkpoint, verify it, and place it with its licence and notice."""
     filename, expected = CHECKPOINTS[variant]
-    target = weights_dir / "yolov11" / variant / revision / "torch-fp32.pth"
-    url = f"{_ASSETS}/{filename}"
+    target = weights_dir / FAMILY / variant / revision / "torch-fp32.pth"
+    download_verified(f"{_ASSETS}/{filename}", target, expected, label=variant)
 
-    if target.is_file() and _sha256(target) == expected:
-        print(f"  {variant:<8} already present, sha256 matches", flush=True)
-    else:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Staged beside the target, not in $TMPDIR: a cross-filesystem move would copy every byte
-        # a second time. Here the finish is a rename. The digest is computed while the bytes are
-        # written, so nothing is read back to verify.
-        staged = target.with_name(target.name + ".part")
-        print(f"  {variant:<8} downloading {url}", flush=True)
-        digest = hashlib.sha256()
-        try:
-            with urllib.request.urlopen(url, timeout=300) as response, staged.open("wb") as out:
-                for chunk in iter(lambda: response.read(_CHUNK), b""):
-                    digest.update(chunk)
-                    out.write(chunk)
-
-            actual = digest.hexdigest()
-            if actual != expected:
-                raise SystemExit(
-                    f"{variant}: sha256 mismatch. Expected {expected}, got {actual}. "
-                    f"Upstream may have re-released this checkpoint; do not publish it until the "
-                    f"change is understood."
-                )
-            staged.replace(target)
-        finally:
-            staged.unlink(missing_ok=True)
-        print(f"  {variant:<8} ok, {target.stat().st_size / 1e6:.1f} MB", flush=True)
-
-    (target.parent / "NOTICE").write_text(_notice(variant, filename))
-    require_licence(target.parent)
+    (target.parent / "NOTICE").write_text(
+        ultralytics_notice(DISPLAY, variant, filename, RELEASE, _ASSETS, SOURCE_URL))
+    require_licence(target.parent, "AGPL-3.0", LICENCE_SOURCE_URL)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("variants", nargs="*", default=None, help="variants to fetch (default: all)")
-    parser.add_argument("--revision", default="2026-08-19", help="revision directory to write into")
-    parser.add_argument("--weights-dir", type=Path, default=ROOT / "weights")
-    args = parser.parse_args()
+    args = variant_parser(__doc__, ROOT / "weights").parse_args()
 
     wanted = args.variants or list(CHECKPOINTS)
     unknown = [v for v in wanted if v not in CHECKPOINTS]
