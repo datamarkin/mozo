@@ -2,7 +2,7 @@
 
 The families differ in their architecture, and that difference lives entirely in their vendored
 packages -- each rebuilds its own network from its own checkpoint and supplies its own
-letterboxing, suppression and coordinate mapping. By the time an adapter is involved there is no
+letterboxing, coordinate mapping, and suppression where the family needs any. By the time an adapter is involved there is no
 model maths left: resolve the weights, choose a runtime, run the vendor's ``detect`` with the
 forward pass plugged in, hand the numbers to PixelFlow.
 
@@ -150,7 +150,8 @@ class YOLOPredictor:
         """
         # The vendor wants RGB and mozo's contract already is RGB, so nothing is converted here.
         # Letterboxing and suppression are the vendor's, not restated here, so the answer cannot
-        # depend on which of the runtimes ran the forward pass.
+        # depend on which of the runtimes ran the forward pass. A family whose head fires once
+        # per object has no suppression step, and needs no special case here either.
         boxes, scores, class_ids = self.VENDOR.detect(
             load_image(image), self._forward, self.imgsz, threshold)
 

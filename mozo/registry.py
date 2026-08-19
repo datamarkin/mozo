@@ -95,6 +95,21 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         'variants': ['nano', 'small', 'medium', 'large', 'xlarge'],
     },
+
+    'yolov26': {
+        'adapter_class': 'YOLOv26Predictor',
+        'module': 'mozo.adapters.yolov26',
+        'task_type': 'object_detection',
+        'description': (
+            'YOLO26 by Ultralytics -- real-time object detection, NMS-free: the head fires once '
+            'per object and the network returns a ranked detection list. '
+            '5 variants (nano/small/medium/large/xlarge). '
+            'The weights are AGPL-3.0, unlike the rest of mozo: serving predictions from them '
+            'over a network places obligations on you. See the NOTICE published beside each '
+            'checkpoint.'
+        ),
+        'variants': ['nano', 'small', 'medium', 'large', 'xlarge'],
+    },
 }
 
 
