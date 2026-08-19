@@ -250,14 +250,6 @@
             margin-top: 10px;
         }
 
-        .answer-section {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
-            margin-top: 10px;
-        }
-
         @media (max-width: 768px) {
             .content {
                 grid-template-columns: 1fr;
@@ -301,11 +293,6 @@
                         <option value="">Select a family first</option>
                     </select>
                 </div>
-                <div class="form-group" id="promptGroup" style="display: none;">
-                    <label for="promptInput">Prompt (for vision-language models)</label>
-                    <input type="text" id="promptInput" placeholder="Describe this image in detail."
-                           value="Describe this image in detail.">
-                </div>
                 <button id="predictBtn" class="btn" style="width: 100%;">
                     ▶️ Run Prediction
                 </button>
@@ -322,9 +309,6 @@
     <script>
         // Served by GET /static/example.jpg — keep in sync with the <img> preview above.
         const DEFAULT_IMAGE = '/static/example.jpg';
-        // Families whose predict() takes a text prompt.
-        const PROMPT_FAMILIES = new Set(['florence2']);
-
         let availableModels = {};
         let currentImage = null;
         let defaultImageBlob = null;  // cached so the default image is fetched once
@@ -355,11 +339,9 @@
         document.getElementById('familySelect').addEventListener('change', function() {
             const family = this.value;
             const variantSelect = document.getElementById('variantSelect');
-            const promptGroup = document.getElementById('promptGroup');
 
             if (!family) {
                 variantSelect.innerHTML = '<option value="">Select a family first</option>';
-                promptGroup.style.display = 'none';
                 return;
             }
 
@@ -372,9 +354,6 @@
                 option.textContent = variant;
                 variantSelect.appendChild(option);
             });
-
-            // Show prompt input for vision-language models
-            promptGroup.style.display = PROMPT_FAMILIES.has(family) ? 'block' : 'none';
         });
 
         // Handle image upload
@@ -424,14 +403,7 @@
             const formData = new FormData();
             formData.append('file', imageBlob);
 
-            // Build URL with parameters for specific model families
-            let url = `/predict/${family}/${variant}`;
-
-            if (PROMPT_FAMILIES.has(family)) {
-                // Add prompt parameter for vision-language models
-                const prompt = document.getElementById('promptInput').value || 'Describe this image in detail.';
-                url += `?prompt=${encodeURIComponent(prompt)}`;
-            }
+            const url = `/predict/${family}/${variant}`;
 
             try {
                 const response = await fetch(url, {
@@ -509,20 +481,8 @@
                 </div>
             `;
 
-            // Handle text responses (Florence-2 captioning / OCR)
-            if (data.text) {
-                html += `<h3 style="margin-top: 20px;">Response:</h3>`;
-
-                html += `<div class="answer-section">`;
-                html += `<p style="margin: 0; white-space: pre-wrap;">${escapeHtml(data.text)}</p>`;
-                html += `</div>`;
-
-                if (data.prompt) {
-                    html += `<p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;"><strong>Prompt:</strong> ${escapeHtml(data.prompt)}</p>`;
-                }
-            }
             // Display predictions for object detection models
-            else if (data.predictions && data.predictions.length > 0) {
+            if (data.predictions && data.predictions.length > 0) {
                 html += `<h3 style="margin-top: 20px;">Detected Objects: ${data.predictions.length}</h3>`;
                 html += '<pre>' + JSON.stringify(data.predictions, null, 2) + '</pre>';
 
@@ -566,12 +526,6 @@
             content.innerHTML = html;
         }
 
-        // Escape HTML to prevent XSS
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
 
         // Initialize on page load
         window.addEventListener('load', loadModels);
