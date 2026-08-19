@@ -1,85 +1,73 @@
-import cv2
-import numpy as np
-from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse, Response, FileResponse
-from typing import Optional
+"""HTTP surface: upload an image, get the model's answer back.
 
-# Import model manager, factory, and registry utilities
-from . import __version__
-from .manager import ModelManager
-from .registry import get_available_families, get_available_variants, get_model_info
-from .image import load_image
+Two kinds of endpoint. ``/predict`` runs a model; ``/models`` says what there is. Nothing here
+manages memory -- a model that is loaded stays loaded, so there is no cleanup call for anyone
+to forget to make.
+
+Handlers are ``def`` rather than ``async def`` on purpose: inference is seconds of blocking CPU
+or GPU work, so FastAPI runs each in its threadpool instead of stalling the event loop.
+"""
+
+from __future__ import annotations
 
 import os
-os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 
-# --- FastAPI App ---
+# Set before torch is imported -- adapters load lazily, so this is always in time. Some ops have
+# no MPS kernel, and without the fallback they raise instead of running on the CPU.
+os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+
+from pathlib import Path
+from typing import Optional
+
+import cv2
+import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
+
+from . import __version__
+from .image import load_image
+from .manager import ModelManager
+from .registry import MODEL_REGISTRY, get_model_info
+
 app = FastAPI(
     title="Mozo Model Server",
-    description="Dynamic model serving API with lazy loading and lifecycle management.",
-    version=__version__
+    description="Computer vision models served from a pip install.",
+    version=__version__,
 )
 
-# --- Model Manager Setup ---
-@app.on_event("startup")
-def setup_manager():
-    """
-    Initialize the model manager (no models loaded yet - they load on-demand).
+# Built at import: a manager is an empty dict and a lock, and loads nothing until asked. There is
+# no startup work to defer, and no window where a request can arrive before it exists.
+app.state.model_manager = ModelManager()
 
-    This is much faster than the old approach which loaded all models at startup.
-    Models will be loaded automatically when first requested.
-    """
-    print("[Server] Initializing model manager...")
-    app.state.model_manager = ModelManager()
-    print("[Server] Model manager ready. Models will be loaded on-demand.")
+_STATIC = Path(__file__).parent / "static"
 
-# --- API Endpoints ---
-@app.get("/", summary="Health Check", description="Check if the API server is ready.")
+
+@app.get("/", summary="Health check")
 def health_check():
-    """
-    Health check endpoint.
-
-    Note: Models are loaded on-demand, so this just checks if the manager is initialized.
-    """
-    manager_ready = hasattr(app.state, "model_manager")
-    if not manager_ready:
-        return {"status": "error", "message": "Server is starting up, model manager not yet initialized."}
+    """Report that the server is up, and which models are resident."""
     return {
         "status": "ok",
-        "message": "Server is running with dynamic model management.",
-        "loaded_models": app.state.model_manager.list_loaded_models()
+        "version": __version__,
+        "loaded_models": app.state.model_manager.loaded(),
     }
 
 
-# --- Test UI ---
-
-@app.get("/test-ui", summary="Test UI", description="Serve interactive testing interface.")
+@app.get("/test-ui", summary="Interactive test page")
 def serve_test_ui():
-    """
-    Serve the interactive test UI for model testing.
-
-    This provides a user-friendly web interface to:
-    - Upload images
-    - Select models dynamically
-    - View prediction results
-    """
-    html_path = Path(__file__).parent / "static" / "test_ui.html"
-    return FileResponse(html_path, media_type="text/html")
+    """Serve the browser page for trying models by hand."""
+    return FileResponse(_STATIC / "test_ui.html", media_type="text/html")
 
 
-@app.get("/static/example.jpg", summary="Example Image", description="Serve example test image.")
+@app.get("/static/example.jpg", summary="Example image")
 def serve_example_image():
-    """Serve the default example image for testing."""
-    image_path = Path(__file__).parent / "static" / "example.jpg"
-
-    if not image_path.exists():
+    """Serve the image the test page starts with."""
+    image_path = _STATIC / "example.jpg"
+    if not image_path.is_file():
         raise HTTPException(status_code=404, detail="Example image not found at mozo/static/example.jpg")
-
     return FileResponse(image_path, media_type="image/jpeg")
 
 
-# --- Prediction Endpoints ---
+# --- Prediction ---
 
 def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
     """Encode a depth map as a 16-bit PNG, with what is needed to read it back in the headers.
@@ -121,9 +109,7 @@ def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
     )
 
 
-@app.post("/predict/{family}/{variant}",
-          summary="Run Model Prediction",
-          description="Upload an image and get predictions from any available model variant.")
+@app.post("/predict/{family}/{variant}", summary="Run a model")
 def predict(
     family: str,
     variant: str,
@@ -131,27 +117,18 @@ def predict(
     threshold: float = 0.5,
     labels: Optional[str] = None,
 ):
-    """
-    Universal prediction endpoint supporting all model families and variants.
+    """Run one model over one image.
 
     Args:
-        family: Model family (e.g., 'rfdetr', 'depth_anything_v2')
-        variant: Model variant (e.g., 'nano', 'indoor-small')
-        file: Image file to process
-        threshold: Confidence threshold for detection models
-        labels: Comma-separated class labels for detection models (e.g., "hardhat,vest,person").
-                Overrides the model's default labels when provided.
+        family: Model family, e.g. ``rfdetr``.
+        variant: Variant within it, e.g. ``nano``.
+        file: The image.
+        threshold: Confidence floor, for detection models.
+        labels: Comma-separated class names overriding the model's own, e.g. ``hardhat,vest``.
 
     Returns:
         Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
-
-    Examples:
-        POST /predict/rfdetr/nano?threshold=0.5
-        POST /predict/depth_anything_v2/indoor-small
     """
-    if not hasattr(app.state, "model_manager"):
-        raise HTTPException(status_code=503, detail="Server is starting up, model manager not initialized.")
-
     # Whether a model exists is answerable from the registry alone -- no adapter import, no
     # torch, no weights, no image decode. Answering it first makes an unknown name free, and
     # keeps it from being confused with a model that exists and failed to load. The registry
@@ -186,6 +163,8 @@ def predict(
                 content=model.predict(image, threshold=threshold, labels=parsed or None).to_dict())
         if task == "depth_estimation":
             return _depth_response(model.predict(image), model.unit)
+    except HTTPException:
+        raise  # already carries the status it wants; do not re-wrap it as a 500
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
@@ -193,183 +172,33 @@ def predict(
         status_code=501, detail=f"{family} performs {task!r}, which this endpoint cannot encode.")
 
 
-# --- Model Management Endpoints ---
+# --- Discovery ---
 
-@app.get("/models",
-         summary="List Available Models",
-         description="Get all available model families with their variants and loaded status.")
-def list_available_models():
+@app.get("/models", summary="List every model")
+def list_models():
+    """Every family and its variants.
+
+    Answered from the registry, so it costs no imports and no weights. This is the whole
+    catalogue: a per-family or per-variant endpoint would only be this response, filtered.
+
+    Residency is not mixed in. It belongs to ``/models/loaded``, and reporting it here would
+    mean taking a model id apart to recover the variant -- which puts the id format in a second
+    module, where it can drift from the one that composes it.
     """
-    List all available model families with their variants.
-
-    Also returns which variants are currently loaded in memory.
-
-    Returns:
-        dict: Available models organized by family, with variant lists, descriptions, and loaded status
-    """
-    loaded_models = set(
-        app.state.model_manager.list_loaded_models() if hasattr(app.state, "model_manager") else []
-    )
-    result = {}
-
-    for family in get_available_families():
-        try:
-            info = get_model_info(family)
-            variants = info['variants']
-
-            result[family] = {
-                'task_type': info['task_type'],
-                'description': info['description'],
-                'num_variants': len(variants),
-                'variants': variants,
-                'loaded': [v for v in variants if f"{family}/{v}" in loaded_models],
-            }
-        except Exception as e:
-            # If adapter fails to load, return error state
-            result[family] = {
-                'error': str(e),
-                'variants': [],
-                'loaded': [],
-            }
-
-    return result
-
-
-@app.get("/models/{family}/variants",
-         summary="Get Model Variants",
-         description="Get available variants for a specific model family.")
-def get_family_variants(family: str):
-    """
-    Get available variants for a specific model family.
-
-    Args:
-        family: Model family name (e.g., 'rfdetr', 'depth_anything_v2')
-
-    Returns:
-        dict: Family name and list of available variants
-
-    Example:
-        GET /models/rfdetr/variants
-        Returns: {"family": "rfdetr", "variants": ["nano", "small", ...]}
-    """
-    try:
-        variants = get_available_variants(family)
-        return {
-            "family": family,
-            "variants": variants,
-            "num_variants": len(variants)
+    return {
+        family: {
+            "task_type": entry["task_type"],
+            "description": entry["description"],
+            "variants": entry["variants"],
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        for family, entry in MODEL_REGISTRY.items()
+    }
 
 
-@app.get("/models/loaded",
-         summary="List Loaded Models",
-         description="Get currently loaded models in memory.")
+@app.get("/models/loaded", summary="List resident models")
 def list_loaded_models():
+    """Model ids currently in memory, in the order they were first asked for.
+
+    Nothing is evicted, so this is everything this process has served since it started.
     """
-    List currently loaded models.
-
-    Returns:
-        dict: Loaded model IDs and their usage information
-    """
-    if not hasattr(app.state, "model_manager"):
-        raise HTTPException(status_code=503, detail="Model manager not initialized.")
-
-    loaded = app.state.model_manager.list_loaded_models()
-    info = app.state.model_manager.get_model_info()
-
-    return {
-        "loaded_count": len(loaded),
-        "models": info
-    }
-
-
-@app.get("/models/{family}/{variant}/info",
-         summary="Get Model Info",
-         description="Get detailed information about a specific model variant.")
-def get_model_details(family: str, variant: str):
-    """
-    Get detailed information about a specific model variant.
-
-    Args:
-        family: Model family name
-        variant: Model variant name
-
-    Returns:
-        dict: Model information including parameters and load status
-    """
-    try:
-        info = get_model_info(family, variant)
-
-        # Add load status
-        if hasattr(app.state, "model_manager"):
-            model_id = f"{family}/{variant}"
-            load_info = app.state.model_manager.get_model_info(model_id)
-            info['load_status'] = load_info
-        else:
-            info['load_status'] = {'loaded': False}
-
-        return info
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.post("/models/{family}/{variant}/unload",
-          summary="Unload Model",
-          description="Manually unload a model to free memory.")
-def unload_model(family: str, variant: str):
-    """
-    Manually unload a specific model to free memory.
-
-    Args:
-        family: Model family name
-        variant: Model variant name
-
-    Returns:
-        dict: Unload status
-    """
-    if not hasattr(app.state, "model_manager"):
-        raise HTTPException(status_code=503, detail="Model manager not initialized.")
-
-    success = app.state.model_manager.unload_model(family, variant)
-
-    if success:
-        return {
-            "status": "unloaded",
-            "family": family,
-            "variant": variant,
-            "model_id": f"{family}/{variant}"
-        }
-    else:
-        return {
-            "status": "not_loaded",
-            "family": family,
-            "variant": variant,
-            "message": "Model was not loaded, nothing to unload."
-        }
-
-
-@app.post("/models/cleanup",
-          summary="Cleanup Inactive Models",
-          description="Unload models that haven't been used recently.")
-def cleanup_inactive_models(inactive_seconds: int = 600):
-    """
-    Cleanup models that haven't been used in the specified time period.
-
-    Args:
-        inactive_seconds: Time threshold in seconds (default: 600 = 10 minutes)
-
-    Returns:
-        dict: Cleanup results
-    """
-    if not hasattr(app.state, "model_manager"):
-        raise HTTPException(status_code=503, detail="Model manager not initialized.")
-
-    count = app.state.model_manager.cleanup_inactive_models(inactive_seconds)
-
-    return {
-        "status": "completed",
-        "models_unloaded": count,
-        "inactive_threshold_seconds": inactive_seconds
-    }
+    return {"models": app.state.model_manager.loaded()}
