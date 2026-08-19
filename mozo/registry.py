@@ -81,6 +81,20 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         'variants': ['nano', 'small', 'medium', 'large', 'xlarge'],
     },
+
+    'yolov12': {
+        'adapter_class': 'YOLOv12Predictor',
+        'module': 'mozo.adapters.yolov12',
+        'task_type': 'object_detection',
+        'description': (
+            'YOLO12 by Ultralytics -- real-time object detection with area attention. '
+            '5 variants (nano/small/medium/large/xlarge). '
+            'The weights are AGPL-3.0, unlike the rest of mozo: serving predictions from them '
+            'over a network places obligations on you. See the NOTICE published beside each '
+            'checkpoint.'
+        ),
+        'variants': ['nano', 'small', 'medium', 'large', 'xlarge'],
+    },
 }
 
 
