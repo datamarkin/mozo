@@ -33,13 +33,14 @@ missing this script says so and prints the command to fetch it.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import shutil
-import urllib.request
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+
+from common import download_verified, require_licence  # noqa: E402
 
 _HF = "https://huggingface.co/depth-anything"
 
@@ -125,17 +126,6 @@ CHECKPOINTS: dict[str, Checkpoint] = {
 }
 
 
-_CHUNK = 1 << 20
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(_CHUNK), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _notice(variant: str, entry: Checkpoint) -> str:
     """Attribution that travels with the weights, as both licences require."""
     descent = ""
@@ -168,57 +158,15 @@ LICENCE_SOURCES = {
 }
 
 
-def require_licence(revision_dir: Path, licence: str) -> None:
-    """Fail if the revision has no LICENSE, saying exactly how to supply one.
-
-    Deliberately not carried forward from a previous revision. A new revision is where an
-    upstream relicence would show up, and silently copying the old terms is how that gets
-    missed.
-    """
-    if (revision_dir / "LICENSE").is_file():
-        return
-    raise SystemExit(
-        f"{revision_dir} has no LICENSE, and every published revision ships one.\n"
-        f"This checkpoint is {licence}:\n"
-        f"    curl -sL {LICENCE_SOURCES[licence]} -o {revision_dir / 'LICENSE'}"
-    )
-
-
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
     """Download one variant's checkpoint, verify it, and place it with its licence and notice."""
     entry = CHECKPOINTS[variant]
     target = weights_dir / "depth_anything_v2" / variant / revision / "torch-fp32.pth"
-
-    if target.is_file() and _sha256(target) == entry.sha256:
-        print(f"  {variant:<15} already present, sha256 matches", flush=True)
-    else:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Staged beside the target, not in $TMPDIR: these are gigabyte checkpoints, and a
-        # cross-filesystem move would copy every byte a second time. Here the finish is a rename.
-        # The digest is computed while the bytes are written, so nothing is read back to verify.
-        staged = target.with_name(target.name + ".part")
-        print(f"  {variant:<15} downloading {entry.url}", flush=True)
-        digest = hashlib.sha256()
-        try:
-            with urllib.request.urlopen(entry.url, timeout=300) as response, staged.open("wb") as out:
-                for chunk in iter(lambda: response.read(_CHUNK), b""):
-                    digest.update(chunk)
-                    out.write(chunk)
-
-            actual = digest.hexdigest()
-            if actual != entry.sha256:
-                raise SystemExit(
-                    f"{variant}: sha256 mismatch. Expected {entry.sha256}, got {actual}. "
-                    f"Upstream may have re-released this checkpoint; do not publish it until the "
-                    f"change is understood."
-                )
-            staged.replace(target)
-        finally:
-            staged.unlink(missing_ok=True)
-        print(f"  {variant:<15} ok, {target.stat().st_size / 1e6:.1f} MB, {entry.licence}", flush=True)
+    download_verified(entry.url, target, entry.sha256, label=variant, width=15,
+                      detail=entry.licence)
 
     (target.parent / "NOTICE").write_text(_notice(variant, entry))
-    require_licence(target.parent, entry.licence)
+    require_licence(target.parent, entry.licence, LICENCE_SOURCES[entry.licence])
 
 
 def main() -> int:
