@@ -23,7 +23,7 @@ Environment:
 
 from __future__ import annotations
 
-__all__ = ["WeightsError", "artifacts", "cache_dir", "manifest", "resolve"]
+__all__ = ["WeightsError", "artifacts", "cache_dir", "companions", "manifest", "resolve"]
 
 import hashlib
 import json
@@ -195,6 +195,25 @@ def artifacts(family: str, variant: str, *, revision: str | None = None) -> list
     """
     _, entry = _lookup(family, variant, revision)
     return sorted(k for k in entry["artifacts"] if k not in _ACCOMPANYING)
+
+
+def companions(family: str, variant: str, *, revision: str | None = None) -> list[str]:
+    """Return the accompanying artifact keys a revision publishes.
+
+    The complement of :func:`artifacts`, which filters these out because they ship with whatever
+    you asked for rather than being a thing you can run. A caller that needs to check a model's
+    terms travelled with it asks here, instead of walking the manifest -- its layout is this
+    module's to know.
+
+    Raises:
+        WeightsError: If the model or revision is not published.
+
+    Examples:
+        >>> companions("rfdetr", "small")  # doctest: +SKIP
+        ['LICENSE']
+    """
+    _, entry = _lookup(family, variant, revision)
+    return sorted(k for k in entry["artifacts"] if k in _ACCOMPANYING)
 
 
 def resolve(
