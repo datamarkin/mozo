@@ -101,6 +101,43 @@ class TestUnknownModels:
         assert response.status_code == 404
 
 
+class TestCatalogue:
+    """The shape ``/models`` promises, because something already reads it.
+
+    ``mozo/static/test_ui.html`` builds its dropdowns from this response. Dropping a field it
+    reads renders "undefined variants" in the browser and nothing anywhere fails -- which is
+    what happened to ``num_variants``. Pinning the fields the page actually uses is cheaper
+    than finding out by looking.
+    """
+
+    def test_every_family_carries_what_the_page_reads(self, client):
+        from mozo.registry import MODEL_REGISTRY
+
+        body = client.get("/models").json()
+        assert set(body) == set(MODEL_REGISTRY)
+        for family, info in body.items():
+            assert info["task_type"] and info["description"]
+            assert isinstance(info["variants"], list) and info["variants"]
+
+    def test_the_catalogue_matches_the_registry(self, client):
+        """It is a projection of the registry, so it must not drift from one."""
+        from mozo.registry import MODEL_REGISTRY
+
+        body = client.get("/models").json()
+        for family, entry in MODEL_REGISTRY.items():
+            assert body[family]["variants"] == entry["variants"]
+
+    def test_residency_is_reported_by_its_own_endpoint(self, client):
+        body = client.get("/models/loaded").json()
+        assert body["models"] == client.app.state.model_manager.loaded()
+
+    def test_the_catalogue_costs_no_model_loads(self, client):
+        """It is answered from the registry alone -- no adapter import, no torch, no weights."""
+        before = client.app.state.model_manager.loaded()
+        client.get("/models")
+        assert client.app.state.model_manager.loaded() == before
+
+
 class TestDetectionResponse:
     def test_detections_come_back_as_json(self, client, payload):
         response = post(client, payload, "rfdetr", "nano")
