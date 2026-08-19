@@ -1,0 +1,27 @@
+yolov26
+Copyright 2026 the yolov26 authors
+
+This product includes software developed by the yolov26 authors.
+
+CODE LICENSE
+------------
+Everything in this repository — every source file, test and document — is licensed under the
+Apache License, Version 2.0. See LICENSE for the full text. The code was written from an
+understanding of what the network computes; it is not derived from, and does not copy, any
+other implementation.
+
+MODEL WEIGHTS ARE NOT COVERED BY THIS LICENSE
+---------------------------------------------
+Model weights are licensed separately from this code, and the Apache-2.0 license above does not
+extend to them. This package ships no weights: it reads a checkpoint file that you supply.
+
+Checkpoints trained and published by Ultralytics — including the YOLO26 checkpoints this package
+was validated against — are licensed under AGPL-3.0 (https://ultralytics.com/license). Loading
+such a checkpoint does not change the license of this code, and this code does not change the
+license of the checkpoint. You are responsible for complying with the terms of whatever weights
+you load, including any obligation those terms place on how you distribute or serve the results.
+
+RELATIONSHIP TO THE ULTRALYTICS PACKAGE
+---------------------------------------
+This package neither bundles nor depends on the `ultralytics` package, and never imports it. It
+reads the checkpoint archive directly and refuses to import any class the file names.
