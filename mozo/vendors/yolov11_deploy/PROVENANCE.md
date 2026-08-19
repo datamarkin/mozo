@@ -86,7 +86,7 @@ are recorded here because deleting the tests would otherwise have deleted the on
 
 **One thing this table cannot show.** Both reference photographs letterbox to whole-pixel padding —
 80.0 and 140.0 — so they agree under either padding convention, and the half-pixel disagreement
-described below is invisible to every number above. `tests/test_letterbox_geometry.py` covers what
+described below is invisible to every number above. `tests/test_vendor_agreement.py` covers what
 the table cannot.
 
 ## What mozo changed on harvesting
@@ -119,7 +119,7 @@ library rather than a vendor, plus one correction.
   where the image was put and where the arithmetic thinks it was, or `0.5 / gain` source pixels —
   1.5 px on mozo's fixture photograph, on every box, always in the same direction. `image.py` now
   reports the floored placement, which is the one that actually happened, and
-  `tests/test_letterbox_geometry.py` holds both YOLO vendors to it by counting the border rows the
+  `tests/test_vendor_agreement.py` holds both YOLO vendors to it by counting the border rows the
   letterbox really wrote. The sibling vendor already floored and did not change.
 
 `tools/verify/yolov11.py` re-runs the vendor-against-mozo comparison over any images you give it.
