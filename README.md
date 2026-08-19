@@ -46,9 +46,9 @@ curl http://localhost:8000/models
 - **17 Published Variants** - RF-DETR (8) and Depth Anything V2 (9), weights hosted and hash-verified
 - **Vendored Architectures** - no upstream package needed, each verified bit-identical to it
 - **Multiple Runtimes** - the same model as torch, ONNX or CoreML, chosen automatically per device
-- **Automatic Memory Management** - Lazy loading, usage tracking, automatic cleanup
+- **Lazy Loading** - Models load on first use and are reused across requests
 - **PixelFlow Integration** - Detection models return a unified format for filtering and annotation
-- **Thread-Safe** - Concurrent request handling with per-model locks
+- **Thread-Safe** - Concurrent requests share one loaded model, built once
 - **Production Ready** - Multiple workers, configurable timeouts, health checks
 
 ## Installation
@@ -160,28 +160,7 @@ Returns all available model families and variants.
 GET /models/loaded
 ```
 
-Returns currently loaded models with usage information.
-
-### Get Model Info
-```http
-GET /models/{family}/{variant}/info
-```
-
-Returns detailed information about a specific model variant.
-
-### Unload Model
-```http
-POST /models/{family}/{variant}/unload
-```
-
-Manually unload a model to free memory.
-
-### Cleanup Inactive Models
-```http
-POST /models/cleanup?inactive_seconds=600
-```
-
-Unload models inactive for specified duration (default: 600 seconds).
+Returns the models currently in memory.
 
 ## How It Works
 
@@ -191,11 +170,8 @@ Models load on first request, not at server startup. This keeps startup time ins
 **Smart Caching**
 Loaded models stay in memory and are reused across requests. First request is slower (model download + load), subsequent requests are fast.
 
-**Usage Tracking**
-Each model access updates a timestamp. Models inactive for 10+ minutes are automatically unloaded.
-
 **Thread Safety**
-Per-model locks ensure only one thread loads a given model. Other threads wait and reuse the loaded instance.
+A model is built once however many requests arrive for it at the same moment, and a request for a model already in memory never waits behind an unrelated load.
 
 Example flow:
 ```bash
@@ -204,14 +180,11 @@ mozo start
 
 # First request loads model
 curl -X POST "http://localhost:8000/predict/rfdetr/medium" -F "file=@test.jpg"
-# Output: [ModelManager] Loading model: rfdetr/medium...
+# Output: [mozo] loading rfdetr/medium
 
 # Subsequent requests reuse loaded model
 curl -X POST "http://localhost:8000/predict/rfdetr/medium" -F "file=@test2.jpg"
-# Output: [ModelManager] Model already loaded, reusing existing instance.
-
-# After 10 minutes of inactivity, model auto-unloads
-# Output: [ModelManager] Cleanup: Unloaded 1 inactive model(s).
+# Served from memory, nothing logged
 ```
 
 ## Python SDK
@@ -220,20 +193,19 @@ For direct integration in Python applications:
 
 ```python
 from mozo import ModelManager
-import cv2
 
 manager = ModelManager()
 model = manager.get_model('rfdetr', 'medium')
 
-image = cv2.imread('image.jpg')
-detections = model.predict(image)
+# A path, encoded bytes, or an RGB array. Decode with mozo.image.load_image rather than
+# cv2.imread, which returns BGR and would silently give a slightly wrong answer.
+detections = model.predict('image.jpg')
 
 # Filter results
 high_confidence = detections.filter_by_confidence(0.8)
 
-# Manual memory management
-manager.unload_model('rfdetr', 'medium')
-manager.cleanup_inactive_models(inactive_seconds=300)
+# A separate manager is a separate lifetime — drop it and its models go with it
+scratch = ModelManager()
 ```
 
 ### Custom Weights
@@ -283,16 +255,8 @@ export HF_HOME=~/.cache/huggingface
 
 ### Memory Management
 
-Models automatically unload after 10 minutes of inactivity. Adjust this:
-
-```bash
-curl -X POST "http://localhost:8000/models/cleanup?inactive_seconds=300"
-```
-
-Or in Python:
-```python
-manager.cleanup_inactive_models(inactive_seconds=300)
-```
+Models load on first use and stay for the life of the process. Memory is yours to manage: load
+what you need, and use a separate `ModelManager` when you want a separate lifetime.
 
 ## Extending Mozo
 
@@ -305,19 +269,19 @@ Add new models in 3 steps:
 ## Architecture
 
 ```
-HTTP Request → FastAPI Server → ModelManager → ModelFactory → Adapter → Framework
+HTTP Request → FastAPI Server → ModelManager → Adapter → Vendor
                                       ↓
-                               Thread-safe cache
-                               Usage tracking
-                               Auto cleanup
+                                Thread-safe cache
 ```
 
 Components:
 - **Server** - FastAPI REST API
-- **Manager** - Lifecycle management, caching, cleanup
-- **Factory** - Dynamic adapter instantiation
-- **Registry** - Central catalog of models
-- **Adapters** - Framework-specific implementations
+- **Manager** - Thread-safe cache of loaded models
+- **Registry** - Catalog of families, answerable without importing torch
+- **Adapters** - One per family, translating between mozo and a vendor
+- **Weights** - Manifest lookup, download, hash verification
+- **Runtimes** - Device detection and artifact selection (torch / ONNX / CoreML)
+- **Image** - The one decode boundary: RGB, uint8, HxWx3
 
 ## Development
 
