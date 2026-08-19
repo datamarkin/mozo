@@ -12,7 +12,7 @@ The placement is reported floored, and :func:`to_original` subtracts exactly wha
 The harvest reported the unrounded half instead, which is half a canvas pixel away from where it
 put the image -- ``0.5 / gain`` source pixels, 1.5 px on mozo's own fixture. Both parity suites
 upstream ran on images that pad to whole pixels, where the two agree, so neither could see it.
-``tests/test_letterbox_geometry.py`` measures the border actually written and holds this module
+``tests/test_vendor_agreement.py`` measures the border actually written and holds this module
 to it.
 """
 
