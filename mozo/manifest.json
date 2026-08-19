@@ -754,8 +754,8 @@
             },
             "coreml-fp32": {
               "path": "yolov12/nano/2026-08-19/coreml-fp32.zip",
-              "sha256": "196f804dd93fc01bc407993cb1ed1805f03e13f4371a7856ba2f25788a313a5d",
-              "size": 9279048
+              "sha256": "be69ed07600a40aa5c03af4a252ed5107930c0d1929acff73e6c46e834d34d09",
+              "size": 9278864
             },
             "labels": {
               "path": "yolov12/nano/2026-08-19/labels.json",
@@ -764,8 +764,8 @@
             },
             "onnx-fp32": {
               "path": "yolov12/nano/2026-08-19/onnx-fp32.onnx",
-              "sha256": "6c682c46a76e135cb93d4d9066eeaf7c675a32ec4aaa558749208ec879af99bf",
-              "size": 10660696
+              "sha256": "fcde0b950d72799f72fcbaaa3e48dbbd553f662b99ea2d8a12747d8e541b6299",
+              "size": 10662141
             },
             "torch-fp32": {
               "path": "yolov12/nano/2026-08-19/torch-fp32.pth",
@@ -849,6 +849,176 @@
               "path": "yolov12/xlarge/2026-08-19/torch-fp32.pth",
               "sha256": "682ce8dadee004dbe964950f1bf3eda451671815a6ed62db80b398916b9b7c6f",
               "size": 119322638
+            }
+          }
+        }
+      }
+    },
+    "yolov26/large": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov26/large/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov26/large/2026-08-19/NOTICE",
+              "sha256": "852d763d18a262f8bf79e59f9ee72e218089965cefddede5125a4f119e7dfa9a",
+              "size": 950
+            },
+            "labels": {
+              "path": "yolov26/large/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/large/2026-08-19/onnx-fp32.onnx",
+              "sha256": "3fce7b7f0351acc2b22cade5e288ae98eebe00ddd07e51cb80bf96851d20834e",
+              "size": 99538353
+            },
+            "torch-fp32": {
+              "path": "yolov26/large/2026-08-19/torch-fp32.pth",
+              "sha256": "9fe3c544f2b19bebad7ea41e76d7ad3d88b7c2f10d11d24430c5311f6b32db26",
+              "size": 53211173
+            }
+          }
+        }
+      }
+    },
+    "yolov26/medium": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov26/medium/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov26/medium/2026-08-19/NOTICE",
+              "sha256": "7051e16fdd54aa349f718c34ec49137e82e355fa390272d94c5d4fc3ff6c0835",
+              "size": 951
+            },
+            "labels": {
+              "path": "yolov26/medium/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/medium/2026-08-19/onnx-fp32.onnx",
+              "sha256": "c426af9352f26f603a8a72922331d2eb3f46ee347fb7094c6bcf95c6cc08994a",
+              "size": 81913032
+            },
+            "torch-fp32": {
+              "path": "yolov26/medium/2026-08-19/torch-fp32.pth",
+              "sha256": "401cea9ab23ad19246ff7744859816bc599f350e93c9dd30367b6f0a0745d0b7",
+              "size": 44255705
+            }
+          }
+        }
+      }
+    },
+    "yolov26/nano": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov26/nano/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov26/nano/2026-08-19/NOTICE",
+              "sha256": "fbb9834a1eab2ea5665b296f6ac76c4ba4c089ebfab701399d73f780f8293d64",
+              "size": 949
+            },
+            "labels": {
+              "path": "yolov26/nano/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/nano/2026-08-19/onnx-fp32.onnx",
+              "sha256": "e8eb449b541bc808521845057ae9c99d64b352c32f529e22f2e73abbf687823c",
+              "size": 9896829
+            },
+            "torch-fp32": {
+              "path": "yolov26/nano/2026-08-19/torch-fp32.pth",
+              "sha256": "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
+              "size": 5544453
+            }
+          }
+        }
+      }
+    },
+    "yolov26/small": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov26/small/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov26/small/2026-08-19/NOTICE",
+              "sha256": "f9dce769889798f5288c13fcf32feed3d9ac93531b5471287ef09caae252c7f1",
+              "size": 950
+            },
+            "labels": {
+              "path": "yolov26/small/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/small/2026-08-19/onnx-fp32.onnx",
+              "sha256": "10600a89c67a68909bfb0881e05ec2530b35b9a6442ec5d5af4ed61ce6addc7d",
+              "size": 38245820
+            },
+            "torch-fp32": {
+              "path": "yolov26/small/2026-08-19/torch-fp32.pth",
+              "sha256": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+              "size": 20422725
+            }
+          }
+        }
+      }
+    },
+    "yolov26/xlarge": {
+      "latest": "2026-08-19",
+      "revisions": {
+        "2026-08-19": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov26/xlarge/2026-08-19/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov26/xlarge/2026-08-19/NOTICE",
+              "sha256": "b5c9664629fbdd0064b094eb38ea989fa0cb28c816dd5640d9d2a934da8364cb",
+              "size": 951
+            },
+            "labels": {
+              "path": "yolov26/xlarge/2026-08-19/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/xlarge/2026-08-19/onnx-fp32.onnx",
+              "sha256": "caa52c160feb5bafa75a89a115a061908ba2c20d3fa9ebd190faf86f5b4dde23",
+              "size": 223212497
+            },
+            "torch-fp32": {
+              "path": "yolov26/xlarge/2026-08-19/torch-fp32.pth",
+              "sha256": "9fdd44a31c504547ffb81d2c6d9e6dac3493c8eaa8b0398d3f43bae6c7003e92",
+              "size": 118667365
             }
           }
         }
@@ -949,8 +1119,8 @@
             },
             "coreml-fp32": {
               "path": "yolov8/nano/2026-08-19/coreml-fp32.zip",
-              "sha256": "c7be51c25c7a5bfbf786b40d86827ba5128c14cf032e32f6938180f27c946ef8",
-              "size": 11062749
+              "sha256": "8b68d52954d42b1c0d92d212154618eb8bd60559c4d8204c2144bfdabdcfff60",
+              "size": 11062586
             },
             "labels": {
               "path": "yolov8/nano/2026-08-19/labels.json",
