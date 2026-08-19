@@ -2,13 +2,13 @@
 
 mozo's detection vendors are deliberately independent copies of each other -- see any of their
 PROVENANCE.md files for why. That buys reproducibility against each upstream and costs the usual
-thing: three copies drift, and the ways they drift are invisible. A vendor that letterboxes
-slightly differently still runs, still finds the right objects, and reports every one of them in
-the wrong place, so nothing else in the suite fails.
+thing: four copies drift, and the ways they drift are invisible. A vendor that letterboxes slightly
+differently still runs, still finds the right objects, and reports every one of them in the wrong
+place, so nothing else in the suite fails.
 
 This file is the compensating control. Each invariant here is measured rather than asserted, and
-every vendor is discovered rather than listed, so a fourth family is covered by existing rather
-than by someone remembering to add a line.
+every vendor is discovered rather than listed. That has now been paid off once: the fourth family
+landed already covered, without a line added here.
 
 **The letterbox and its inverse must agree about where the image was put.** For a source whose
 scaled side is odd the spare space is a half pixel, and rounding it one way in the placement and
@@ -20,8 +20,14 @@ actually wrote and requiring the inverse to remove precisely those.
 **Suppression must separate classes even at negative coordinates**, which is where a
 too-narrow class-separating band stops separating.
 
-**The vendors must agree on their suppression defaults**, because mozo's adapters do not pass one
-and the vendor default is therefore what every served prediction uses.
+**The vendors that suppress must agree on their defaults**, because mozo's adapters do not pass an
+overlap threshold and the vendor default is therefore what every served prediction uses.
+
+The last two apply only to the families that suppress. YOLO26 is trained to fire once per object
+and returns a ranked detection list from the network itself, so it has no ``suppress`` and no
+``iou`` -- a fact about the architecture, not a hole in the coverage. :func:`suppresses` is the one
+place that is decided, and both tests report the family they skipped rather than dropping it in
+silence.
 """
 
 from __future__ import annotations
@@ -55,8 +61,19 @@ SIZE = 640
 
 @pytest.fixture(params=VENDOR_PACKAGES)
 def vendor(request):
-    """One vendor's image module: letterboxing, suppression and the coordinate mapping."""
+    """One vendor's image module: letterboxing and the coordinate mapping."""
     return importlib.import_module(f"{request.param}.image")
+
+
+def suppresses(package: str) -> bool:
+    """Whether *package* suppresses at all, asked once so two tests cannot disagree about it.
+
+    A family whose head fires once per object has nothing to suppress, so it exposes no
+    ``suppress`` and its ``detect`` takes no overlap threshold. Both follow from one architectural
+    fact, and reading it in one place is what stops a family that keeps an ignored ``iou=`` kwarg
+    for compatibility from being skipped by one test and included by the other.
+    """
+    return hasattr(importlib.import_module(f"{package}.image"), "suppress")
 
 
 def _placement(canvas: np.ndarray, border: int) -> tuple[int, int]:
@@ -162,6 +179,9 @@ def test_classes_cannot_suppress_each_other_across_the_padded_edge(vendor):
     box (200) and leaves an overlap of only 0.14. Spanning -1000..10 makes the narrow shift 11
     against a box of 1010, an overlap of 0.98, which suppresses.
     """
+    if not hasattr(vendor, "suppress"):
+        pytest.skip(f"{vendor.__name__} is NMS-free: its network returns a detection list")
+
     # (4 + classes, anchors): two anchors, two classes, centre-form boxes sharing one position
     # that runs far off the left and top edges.
     prediction = torch.zeros(6, 2)
@@ -190,10 +210,17 @@ def test_the_vendors_agree_on_their_suppression_defaults():
     """
     defaults = {}
     for package in VENDOR_PACKAGES:
-        detect = importlib.import_module(f"{package}.model").detect
-        signature = inspect.signature(detect)
-        defaults[package] = (signature.parameters["conf"].default,
-                             signature.parameters["iou"].default,
-                             signature.parameters["max_det"].default)
+        if not suppresses(package):
+            print(f"skipping {package}: NMS-free, nothing to overlap")
+            continue
+        parameters = inspect.signature(importlib.import_module(f"{package}.model").detect).parameters
+        defaults[package] = tuple(parameters[name].default for name in ("conf", "iou", "max_det"))
 
+    assert len(defaults) >= 2, f"expected several suppressing vendors, found {sorted(defaults)}"
     assert len(set(defaults.values())) == 1, f"vendors disagree on suppression defaults: {defaults}"
+    # Pinned to a value, not only to each other. Agreement alone would let a coordinated drift --
+    # a new harvest arrives at 0.45 and the others are "fixed" to match, which is how the
+    # assertion above invites you to resolve a failure -- silently change the conditions every
+    # published artifact was verified under, because tools/export passes no overlap threshold and
+    # takes these very defaults.
+    assert next(iter(defaults.values())) == (0.25, 0.7, 300)
