@@ -1,0 +1,25 @@
+yolov8 — standalone detection inference for YOLOv8-format checkpoints
+
+The CODE in this package is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full text.
+
+MODEL WEIGHTS ARE NOT COVERED BY THAT LICENSE.
+
+Weights are separately licensed by whoever produced them, and loading a
+checkpoint with this package does not change its terms:
+
+  * Checkpoints published or trained by Ultralytics are licensed under
+    AGPL-3.0 (https://ultralytics.com/license), or under a commercial
+    Ultralytics licence where the holder has one.
+  * Checkpoints you trained yourself, or obtained elsewhere, carry whatever
+    terms came with them and with the data they were trained on.
+
+You are responsible for complying with the terms of any weights you load,
+including any obligation they place on the distribution or network use of
+work derived from them.
+
+This package neither bundles model weights nor depends on, imports, or
+contains any code from the `ultralytics` package. It reads the checkpoint
+file format directly: the archive is unpacked with the Python standard
+library, and every class it names is resolved to an inert placeholder rather
+than being imported.
