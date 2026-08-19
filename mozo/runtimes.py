@@ -281,6 +281,8 @@ class OnnxRunner:
         outputs: Output tensor names, in the order the graph declares them.
         input_dtype: What the graph wants fed to it. An fp16 artifact declares fp16 inputs, and
             callers should not have to know that -- :meth:`__call__` casts.
+        input_shape: The first input's declared shape. A graph exported at a fixed side fixes the
+            size its caller must letterbox to, and asking it beats assuming.
 
     Examples:
         >>> run = OnnxRunner("model.onnx", device="cpu")  # doctest: +SKIP
@@ -305,6 +307,7 @@ class OnnxRunner:
         self.inputs: list[str] = [i.name for i in self._session.get_inputs()]
         self.outputs: list[str] = [o.name for o in self._session.get_outputs()]
         self.input_dtype = _ORT_DTYPES.get(self._session.get_inputs()[0].type, np.float32)
+        self.input_shape: tuple = tuple(self._session.get_inputs()[0].shape)
 
         if self.provider != wanted[0]:
             print(
