@@ -14,12 +14,24 @@ is the one failure this whole scheme exists to prevent. The check compares *dete
 photographs rather than raw tensors -- what matters is that the two artifacts find the same
 objects in the same places, and a tensor tolerance measures kernel arithmetic instead.
 
-Two artifacts land in ``weights/yolov8/<variant>/<revision>/``:
+Two artifacts land in ``weights/yolov8/<variant>/<revision>/``, both mapping a letterboxed
+``(1, 3, imgsz, imgsz)`` batch to the raw head output ``(1, 4 + classes, anchors)``. That is a
+classic head, so whoever runs one still applies non-maximum suppression -- which mozo does with
+the vendor's own :func:`~mozo.vendors.yolov8_deploy.detect`, so every runtime shares it:
 
-``onnx-fp32``   the graph, mapping a letterboxed ``(1, 3, imgsz, imgsz)`` batch to the raw head
-                output ``(1, 4 + classes, anchors)``. This is a classic head, so whoever runs it
-                still applies non-maximum suppression -- which mozo does with the vendor's own
-                :func:`~mozo.vendors.yolov8_deploy.image.suppress`, so both runtimes share it.
+``onnx-fp32``    the graph.
+``coreml-fp32``  the same model as a CoreML package, zipped because an ``.mlpackage`` is a
+                 directory and an artifact is a file. It is the fastest way to run these models on
+                 Apple silicon by a wide margin -- measured on this laptop, nano runs 4.2 ms
+                 against 7.9 ms on torch MPS and 52.2 ms on torch CPU, and xlarge 41.1 ms against
+                 48.8 and 330.2 -- at a worst box error of 0.0004 px.
+
+There is deliberately no fp16 path, in either format. It was measured across four variants and is
+a loss everywhere: torch fp16 on MPS is *slower* than fp32 (8.2 ms against 7.9 on nano) and moves
+boxes 0.76 px; ONNX fp16 is slower too (43.2 against 34.4). CoreML fp16 is the one that is
+genuinely faster, 1.3-1.6x, but it is wrong by 1.5 px on small, 108 px on xlarge, 341 on medium
+and 636 on nano -- erratic rather than degrading with size, so the error cannot be bounded. Should
+CUDA tensor cores ever justify revisiting it, start from measurements rather than from this note.
 The class names a graph cannot carry are published by ``tools/labels/yolov8.py``, which runs over
 every variant you fetched rather than only the ones exported here -- a vocabulary is needed by any
 runtime that does not record its own, and tying it to this tool would skip the ones you never
@@ -34,7 +46,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -46,6 +60,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from mozo.image import load_image  # noqa: E402
+from mozo.runtimes import CoreMLRunner  # noqa: E402
 from mozo.vendors.yolov8_deploy import Detector, detect  # noqa: E402
 
 #: The photographs the comparison runs on.
@@ -61,6 +76,10 @@ OPSET = 17
 CONF = 0.001
 IOU = 0.7
 MAX_DET = 300
+
+#: Names both artifacts declare, so nothing downstream needs a per-runtime table.
+INPUT_NAME = "images"
+OUTPUT_NAME = "predictions"
 
 #: What the export must reproduce. Counts and class ids are exact -- an artifact that finds a
 #: different number of objects, or calls one of them something else, is not the same model.
@@ -90,22 +109,51 @@ def _detections(source: np.ndarray, forward, imgsz: int) -> tuple[np.ndarray, ..
         return tuple(t.numpy() for t in detect(source, forward, imgsz, CONF, IOU, MAX_DET))
 
 
-def _compare(image: Path, want: tuple, got: tuple) -> str:
+def _compare(image: Path, want: tuple, got: tuple, kind: str) -> str:
     """Return a one-line report, or raise if the two artifacts disagree beyond tolerance."""
     (want_boxes, want_scores, want_ids), (got_boxes, got_scores, got_ids) = want, got
     if len(want_boxes) != len(got_boxes):
         raise SystemExit(
-            f"{image.name}: torch found {len(want_boxes)} detections, ONNX found {len(got_boxes)}")
+            f"{image.name}: torch found {len(want_boxes)} detections, {kind} found {len(got_boxes)}")
     if not np.array_equal(want_ids, got_ids):
-        raise SystemExit(f"{image.name}: ONNX assigns different class ids to the same detections")
+        raise SystemExit(f"{image.name}: {kind} assigns different class ids to the same detections")
 
     box_error = float(np.abs(want_boxes - got_boxes).max()) if len(want_boxes) else 0.0
     score_error = float(np.abs(want_scores - got_scores).max()) if len(want_scores) else 0.0
     if box_error > BOX_TOLERANCE or score_error > SCORE_TOLERANCE:
         raise SystemExit(
-            f"{image.name}: exported graph differs from the torch model -- "
+            f"{image.name}: exported {kind} differs from the torch model -- "
             f"boxes {box_error:g} px, scores {score_error:g}. Not published.")
-    return f"    {image.name:<20} {len(want_boxes):>4} detections, boxes {box_error:.2e} px, scores {score_error:.2e}"
+    return (f"    {kind:<7} {image.name:<20} {len(want_boxes):>4} detections, "
+            f"boxes {box_error:.2e} px, scores {score_error:.2e}")
+
+
+def _export_coreml(network, imgsz: int, destination: Path) -> Path:
+    """Convert the traced network to a CoreML package and zip it into place.
+
+    The input and output are renamed to match the ONNX graph's, so a consumer reads one name off
+    whichever artifact it was handed rather than keeping a per-runtime table.
+
+    Written to a scratch directory first: a package that fails verification must not be left where
+    the manifest generator would pick it up.
+    """
+    import coremltools as ct
+
+    with torch.no_grad():
+        traced = torch.jit.trace(network, torch.zeros(1, 3, imgsz, imgsz))
+    with tempfile.TemporaryDirectory() as scratch:
+        model = ct.convert(
+            traced,
+            inputs=[ct.TensorType(name=INPUT_NAME, shape=(1, 3, imgsz, imgsz))],
+            compute_precision=ct.precision.FLOAT32,
+            minimum_deployment_target=ct.target.macOS13,
+        )
+        spec = model.get_spec()
+        ct.utils.rename_feature(spec, spec.description.output[0].name, OUTPUT_NAME)
+        renamed = Path(scratch) / "model.mlpackage"
+        ct.models.MLModel(spec, weights_dir=model.weights_dir).save(str(renamed))
+        shutil.make_archive(str(destination.with_suffix("")), "zip", root_dir=renamed)
+    return destination
 
 
 def export_variant(variant: str, revision: str, weights_dir: Path) -> None:
@@ -125,8 +173,8 @@ def export_variant(variant: str, revision: str, weights_dir: Path) -> None:
             detector.network,
             sample,
             str(destination),
-            input_names=["images"],
-            output_names=["predictions"],
+            input_names=[INPUT_NAME],
+            output_names=[OUTPUT_NAME],
             opset_version=OPSET,
             dynamo=False,
         )
@@ -143,17 +191,24 @@ def export_variant(variant: str, revision: str, weights_dir: Path) -> None:
     graph.metadata_props.append(onnx.StringStringEntryProto(key="end2end", value="False"))
     onnx.save(graph, destination)
 
-    session = onnxruntime.InferenceSession(str(destination), providers=["CPUExecutionProvider"])
-    for image in _fixtures():
-        # Decoded once and fed to both, so the two sides provably start from the same pixels --
-        # and so the comparison does not pay for a second JPEG decode it cannot learn anything from.
-        source = load_image(str(image))
-        want = _detections(source, detector.forward, detector.imgsz)
-        got = _detections(
-            source, lambda b: torch.from_numpy(session.run(None, {"images": b.numpy()})[0]), detector.imgsz)
-        print(_compare(image, want, got))
+    # Decoded once and shared by every comparison below, so each artifact provably starts from
+    # the same pixels -- and so this does not pay for a JPEG decode per runtime per image.
+    sources = {image: load_image(str(image)) for image in _fixtures()}
+    reference = {image: _detections(pixels, detector.forward, detector.imgsz)
+                 for image, pixels in sources.items()}
 
+    session = onnxruntime.InferenceSession(str(destination), providers=["CPUExecutionProvider"])
+    onnx_forward = lambda b: torch.from_numpy(session.run(None, {INPUT_NAME: b.numpy()})[0])  # noqa: E731
+    for image, pixels in sources.items():
+        print(_compare(image, reference[image], _detections(pixels, onnx_forward, detector.imgsz), "onnx"))
     print(f"    onnx-fp32.onnx {destination.stat().st_size / 1e6:.1f} MB")
+
+    coreml = _export_coreml(detector.network, detector.imgsz, revision_dir / "coreml-fp32.zip")
+    runner = CoreMLRunner(coreml)
+    coreml_forward = lambda b: torch.from_numpy(runner(b.numpy())[0]).float()  # noqa: E731
+    for image, pixels in sources.items():
+        print(_compare(image, reference[image], _detections(pixels, coreml_forward, detector.imgsz), "coreml"))
+    print(f"    coreml-fp32.zip {coreml.stat().st_size / 1e6:.1f} MB")
 
 
 def main() -> int:
