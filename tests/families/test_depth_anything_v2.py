@@ -14,15 +14,14 @@ be worse than no test at all.
 
 from __future__ import annotations
 
-import cv2
 import numpy as np
 import pytest
 
 from mozo.vendors.depth_anything_v2_deploy import MODEL_SPECS, get_spec
-from mozo.weights import WeightsError, artifacts
+from conftest import FIXTURE, published, require_weights
+from mozo.weights import WeightsError
 
 FAMILY = "depth_anything_v2"
-FIXTURE = "tests/fixtures/images/example.jpg"
 
 RELATIVE = ("small", "base", "large")
 METRIC = ("indoor-small", "indoor-base", "indoor-large",
@@ -32,23 +31,6 @@ ALL = RELATIVE + METRIC
 #: One small variant per group is enough for the tests that actually load weights; the encoder
 #: sizes differ in width, not in behaviour, and vitl costs 1.3 GB to prove the same point.
 SAMPLED = ("small", "indoor-small", "outdoor-small")
-
-
-def _published(variant: str) -> list[str]:
-    try:
-        return artifacts(FAMILY, variant)
-    except WeightsError:
-        return []
-
-
-def _require(variant: str, runtime: str = "torch-fp32") -> None:
-    if runtime not in _published(variant):
-        pytest.skip(f"{FAMILY}/{variant} does not publish {runtime}")
-
-
-@pytest.fixture(scope="module")
-def image():
-    return cv2.imread(FIXTURE)
 
 
 @pytest.fixture(scope="module")
@@ -101,15 +83,15 @@ class TestVariantTable:
 class TestPublished:
     @pytest.mark.parametrize("variant", ALL)
     def test_every_variant_publishes_torch(self, variant):
-        published = _published(variant)
-        if not published:
+        keys = published("depth_anything_v2", variant)
+        if not keys:
             pytest.skip(f"{FAMILY}/{variant} is not published locally")
-        assert "torch-fp32" in published
+        assert "torch-fp32" in keys
 
     @pytest.mark.parametrize("variant", ALL)
     def test_licence_and_notice_are_not_offered_as_runtimes(self, variant):
         # They travel with whatever you asked for; they are never a thing you ask for.
-        assert not ({"LICENSE", "NOTICE"} & set(_published(variant)))
+        assert not ({"LICENSE", "NOTICE"} & set(published("depth_anything_v2", variant)))
 
 
 class TestPreprocessing:
@@ -117,7 +99,7 @@ class TestPreprocessing:
 
     @pytest.mark.parametrize("shape", [(1281, 1920, 3), (480, 640, 3), (900, 600, 3), (518, 518, 3)])
     def test_shorter_side_is_518_and_both_sides_are_multiples_of_14(self, predictor_for, shape):
-        _require("small")
+        require_weights("depth_anything_v2", "small")
         predictor = predictor_for("small")._predictor
         tensor, size = predictor.preprocess(np.zeros(shape, dtype=np.uint8))
 
@@ -127,7 +109,7 @@ class TestPreprocessing:
         assert min(height, width) == 518
 
     def test_a_wide_image_is_not_squashed_to_a_square(self, predictor_for):
-        _require("small")
+        require_weights("depth_anything_v2", "small")
         predictor = predictor_for("small")._predictor
         tensor, _ = predictor.preprocess(np.zeros((1000, 2000, 3), dtype=np.uint8))
         height, width = tensor.shape[-2:]
@@ -137,19 +119,19 @@ class TestPreprocessing:
 class TestDepthMaps:
     @pytest.mark.parametrize("variant", SAMPLED)
     def test_output_matches_the_input_resolution(self, predictor_for, image, variant):
-        _require(variant)
+        require_weights("depth_anything_v2", variant)
         depth = predictor_for(variant).predict(image)
         assert depth.shape == image.shape[:2]
         assert depth.dtype == np.float32
 
     @pytest.mark.parametrize("variant", SAMPLED)
     def test_accepts_a_path_as_well_as_an_array(self, predictor_for, image, variant):
-        _require(variant)
+        require_weights("depth_anything_v2", variant)
         from_path = predictor_for(variant).predict(FIXTURE)
         assert np.array_equal(from_path, predictor_for(variant).predict(image))
 
     def test_relative_depth_is_unitless(self, predictor_for, image):
-        _require("small")
+        require_weights("depth_anything_v2", "small")
         model = predictor_for("small")
         assert model.unit is None
         assert model.max_depth is None
@@ -162,7 +144,7 @@ class TestDepthMaps:
     @pytest.mark.parametrize("variant,ceiling", [("indoor-small", 20.0), ("outdoor-small", 80.0)])
     def test_metric_depth_is_metres_within_the_variants_ceiling(self, predictor_for, image,
                                                                 variant, ceiling):
-        _require(variant)
+        require_weights("depth_anything_v2", variant)
         model = predictor_for(variant)
         assert model.unit == "metres"
         assert model.max_depth == ceiling
@@ -172,8 +154,8 @@ class TestDepthMaps:
 
     def test_indoor_and_outdoor_disagree_about_the_same_scene(self, predictor_for, image):
         """Two metric variants are two different models, not one with a scale factor."""
-        _require("indoor-small")
-        _require("outdoor-small")
+        require_weights("depth_anything_v2", "indoor-small")
+        require_weights("depth_anything_v2", "outdoor-small")
         indoor = predictor_for("indoor-small").predict(image)
         outdoor = predictor_for("outdoor-small").predict(image)
         assert not np.allclose(indoor, outdoor)

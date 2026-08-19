@@ -275,6 +275,9 @@ def main() -> int:
                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"})[:args.limit]
     if not paths:
         raise SystemExit(f"no images in {args.images}")
+    # BGR on both sides, deliberately. This compares the *vendor* against upstream, and the
+    # vendor keeps upstream's contract verbatim -- ``cv2.imread`` order, converted internally.
+    # mozo's RGB contract lives one layer up, in the adapter; it is not in this comparison.
     images = [cv2.imread(str(p)) for p in paths]
 
     print(f"device {device}, upstream {head[:12]}, {len(images)} images, {args.iters} timed passes\n")

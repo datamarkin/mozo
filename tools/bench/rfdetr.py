@@ -28,7 +28,6 @@ import time
 import warnings
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 warnings.filterwarnings("ignore")
@@ -38,6 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(ROOT))
 
+from mozo.utils import load_image
 from mozo.runtimes import runnable  # noqa: E402
 from mozo.weights import WeightsError, artifacts  # noqa: E402
 
@@ -206,7 +206,9 @@ def main() -> int:
                    if p.suffix.lower() in {".jpg", ".jpeg", ".png"})[:args.limit]
     if len(paths) < args.limit:
         print(f"warning: only {len(paths)} images available", file=sys.stderr)
-    arrays = [cv2.imread(str(p)) for p in paths]
+    # Our model takes mozo's contract (RGB); the upstream baseline reads the same files
+    # itself through PIL, so the two never share an array.
+    arrays = [load_image(str(p)) for p in paths]
     print(f"{len(paths)} images, {args.iters} timed passes each\n")
 
     rows = []

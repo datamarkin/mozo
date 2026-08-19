@@ -19,6 +19,45 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = ROOT / "tools" / "generate_manifest.py"
 
+#: The one real photograph the model tests run on. Path rather than array, because half the
+#: callers want the bytes and half want the decoded image.
+FIXTURE = ROOT / "tests" / "fixtures" / "images" / "example.jpg"
+
+
+def published(family: str, variant: str) -> list[str]:
+    """The artifact keys *variant* publishes, or ``[]`` if it publishes nothing at all.
+
+    Answered from the manifest, which ships in the wheel -- so no network and no cache. This is
+    "is it published", not "are the bytes here": obtaining the bytes can still fail, which is
+    why fixtures that build a predictor also catch :class:`WeightsError`.
+    """
+    from mozo.weights import WeightsError, artifacts
+
+    try:
+        return artifacts(family, variant)
+    except WeightsError:
+        return []
+
+
+def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> None:
+    """Skip unless *variant* publishes *runtime*."""
+    if runtime not in published(family, variant):
+        pytest.skip(f"{family}/{variant} does not publish {runtime}")
+
+
+@pytest.fixture(scope="session")
+def image():
+    """The fixture photograph, decoded to mozo's contract (RGB)."""
+    from mozo.utils import load_image
+
+    return load_image(str(FIXTURE))
+
+
+@pytest.fixture(scope="session")
+def payload() -> bytes:
+    """The fixture photograph as encoded bytes, i.e. what an HTTP request body carries."""
+    return FIXTURE.read_bytes()
+
 #: What a synthetic zoo contains: two variants of one family, one revision apart, with a
 #: different artifact set each so selection and absence are both exercised.
 _ZOO = {

@@ -14,13 +14,12 @@ and ONNX must return the same detections, with the same names, for every variant
 
 from __future__ import annotations
 
-import cv2
 import pytest
 
 from mozo.runtimes import select_runtime
+from conftest import FIXTURE, published, require_weights
 from mozo.weights import WeightsError, artifacts
 
-FIXTURE = "tests/fixtures/images/example.jpg"
 THRESHOLD = 0.5
 
 DETECTION = ["nano", "small", "medium", "large"]
@@ -32,34 +31,28 @@ ALL = DETECTION + SEGMENTATION
 EXPECTED_NAMES = {"person", "cup", "dining table", "laptop", "cell phone"}
 
 
-def _published(variant: str) -> list[str]:
-    try:
-        return artifacts("rfdetr", variant)
-    except WeightsError:
-        return []
-
-
-def _require(variant: str, runtime: str) -> None:
-    if runtime not in _published(variant):
-        pytest.skip(f"rfdetr/{variant} does not publish {runtime}")
-
-
-@pytest.fixture(scope="module")
-def image():
-    return cv2.imread(FIXTURE)
-
-
 @pytest.fixture(scope="module")
 def predictor_for():
     """Build predictors once per (variant, runtime) -- loading a checkpoint is the slow part."""
     from mozo.adapters.rfdetr import RFDETRPredictor
 
-    cache: dict[tuple[str, str], object] = {}
+    # Keyed by runtime only, and dropped when the variant changes. Both runtimes of one
+    # variant have to coexist for the agreement test, but nothing needs two variants at once --
+    # and holding all sixteen took peak RSS from 2.6 GB to 6.1 GB.
+    cache: dict[str, object] = {}
+    loaded = None
 
     def build(variant: str, runtime: str):
-        if (variant, runtime) not in cache:
-            cache[(variant, runtime)] = RFDETRPredictor(variant, device="cpu", runtime=runtime)
-        return cache[(variant, runtime)]
+        nonlocal loaded
+        if variant != loaded:
+            cache.clear()
+            loaded = variant
+        if runtime not in cache:
+            try:
+                cache[runtime] = RFDETRPredictor(variant, device="cpu", runtime=runtime)
+            except WeightsError as error:
+                pytest.skip(f"rfdetr/{variant} weights unavailable: {error}")
+        return cache[runtime]
 
     return build
 
@@ -67,18 +60,18 @@ def predictor_for():
 class TestPublished:
     @pytest.mark.parametrize("variant", ALL)
     def test_every_variant_publishes_torch_and_onnx(self, variant):
-        published = _published(variant)
-        if not published:
+        keys = published("rfdetr", variant)
+        if not keys:
             pytest.skip(f"rfdetr/{variant} is not in the manifest")
-        assert "torch-fp32" in published
-        assert "onnx-fp32" in published
-        assert "labels" in published
+        assert "torch-fp32" in keys
+        assert "onnx-fp32" in keys
+        assert "labels" in keys
 
 
 class TestDetections:
     @pytest.mark.parametrize("variant", ALL)
     def test_finds_the_scene(self, predictor_for, image, variant):
-        _require(variant, "torch-fp32")
+        require_weights("rfdetr", variant, "torch-fp32")
         detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
         assert len(detections) > 0
         names = {d.class_name for d in detections}
@@ -88,21 +81,21 @@ class TestDetections:
     @pytest.mark.parametrize("variant", ALL)
     def test_names_come_from_the_published_vocabulary(self, predictor_for, image, variant):
         """RF-DETR emits COCO's original ids. The contiguous list would say "bicycle" here."""
-        _require(variant, "torch-fp32")
+        require_weights("rfdetr", variant, "torch-fp32")
         detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
         person = next(d for d in detections if d.class_name == "person")
         assert person.class_id == 1
 
     @pytest.mark.parametrize("variant", SEGMENTATION)
     def test_segmentation_variants_return_masks(self, predictor_for, image, variant):
-        _require(variant, "torch-fp32")
+        require_weights("rfdetr", variant, "torch-fp32")
         detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
         assert detections[0].masks is not None
         assert detections[0].masks[0].shape[:2] == image.shape[:2]
 
     @pytest.mark.parametrize("variant", DETECTION)
     def test_detection_variants_return_no_masks(self, predictor_for, image, variant):
-        _require(variant, "torch-fp32")
+        require_weights("rfdetr", variant, "torch-fp32")
         assert predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)[0].masks is None
 
 
@@ -111,8 +104,8 @@ class TestRuntimeAgreement:
 
     @pytest.mark.parametrize("variant", ALL)
     def test_torch_and_onnx_agree(self, predictor_for, image, variant):
-        _require(variant, "torch-fp32")
-        _require(variant, "onnx-fp32")
+        require_weights("rfdetr", variant, "torch-fp32")
+        require_weights("rfdetr", variant, "onnx-fp32")
 
         torch_out = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
         onnx_out = predictor_for(variant, "onnx-fp32").predict(image, threshold=THRESHOLD)
@@ -131,13 +124,13 @@ class TestRuntimeAgreement:
 
     def test_auto_picks_torch(self):
         """Asserted against the real manifest rather than by loading a duplicate predictor."""
-        _require("small", "torch-fp32")
+        require_weights("rfdetr", "small", "torch-fp32")
         assert select_runtime("cpu", artifacts("rfdetr", "small")) == "torch-fp32"
 
 
 class TestCallerSuppliedNames:
     def test_caller_labels_override_the_published_ones(self, predictor_for, image):
-        _require("small", "torch-fp32")
+        require_weights("rfdetr", "small", "torch-fp32")
         detections = predictor_for("small", "torch-fp32").predict(
             image, threshold=THRESHOLD, labels={1: "human"}
         )
@@ -168,12 +161,28 @@ class TestAgreesWithUpstream:
         matches to four decimals right up until the images get large. The vendor was extracted
         from 1.10.0.dev; a baseline older than that is not a baseline.
         """
-        _require("small", "torch-fp32")
+        require_weights("rfdetr", "small", "torch-fp32")
         from PIL import Image
 
         image = Image.open(FIXTURE).convert("RGB")
         want = upstream.predict(image, threshold=0.1)
-        got = predictor_for("small", "torch-fp32").predict(cv2.imread(FIXTURE), threshold=0.1)
+        got = predictor_for("small", "torch-fp32").predict(str(FIXTURE), threshold=0.1)
 
         assert len(got) == len(want.xyxy)
         assert abs(float(max(want.confidence)) - max(d.confidence for d in got)) < 0.01
+
+class TestRegistry:
+    def test_registry_agrees_with_the_adapter(self):
+        """The variant list is written twice on purpose, so something has to hold it together.
+
+        mozo.registry must answer /models without importing an adapter, and every adapter pulls
+        torch in -- so the registry cannot derive its list from the adapter. This test is what
+        makes the duplication safe rather than a latent drift.
+        """
+        from mozo.adapters.rfdetr import RFDETRPredictor
+        from mozo.registry import MODEL_REGISTRY
+
+        entry = MODEL_REGISTRY["rfdetr"]
+        assert entry["adapter_class"] == RFDETRPredictor.__name__
+        assert entry["module"] == "mozo.adapters.rfdetr"
+        assert set(entry["variants"]) == set(RFDETRPredictor.VARIANTS)
