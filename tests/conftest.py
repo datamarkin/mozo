@@ -45,6 +45,23 @@ def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> N
         pytest.skip(f"{family}/{variant} does not publish {runtime}")
 
 
+def as_pixelflow_reports(boxes, scores):
+    """Quantise a model's raw numbers the way PixelFlow quantises what mozo returns.
+
+    PixelFlow truncates each box coordinate to a whole pixel -- 17.81 is reported as 17 -- and
+    rounds each score to three decimals, so those are the only numbers a raw model output and a
+    mozo result can be compared on. Truncation, not rounding: measured against PixelFlow rather
+    than assumed, and rounding to nearest disagrees with it on roughly half of all boxes.
+
+    Lives here rather than in a family's test because it is a fact about mozo's result boundary,
+    not about any one model. ``tools/verify/*.py`` imports it too.
+    """
+    import numpy as np
+
+    return (np.trunc(np.asarray(boxes, dtype=np.float64)),
+            np.round(np.asarray(scores, dtype=np.float64), 3))
+
+
 @pytest.fixture(scope="session")
 def image():
     """The fixture photograph, decoded to mozo's contract (RGB)."""
