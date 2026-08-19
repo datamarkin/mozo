@@ -1,0 +1,18 @@
+Depth Anything V2
+Copyright (c) 2024 TikTok and The University of Hong Kong.
+
+Lihe Yang, Bingyi Kang, Zilong Huang, Zhen Zhao, Xiaogang Xu, Jiashi Feng, Hengshuang Zhao.
+"Depth Anything V2", NeurIPS 2024.
+
+This product includes a deployment-only extraction of software developed at
+https://github.com/DepthAnything/Depth-Anything-V2, licensed under the Apache
+License 2.0. See LICENSE for the full text and PROVENANCE.md for what was taken
+and what was changed.
+
+The DINOv2 backbone under dinov2.py and dinov2_layers/ originates with Meta
+Platforms, Inc. (https://github.com/facebookresearch/dinov2), also Apache 2.0,
+and reaches this package through Depth Anything V2's own copy of it.
+
+The model weights are licensed separately from this code, and not uniformly:
+the relative-depth base and large checkpoints are CC-BY-NC-4.0. Each published
+artifact carries its own LICENSE and NOTICE alongside it.
