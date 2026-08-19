@@ -103,8 +103,10 @@ class TestPublished:
         """Measured across four variants and a loss every time, so mozo does not ship it.
 
         torch fp16 on MPS is *slower* than fp32 and moves boxes 0.76 px; ONNX fp16 is slower too.
-        CoreML fp16 is genuinely faster but wrong by 1.5 px on small and 636 px on nano -- erratic
-        rather than degrading with size, so the error cannot be bounded. See tools/export/yolov8.py.
+        CoreML fp16 is genuinely faster, about 1.4x, and costs 1.4 to 7.4 px depending on variant
+        -- it finds every object fp32 finds, and puts them in slightly the wrong place. Boxes are
+        what a detector is for, so mozo does not publish it. See tools/export/yolov8.py, whose
+        docstring also records how an earlier and much worse-looking set of numbers was wrong.
         """
         assert not [k for k in published("yolov8", variant) if k.endswith("fp16")]
 
