@@ -43,7 +43,7 @@ curl http://localhost:8000/models
 
 ## Features
 
-- **17 Published Variants** - RF-DETR (8) and Depth Anything V2 (9), weights hosted and hash-verified
+- **27 Published Variants** - RF-DETR (8), Depth Anything V2 (9), YOLOv8 (5) and YOLO11 (5), weights hosted and hash-verified
 - **Vendored Architectures** - no upstream package needed, each verified bit-identical to it
 - **Multiple Runtimes** - the same model as torch, ONNX or CoreML, chosen automatically per device
 - **Lazy Loading** - Models load on first use and are reused across requests
@@ -87,6 +87,35 @@ Class names ship with the weights, so they are the vocabulary the checkpoint was
 trained on rather than an assumption. A checkpoint of your own that carries no
 names returns `class_id` with `class_name` unset — pass `labels=[...]` to name
 them. Mozo never guesses a name.
+
+### YOLOv8 (5 variants) and YOLO11 (5 variants)
+Real-time detection by Ultralytics. **The weights are AGPL-3.0**, unlike the rest of
+mozo — see the licensing note below.
+
+- Both families: `nano`, `small`, `medium`, `large`, `xlarge`
+
+Output: PixelFlow `Detections` — boxes, class names, confidence scores
+
+```python
+model = manager.get_model('yolov8', 'nano')                         # torch
+model = manager.get_model('yolov11', 'nano', runtime='onnx-fp32')   # ONNX Runtime
+```
+
+YOLOv8 also publishes a CoreML artifact, which is by far the fastest way to run it on
+Apple silicon. YOLO11 does not: its attention block makes Apple's Metal graph compiler
+abort the process, and the configuration that avoids that is slower than torch on MPS.
+`runtime="auto"` handles this by itself — it only ever chooses among what a variant
+actually publishes.
+
+Class names come from the checkpoint, so a fine-tuned model publishes its own
+vocabulary. Mozo never guesses a name.
+
+> **Licensing.** These weights are AGPL-3.0, or covered by a commercial licence from
+> Ultralytics. Mozo's own code stays Apache-2.0 — they are separate works travelling
+> together — but anything you export from them inherits their terms, and **serving
+> predictions from them over a network places AGPL-3.0 section 13 obligations on you**.
+> The full licence and a NOTICE naming the exact upstream release are published beside
+> every checkpoint. Complying is the operator's responsibility.
 
 ### Depth Anything V2 (9 variants)
 Monocular depth estimation, in two groups that are not interchangeable.
@@ -135,7 +164,7 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (`rfdetr` or `depth_anything_v2`)
+- `family` - Model family (`rfdetr`, `yolov8`, `yolov11` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
