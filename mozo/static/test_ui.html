@@ -325,7 +325,7 @@
                 for (const [family, info] of Object.entries(availableModels)) {
                     const option = document.createElement('option');
                     option.value = family;
-                    option.textContent = `${family} (${info.task_type}) - ${info.num_variants} variants`;
+                    option.textContent = `${family} (${info.task_type}) - ${info.variants.length} variants`;
                     familySelect.appendChild(option);
                 }
             } catch (error) {
