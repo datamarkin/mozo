@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from mozo.runtimes import RuntimeError_, providers_for, select_runtime
+from mozo.runtimes import RuntimeError_, providers_for, runnable, select_runtime
 
 BOTH = ["onnx-fp32", "torch-fp32"]
 
@@ -24,6 +24,31 @@ class TestSelectRuntime:
 
     def test_auto_falls_through_to_anything_published(self):
         assert select_runtime("cpu", ["coreml-fp16"]) == "coreml-fp16"
+
+    def test_a_split_runtime_is_named_once_and_chosen_as_a_whole(self):
+        """SAM 2 publishes an encoder and a decoder that compose one runtime. A caller choosing
+        a runtime must see ``onnx-fp32``, never a half it would have to know to rejoin."""
+        split = ["onnx-fp32-decoder", "onnx-fp32-encoder", "torch-fp32"]
+        assert runnable(split) == ["onnx-fp32", "torch-fp32"]
+        assert select_runtime("cpu", split) == "torch-fp32"
+        assert select_runtime("cpu", split, requested="onnx-fp32") == "onnx-fp32"
+
+    def test_asking_for_half_a_runtime_by_name_is_refused(self):
+        """Otherwise a typo selects an encoder and fails much later, at load time."""
+        with pytest.raises(RuntimeError_, match="not published"):
+            select_runtime("cpu", ["onnx-fp32-encoder", "onnx-fp32-decoder"],
+                           requested="onnx-fp32-encoder")
+
+    def test_a_missing_library_drops_a_split_runtime_whole(self, monkeypatch):
+        """Not half of it, or ``auto`` offers an encoder this machine cannot execute."""
+        from mozo import runtimes
+
+        # Pointing the requirement at a module that does not exist is what makes ``find_spec``
+        # return None; patching ``find_spec`` itself would not, because ``executable`` imports
+        # it inside the function.
+        monkeypatch.setitem(runtimes._REQUIRES, "onnx", "definitely_not_installed")
+        assert "onnx-fp32" not in runtimes.executable(
+            ["onnx-fp32-encoder", "onnx-fp32-decoder", "torch-fp32"])
 
     def test_explicit_request_is_honoured(self):
         assert select_runtime("cpu", BOTH, requested="onnx-fp32") == "onnx-fp32"
