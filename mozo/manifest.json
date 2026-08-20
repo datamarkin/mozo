@@ -489,6 +489,187 @@
         }
       }
     },
+    "sam2/base_plus": {
+      "latest": "2026-08-20",
+      "revisions": {
+        "2026-08-20": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "sam2/base_plus/2026-08-20/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "sam2/base_plus/2026-08-20/NOTICE",
+              "sha256": "adc6b60072b86123303b913921d2f45dbb07e17bac859d0547631a52dab7cead",
+              "size": 1230
+            },
+            "onnx-fp32-decoder": {
+              "path": "sam2/base_plus/2026-08-20/onnx-fp32-decoder.onnx",
+              "sha256": "33bb43415e701dbc8e91b93769712743126dc005ec4644b044e8a6f482b9194e",
+              "size": 16505956
+            },
+            "onnx-fp32-encoder": {
+              "path": "sam2/base_plus/2026-08-20/onnx-fp32-encoder.onnx",
+              "sha256": "90d77df0b22afa0fb7f762f535e69305ee9a86b9be00b0437526bf4ef6c6da62",
+              "size": 277383203
+            },
+            "torch-fp32": {
+              "path": "sam2/base_plus/2026-08-20/torch-fp32.pth",
+              "sha256": "a2345aede8715ab1d5d31b4a509fb160c5a4af1970f199d9054ccfb746c004c5",
+              "size": 323606802
+            }
+          }
+        }
+      }
+    },
+    "sam2/large": {
+      "latest": "2026-08-20",
+      "revisions": {
+        "2026-08-20": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "sam2/large/2026-08-20/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "sam2/large/2026-08-20/NOTICE",
+              "sha256": "adc6b60072b86123303b913921d2f45dbb07e17bac859d0547631a52dab7cead",
+              "size": 1230
+            },
+            "coreml-fp16-decoder": {
+              "path": "sam2/large/2026-08-20/coreml-fp16-decoder.zip",
+              "sha256": "d075b702faa52e25e0f50e8fabea675295c2e75bb88a8b5b87d9e44d7479d255",
+              "size": 9435201
+            },
+            "coreml-fp16-encoder": {
+              "path": "sam2/large/2026-08-20/coreml-fp16-encoder.zip",
+              "sha256": "352e824018bef0642f318dda500229003990559919eb1b87ca7ebe8700cbd4bd",
+              "size": 393759977
+            },
+            "coreml-fp16-prompt": {
+              "path": "sam2/large/2026-08-20/coreml-fp16-prompt.zip",
+              "sha256": "538f2a08777428514835f3c01a4cf39f75c98b44717316e3a6f1c3561d20b86c",
+              "size": 11184
+            },
+            "onnx-fp32-decoder": {
+              "path": "sam2/large/2026-08-20/onnx-fp32-decoder.onnx",
+              "sha256": "a7b267f40fd9929b2ae40793410f11d43e97bf80a8e26849281ab3c8f562a832",
+              "size": 16505998
+            },
+            "onnx-fp32-encoder": {
+              "path": "sam2/large/2026-08-20/onnx-fp32-encoder.onnx",
+              "sha256": "4bc5e100d50cb045cc8e5872976981dd19fcf50a45fbcd9f71b8e27556e48ca9",
+              "size": 852362152
+            },
+            "torch-fp32": {
+              "path": "sam2/large/2026-08-20/torch-fp32.pth",
+              "sha256": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
+              "size": 898083611
+            }
+          }
+        }
+      }
+    },
+    "sam2/small": {
+      "latest": "2026-08-20",
+      "revisions": {
+        "2026-08-20": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "sam2/small/2026-08-20/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "sam2/small/2026-08-20/NOTICE",
+              "sha256": "adc6b60072b86123303b913921d2f45dbb07e17bac859d0547631a52dab7cead",
+              "size": 1230
+            },
+            "coreml-fp16-decoder": {
+              "path": "sam2/small/2026-08-20/coreml-fp16-decoder.zip",
+              "sha256": "af74e66356e49c99d885833dcf4c63632f57960731fdb8dbb1a1df873781bf4c",
+              "size": 9411672
+            },
+            "coreml-fp16-encoder": {
+              "path": "sam2/small/2026-08-20/coreml-fp16-encoder.zip",
+              "sha256": "c0492f3229319dfb8501f0516098f02e7818a864e549b0b8d1c8c06e046e8d96",
+              "size": 63590171
+            },
+            "coreml-fp16-prompt": {
+              "path": "sam2/small/2026-08-20/coreml-fp16-prompt.zip",
+              "sha256": "b0c92c529b8ebfe981c5a0c00444219fbd614c7e70f202d33ab529346c293bd7",
+              "size": 11185
+            },
+            "onnx-fp32-decoder": {
+              "path": "sam2/small/2026-08-20/onnx-fp32-decoder.onnx",
+              "sha256": "041546af3bdea3991fe6ff709ec3271e5fa925317353aed9cf6a8da25ba7b5c8",
+              "size": 16505944
+            },
+            "onnx-fp32-encoder": {
+              "path": "sam2/small/2026-08-20/onnx-fp32-encoder.onnx",
+              "sha256": "f6432c00fe9770079f8207588e53dbc1ddc23756332a48bdcae1a67e28599a82",
+              "size": 137929059
+            },
+            "torch-fp32": {
+              "path": "sam2/small/2026-08-20/torch-fp32.pth",
+              "sha256": "6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38",
+              "size": 184416285
+            }
+          }
+        }
+      }
+    },
+    "sam2/tiny": {
+      "latest": "2026-08-20",
+      "revisions": {
+        "2026-08-20": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "sam2/tiny/2026-08-20/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "sam2/tiny/2026-08-20/NOTICE",
+              "sha256": "adc6b60072b86123303b913921d2f45dbb07e17bac859d0547631a52dab7cead",
+              "size": 1230
+            },
+            "coreml-fp16-decoder": {
+              "path": "sam2/tiny/2026-08-20/coreml-fp16-decoder.zip",
+              "sha256": "66016318df4088d562e8531e59be3814a1c0d4673e0b1314dd8b49b4d5e580e2",
+              "size": 9411856
+            },
+            "coreml-fp16-encoder": {
+              "path": "sam2/tiny/2026-08-20/coreml-fp16-encoder.zip",
+              "sha256": "5baee6a905a75dffa56023a76721eeaf5ebc2dd18370064d83238d091fb7a221",
+              "size": 50467049
+            },
+            "coreml-fp16-prompt": {
+              "path": "sam2/tiny/2026-08-20/coreml-fp16-prompt.zip",
+              "sha256": "d7b3e3002c95e7ebd14d1f611ade34a2a9c0ab169cca14a3d5df25ce9241471d",
+              "size": 11181
+            },
+            "onnx-fp32-decoder": {
+              "path": "sam2/tiny/2026-08-20/onnx-fp32-decoder.onnx",
+              "sha256": "f6b7d1bc9faf10b9ed1108e9c792dbfc60048f8fd6ac2046f92e92334e766d42",
+              "size": 16505932
+            },
+            "onnx-fp32-encoder": {
+              "path": "sam2/tiny/2026-08-20/onnx-fp32-encoder.onnx",
+              "sha256": "269a9072b7199b764ec16d4f1dc0cf8ffd088bb824def9df3e2b8da127a1f2a3",
+              "size": 109382065
+            },
+            "torch-fp32": {
+              "path": "sam2/tiny/2026-08-20/torch-fp32.pth",
+              "sha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69",
+              "size": 156008466
+            }
+          }
+        }
+      }
+    },
     "yolov11/large": {
       "latest": "2026-08-19",
       "revisions": {
