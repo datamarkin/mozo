@@ -17,11 +17,11 @@ import os
 os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from . import __version__
@@ -116,7 +116,12 @@ def predict(
     file: UploadFile = File(..., description="Image file to process."),
     threshold: float = 0.5,
     labels: Optional[str] = None,
-    text: Optional[str] = None,
+    text: Optional[List[str]] = Query(
+        None,
+        description="Concept to look for, for prompted models. Repeat it to ask for several: "
+                    "?text=car&text=person. Not comma-separated -- a prompt is free text and "
+                    "may contain a comma of its own.",
+    ),
 ):
     """Run one model over one image.
 
@@ -127,7 +132,10 @@ def predict(
         threshold: Confidence floor, for detection models.
         labels: Comma-separated class names overriding the model's own, e.g. ``hardhat,vest``.
         text: The concept to look for, for prompted models -- ``cow``, ``yellow school bus``.
-            Required by those, ignored by the rest.
+            Repeat the parameter to ask for several in one request; they share the image encode.
+            Required by prompted models, ignored by the rest. Deliberately *not* comma-separated
+            the way ``labels`` is: a prompt is free text, and ``"a person, holding a mug"`` is
+            one concept rather than two.
 
     Returns:
         Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
@@ -145,9 +153,14 @@ def predict(
     # Settled here rather than beside the call: nothing about it needs the image or the model,
     # and asking first is what keeps a forgotten parameter from costing a decode and a
     # multi-gigabyte load before the caller is told they forgot it.
-    if task == "concept_segmentation" and not (text or "").strip():
+    # Deliberately the adapter's own rule, not a looser one. A guard that accepted
+    # ``?text=car&text=`` would hand the caller the same 400 from the adapter, but only after
+    # decoding the image and loading the weights -- which is the cost this exists to avoid.
+    if task == "concept_segmentation" and (not text or any(not t.strip() for t in text)):
         raise HTTPException(
-            status_code=400, detail=f"{family} is prompted: pass ?text=... naming what to look for."
+            status_code=400,
+            detail=f"{family} is prompted: pass ?text=... naming what to look for, and give "
+                   "every one a concept. Repeat it for several: ?text=car&text=person.",
         )
 
     # Decode through the same function the Python API uses, so both entry points agree on
