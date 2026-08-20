@@ -1,0 +1,26 @@
+sam2_deploy
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This product includes software developed by Meta Platforms, Inc., extracted from the
+Segment Anything Model 2 project (https://github.com/facebookresearch/sam2) and reduced
+to its single-image inference path. It is licensed under the Apache License, Version 2.0;
+see the LICENSE file in this directory.
+
+Unlike the other model families mozo serves, SAM 2's published checkpoints are Apache-2.0
+as well -- Meta licenses the SAM 2 code, the training code and the model weights under the
+same terms. Nothing in this family carries a separate weights licence.
+
+SAM 2's image encoder is Hiera, whose copyright notice is preserved in the header of the
+file that carries it:
+
+  - Hiera: A Hierarchical Vision Transformer
+    Copyright (c) Meta Platforms, Inc. and affiliates.
+    https://github.com/facebookresearch/hiera
+    Apache License 2.0
+
+NOT INCLUDED
+------------
+The video tracker is not part of this package: memory attention, the memory encoder,
+object pointers and the frame bookkeeping that drives them are all left behind, along
+with the training code, the evaluation harness and the automatic mask generator. See
+PROVENANCE.md for the full list and for why.
