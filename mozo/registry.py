@@ -54,6 +54,21 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         ],
     },
 
+    'sam3': {
+        'adapter_class': 'Sam3Predictor',
+        'module': 'mozo.adapters.sam3',
+        'task_type': 'concept_segmentation',
+        'description': (
+            'SAM 3 by Meta — promptable concept segmentation. Name a thing in words and it '
+            'returns every instance of it, with a mask, a box and a score. One published model, '
+            'so one variant. Unlike every other family here the weights are neither Apache-2.0 '
+            'nor AGPL: they carry Meta\'s SAM License, which restricts what they may be used '
+            'for and binds whoever you serve predictions to. See the NOTICE published beside '
+            'the checkpoint.'
+        ),
+        'variants': ['sam3'],
+    },
+
     'yolov8': {
         'adapter_class': 'YOLOv8Predictor',
         'module': 'mozo.adapters.yolov8',
