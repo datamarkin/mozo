@@ -23,7 +23,18 @@ Environment:
 
 from __future__ import annotations
 
-__all__ = ["WeightsError", "artifacts", "cache_dir", "companions", "manifest", "resolve"]
+__all__ = [
+    "WeightsError",
+    "artifacts",
+    "cache_dir",
+    "companions",
+    "framework_of",
+    "manifest",
+    "part_of",
+    "parts",
+    "resolve",
+    "runtime_of",
+]
 
 import hashlib
 import json
@@ -55,6 +66,52 @@ _manifest: dict[str, Any] | None = None
 
 class WeightsError(RuntimeError):
     """Raised when a model cannot be resolved, downloaded, or verified."""
+
+
+#: Framework prefixes that name an execution path. A revision also publishes data artifacts --
+#: the licence, the label vocabulary -- and those are not things a model can be run as.
+_RUNNABLE = ("torch", "onnx", "coreml", "tensorrt")
+
+
+def runtime_of(key: str) -> str:
+    """Return the runtime an artifact key belongs to.
+
+    An artifact key is ``<framework>-<precision>`` with an optional ``-<part>`` on the end. Most
+    families publish a runtime as one file and the key *is* the runtime; SAM 2 publishes its
+    graphs split across an encoder and a decoder, because the expensive half depends only on the
+    image and exporting them together would forfeit the reuse that makes clicking cheap.
+
+    Examples:
+        >>> runtime_of("torch-fp32")
+        'torch-fp32'
+        >>> runtime_of("onnx-fp32-encoder")
+        'onnx-fp32'
+    """
+    return "-".join(key.split("-")[:2])
+
+
+def part_of(key: str) -> str:
+    """Return the part an artifact key names within its runtime, or ``""`` if it is the whole.
+
+    Examples:
+        >>> part_of("onnx-fp32-encoder")
+        'encoder'
+        >>> part_of("torch-fp32")
+        ''
+    """
+    return "-".join(key.split("-")[2:])
+
+
+def framework_of(key: str) -> str:
+    """Return the framework an artifact key names, or the whole key if it names no runtime.
+
+    Examples:
+        >>> framework_of("onnx-fp32-encoder")
+        'onnx'
+        >>> framework_of("LICENSE")
+        'LICENSE'
+    """
+    return key.split("-")[0]
 
 
 def manifest() -> dict[str, Any]:
@@ -101,7 +158,18 @@ def _lookup(family: str, variant: str, revision: str | None) -> tuple[str, dict[
     return name, entry
 
 
-def _artifact(entry: dict[str, Any], model_id: str, revision: str, key: str) -> dict[str, Any]:
+def _composing(entry: dict[str, Any], runtime: str) -> list[str]:
+    """Return the artifact keys that compose *runtime*, in a stable order.
+
+    One definition of "these files are that runtime", used both to fetch them and to explain
+    why a runtime name is not itself a file.
+    """
+    return sorted(k for k in entry["artifacts"] if runtime_of(k) == runtime)
+
+
+def _artifact(
+    entry: dict[str, Any], model_id: str, revision: str, key: str
+) -> dict[str, Any]:
     """Return one artifact record from a revision.
 
     Raises:
@@ -109,6 +177,17 @@ def _artifact(entry: dict[str, Any], model_id: str, revision: str, key: str) -> 
     """
     artifact = entry["artifacts"].get(key)
     if artifact is None:
+        # A runtime split across parts is the trap worth naming: ``select_runtime`` hands back
+        # ``onnx-fp32``, every adapter passes that straight to ``resolve``, and for SAM 2 there
+        # is no such file -- only an encoder and a decoder. Saying "not published" there would
+        # contradict the list the caller was just given to choose from.
+        composed = _composing(entry, key)
+        if composed:
+            raise WeightsError(
+                f"{model_id} publishes {key!r} as {len(composed)} files, not one: "
+                f"{', '.join(composed)}. Ask for one of those by name, or use "
+                f"mozo.weights.parts() with {key!r} to get them all."
+            )
         available = ", ".join(sorted(k for k in entry["artifacts"] if k not in _ACCOMPANYING))
         raise WeightsError(
             f"{model_id} revision {revision} does not publish {key!r}. Available: {available}"
@@ -155,6 +234,11 @@ def _fetch(url: str, target: Path, *, size: int, sha256: str) -> None:
     partial.replace(target)
 
 
+def _offline() -> bool:
+    """Is fetching forbidden? ``MOZO_OFFLINE`` unset, empty or ``0`` all mean no."""
+    return os.environ.get("MOZO_OFFLINE", "").strip() not in ("", "0")
+
+
 def _obtain(artifact: dict[str, Any], revision_dir: Path) -> Path:
     """Return the local path for *artifact*, downloading it if the cache does not already hold it.
 
@@ -166,7 +250,7 @@ def _obtain(artifact: dict[str, Any], revision_dir: Path) -> Path:
         return target
 
     url = f"{_base_url()}/{artifact['path']}"
-    if os.environ.get("MOZO_OFFLINE", "").strip() not in ("", "0"):
+    if _offline():
         raise WeightsError(
             f"MOZO_OFFLINE is set and {target} is not cached.\n"
             f"  fetch:  {url}\n"
@@ -184,7 +268,10 @@ def artifacts(family: str, variant: str, *, revision: str | None = None) -> list
 
     ``LICENSE`` and ``NOTICE`` are omitted -- they ship with every artifact rather than being
     ones you choose.
-    Callers use this to find out what a model can actually be run as before asking for it.
+    These are files. For a family that splits a runtime across several of them this lists the
+    parts -- ``onnx-fp32-encoder`` and ``onnx-fp32-decoder`` rather than ``onnx-fp32`` -- and a
+    part is not something ``runtime=`` accepts. :func:`mozo.runtimes.runnable` turns this into
+    the list a caller may choose from.
 
     Raises:
         WeightsError: If the model or revision is not published.
@@ -214,6 +301,83 @@ def companions(family: str, variant: str, *, revision: str | None = None) -> lis
     """
     _, entry = _lookup(family, variant, revision)
     return sorted(k for k in entry["artifacts"] if k in _ACCOMPANYING)
+
+
+def parts(
+    family: str,
+    variant: str,
+    runtime: str,
+    *,
+    revision: str | None = None,
+) -> dict[str, Path]:
+    """Return every artifact that composes one runtime, downloaded and verified.
+
+    Most families publish a runtime as a single file, and this returns one entry keyed ``""``.
+    SAM 2 splits its graphs into an encoder and a decoder -- the expensive half depends only on
+    the image, and exporting them as one graph would forfeit the reuse that makes a second click
+    cheap -- so this returns one entry per part, keyed by the part's name.
+
+    Callers that already know they want one specific file should use :func:`resolve` with its
+    exact key. This is for the case the caller does *not* know: it was handed a runtime name by
+    :func:`mozo.runtimes.select_runtime` and needs whatever that runtime is made of.
+
+    Args:
+        family: Model family, e.g. ``"sam2"``.
+        variant: Variant within it, e.g. ``"large"``.
+        runtime: A runtime name as :func:`mozo.runtimes.runnable` reports it, e.g.
+            ``"onnx-fp32"``. Not an artifact key with a part on the end.
+        revision: Published revision to pin. Defaults to the manifest's ``latest``.
+
+    Returns:
+        Part name to local path, sorted by part name. A single-file runtime is ``{"": path}``;
+        SAM 2's ONNX is ``{"decoder": ..., "encoder": ...}``.
+
+    Raises:
+        WeightsError: If the model or revision is not published, if *runtime* is not one this
+            revision can be executed as, or if any part fails to download or verify. A part that
+            cannot be obtained does not stop the others being tried, so an offline caller is told
+            about every file it has to place rather than one per run.
+
+    Examples:
+        >>> parts("sam2", "large", "onnx-fp32")           # doctest: +SKIP
+        {'decoder': PosixPath(...), 'encoder': PosixPath(...)}
+        >>> parts("rfdetr", "small", "torch-fp32")        # doctest: +SKIP
+        {'': PosixPath(...)}
+    """
+    from .runtimes import runnable
+
+    _, entry = _lookup(family, variant, revision)
+    # Through ``runnable`` rather than by excluding the licence: ``labels`` is neither a
+    # companion nor something a model can be executed as, and answering with it here would
+    # contradict the list a caller was given to choose from.
+    available = runnable(sorted(entry["artifacts"]))
+    if runtime not in available:
+        raise WeightsError(
+            f"{family}/{variant} publishes no {runtime!r}. "
+            f"Available runtimes: {', '.join(available) or 'none'}"
+        )
+
+    keys = _composing(entry, runtime)
+
+    # Offline, none of these touches the network, so collecting every complaint costs nothing
+    # and spares a caller placing files by hand from learning about them one run at a time.
+    # A real download is the opposite trade: keys are sorted, so the small part is tried first,
+    # and carrying on after it fails would start SAM 2's 852 MB encoder to produce an error
+    # already known -- two more minutes of timeouts for an answer nobody will use.
+    if _offline():
+        missing = []
+        for key in keys:
+            try:
+                resolve(family, variant, key, revision=revision)
+            except WeightsError as error:
+                missing.append(str(error))
+        if missing:
+            raise WeightsError(
+                f"{runtime} is {len(keys)} files and {len(missing)} are not cached:\n\n"
+                + "\n\n".join(missing)
+            )
+
+    return {part_of(key): resolve(family, variant, key, revision=revision) for key in keys}
 
 
 def resolve(

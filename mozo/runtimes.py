@@ -19,8 +19,19 @@ identical whichever runtime produced the numbers in between.
 
 from __future__ import annotations
 
-__all__ = ["CoreMLRunner", "OnnxRunner", "RuntimeError_", "executable", "get_default_device",
-           "make_runner", "providers_for", "runnable", "select_runtime"]
+__all__ = [
+    "CoreMLRunner",
+    "OnnxRunner",
+    "RuntimeError_",
+    "executable",
+    "get_default_device",
+    "make_runner",
+    "part_of",
+    "providers_for",
+    "runnable",
+    "runtime_of",
+    "select_runtime",
+]
 
 import shutil
 import zipfile
@@ -28,6 +39,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from .weights import _RUNNABLE, framework_of, part_of, runtime_of
 
 #: Cached: the answer cannot change within a process, and ``torch.cuda.is_available()`` costs
 #: real time the first time it is asked.
@@ -69,9 +82,15 @@ def get_default_device() -> str:
 #: has no MPS path at all and quietly runs on the CPU. Defaulting to a guess would have shipped
 #: that regression silently to everyone on a Mac.
 #:
-#: fp16 does not appear because mozo does not publish it -- it measured worse on accuracy and
-#: no better on speed everywhere it was tried. Keys are still matched by prefix, so a future
-#: fp16 artifact would be selectable by name without changing anything here.
+#: No fp16 entry appears here. Where fp16 was tried for a whole-file runtime it measured worse
+#: on accuracy and no better on speed; and ``coreml-fp16``, which SAM 2's three smaller variants
+#: do publish, has never been measured against torch MPS for a promptable model. This table's
+#: whole claim is that its entries were measured, so an unmeasured one does not join it.
+#:
+#: What that absence buys is narrower than it looks. Entries are matched by exact membership
+#: (``if key in usable``), so leaving a runtime out means ``auto`` will not *prefer* it -- but
+#: the last-resort branch below still takes whatever is executable when nothing preferred is
+#: published, and a variant shipping only fp16 would get it. Absence is a preference, not a veto.
 #:
 #: CoreML leads on Apple silicon because it was measured to: RF-DETR nano runs 10.8 ms through
 #: CoreML against 53.3 ms on torch MPS, five times faster, at a worst output delta of 0.001.
@@ -83,24 +102,29 @@ _PREFERENCE: dict[str, tuple[str, ...]] = {
 }
 
 
-#: Key prefixes that name an execution path. A revision also publishes data artifacts -- the
-#: licence, the label vocabulary -- and those are not things a model can be run as.
-_RUNNABLE = ("torch", "onnx", "coreml", "tensorrt")
-
-
 #: What each runtime needs importable before it can execute anything. torch is a core
-#: dependency and always present; the rest are the caller's to install.
+#: dependency and always present; the rest are the caller's to install. Which frameworks *name*
+#: a runtime is a fact about artifact keys and lives in :mod:`mozo.weights`; what it takes to
+#: execute one is this module's business.
 _REQUIRES = {"onnx": "onnxruntime", "coreml": "coremltools", "tensorrt": "tensorrt"}
 
 
 def runnable(published: list[str]) -> list[str]:
-    """Return only the artifact keys that name a runtime.
+    """Return the runtimes these artifacts can be executed as, each named once.
+
+    Keys that only differ by their part collapse into the runtime they compose, so a caller
+    choosing a runtime sees ``onnx-fp32`` rather than an encoder and a decoder it would have to
+    know to rejoin. :func:`mozo.weights.parts` is what turns the answer back into files.
 
     Examples:
         >>> runnable(["labels", "onnx-fp16", "torch-fp32"])
         ['onnx-fp16', 'torch-fp32']
+        >>> runnable(["onnx-fp32-decoder", "onnx-fp32-encoder", "torch-fp32"])
+        ['onnx-fp32', 'torch-fp32']
     """
-    return [key for key in published if key.split("-")[0] in _RUNNABLE]
+    return list(dict.fromkeys(
+        runtime_of(key) for key in published if framework_of(key) in _RUNNABLE
+    ))
 
 
 def executable(published: list[str]) -> list[str]:
@@ -113,8 +137,8 @@ def executable(published: list[str]) -> list[str]:
     """
     from importlib.util import find_spec
 
-    return [key for key in runnable(published)
-            if (module := _REQUIRES.get(key.split("-")[0])) is None or find_spec(module)]
+    return [runtime for runtime in runnable(published)
+            if (module := _REQUIRES.get(framework_of(runtime))) is None or find_spec(module)]
 
 
 #: ONNX Runtime reports input types as strings; these are the ones an artifact can declare.
@@ -146,11 +170,13 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
     Args:
         device: Where the model will run -- ``cpu``, ``cuda``, ``mps``.
         published: Artifact keys the model publishes, from :func:`mozo.weights.artifacts`.
-        requested: An explicit key such as ``"onnx-fp16"``, or ``"auto"`` to take the best
+        requested: An explicit runtime such as ``"onnx-fp16"``, or ``"auto"`` to take the best
             published option for the device.
 
     Returns:
-        One key from *published*.
+        A runtime name, which is an artifact key for a family that publishes its runtime as one
+        file and the shared prefix of several for a family that splits it. Either way it is what
+        :func:`mozo.weights.parts` takes.
 
     Raises:
         RuntimeError_: If *requested* is not published, or nothing suitable exists.
@@ -162,6 +188,8 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
         'onnx-fp32'
         >>> select_runtime("cpu", ["onnx-fp32", "torch-fp32"], requested="onnx-fp32")
         'onnx-fp32'
+        >>> select_runtime("cpu", ["onnx-fp32-decoder", "onnx-fp32-encoder", "torch-fp32"])
+        'torch-fp32'
     """
     if requested != "auto":
         if requested not in runnable(published):
@@ -171,14 +199,14 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
             )
         return requested
 
-    published = executable(published)
+    usable = executable(published)
     for key in _PREFERENCE.get(device.split(":")[0], _PREFERENCE["cpu"]):
-        if key in published:
+        if key in usable:
             return key
 
     # Nothing preferred is available, but something executable is -- take it rather than refuse.
-    if published:
-        return published[0]
+    if usable:
+        return usable[0]
     raise RuntimeError_(
         "nothing this model publishes can run here. Published: "
         f"{', '.join(runnable(published)) or 'nothing runnable'}"
