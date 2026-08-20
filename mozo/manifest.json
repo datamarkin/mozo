@@ -682,8 +682,8 @@
             },
             "NOTICE": {
               "path": "sam3/sam3/2026-08-20/NOTICE",
-              "sha256": "30837cfdcef5d26c343237e635e6da88d5df745b8d12396299e0a4b655447c43",
-              "size": 1614
+              "sha256": "50c96760d91d0b0de3a22ce9f40ef538a772c39fc51fbf02f23402d6bbfef021",
+              "size": 1967
             },
             "torch-fp32": {
               "path": "sam3/sam3/2026-08-20/torch-fp32.pth",
