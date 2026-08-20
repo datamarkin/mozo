@@ -8,8 +8,10 @@ addition that implementation does not carry.
 and different weights, and runs both over the *same* trunk output: one feeds the concept head
 (text and exemplar prompts), the other feeds the click head that the checkpoint's ``tracker.``
 weights drive. ``transformers`` implements only the concept half, so only one stack appears there.
-Both are built here, because the whole reason to deploy SAM 3 rather than two models is that one
-image encode serves both kinds of prompt.
+Both are built here because the checkpoint has weights for both and a strict load must find
+somewhere to put them. What they do *not* do is serve one encode between them: the two heads
+preprocess an image differently, so each runs its own trunk pass and reads its own stack. See
+:meth:`~..predictor.Segmenter.encode_click`.
 
 The position encoding is a function of shape alone -- not of the image, and not of which stack
 produced the map -- so it lives in :mod:`..position`, which memoises it. Only the coarsest
@@ -92,20 +94,42 @@ class Neck(nn.Module):
         # here. Skipping the 36x36 level saves roughly 2.2 GFLOP per image across both stacks.
         self.keep = len(spec.scale_factors) - spec.scalp
 
-    def forward(self, x: Tensor) -> dict[str, list[Tensor] | Tensor]:
-        """Run both stacks over ``x``, for the levels that survive the scalp.
+    #: The stacks :meth:`forward` can build, in the order they are defined.
+    STACKS = ("concept", "click")
+
+    def forward(
+        self, x: Tensor, stacks: tuple[str, ...] = STACKS
+    ) -> dict[str, list[Tensor] | Tensor]:
+        """Run the requested stacks over ``x``, for the levels that survive the scalp.
+
+        Both stacks are built and loaded, but a caller rarely wants both at once: the two heads
+        preprocess an image differently, so each encodes separately and reads one stack. Running
+        the other and discarding it costs 62 ms on an M-series GPU and a transient 111 MB, which
+        is the same kind of waste the scalp above exists to avoid.
 
         Args:
             x: ``(B, hidden, grid, grid)`` from the trunk.
+            stacks: Which pyramids to build. Defaults to both.
 
         Returns:
-            ``concept`` and ``click`` pyramids -- coarsest last -- and ``positions``, the
-            coarsest level's position encoding, shared by both.
+            The requested pyramids -- coarsest last -- and ``positions``, the coarsest level's
+            position encoding. ``positions`` is a function of shape, device and dtype alone, so
+            it does not depend on which stack was asked for.
+
+        Raises:
+            ValueError: If ``stacks`` names nothing, or names something this neck does not have.
         """
-        concept = [level(x) for level in self.levels[: self.keep]]
-        click = [level(x) for level in self.click_levels[: self.keep]]
-        coarse = concept[-1]
+        unknown = set(stacks) - set(self.STACKS)
+        if unknown or not stacks:
+            raise ValueError(f"stacks must be a non-empty subset of {self.STACKS}, got {stacks!r}")
+
+        built = {
+            name: [level(x) for level in levels[: self.keep]]
+            for name, levels in (("concept", self.levels), ("click", self.click_levels))
+            if name in stacks
+        }
+        coarse = next(iter(built.values()))[-1]
         positions = self.position_encoding(
             coarse.shape[-2], coarse.shape[-1], coarse.device, coarse.dtype
         )
-        return {"concept": concept, "click": click, "positions": positions}
+        return {**built, "positions": positions}
