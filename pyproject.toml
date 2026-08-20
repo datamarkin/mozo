@@ -35,6 +35,17 @@ dependencies = [
     # FastAPI needs this to accept the multipart upload every /predict endpoint takes. Without
     # it mozo.server raises at import, not at request time -- so it was never optional.
     "python-multipart",
+    # SAM 3 tokenizes prompts with CLIP's byte-pair encoder. ``regex`` is not optional for
+    # correctness -- the split pattern uses Unicode categories (\p{L}, \p{N}) that the standard
+    # library's ``re`` cannot express -- and ``ftfy`` repairs mis-decoded input the way upstream
+    # does. Both declare no version bounds and pull in nothing but ``wcwidth``, so neither adds
+    # any resolver pressure.
+    "regex",
+    "ftfy",
+    # Already a de-facto dependency: rfdetr_deploy and depth_anything_v2_deploy import it at
+    # module scope, and SAM 3's exemplar-box pooling needs ``roi_align``. Declared so a missing
+    # install fails at install time rather than inside a forward pass.
+    "torchvision",
 ]
 
 # Optional runtimes. Every model family ships as a vendored, deployment-only extraction, so
@@ -72,3 +83,7 @@ mozo = ["static/*", "manifest.json"]
 # in the wheel with it -- the same rule the weights follow.
 "mozo.vendors.rfdetr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
 "mozo.vendors.depth_anything_v2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
+# SAM 3's tokenizer reads CLIP's byte-pair vocabulary at construction. It is OpenAI's file
+# (MIT), byte-identical to the one openai/CLIP publishes, so it ships in the wheel rather than
+# being downloaded -- a prompt should not need a network round trip to tokenize.
+"mozo.vendors.sam3_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
