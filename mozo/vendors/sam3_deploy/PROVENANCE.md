@@ -92,17 +92,54 @@ three box projections at all. The two-box case is what makes it meaningful: with
 reference's sequence-first prompt is indistinguishable from a batch-first one, so a transpose
 would pass unnoticed.
 
-## Not yet built
+The click path is gated too, on seven prompt shapes: one positive point, positive with negative,
+two positives, a box, a box with a negative point, a lone negative point, and
+`multimask_output=False`. The last two exist because a simpler set misses them -- a lone negative
+is the only prompt with nothing to include, and the single-mask call is the only one that reaches
+the stability fallback. Scores and low-resolution logits are bit-identical to the published model
+on all seven; binary masks are excluded from the comparison for the hole-filling reason below.
 
-The click path and the registry/adapter wiring. The concept path is complete: a decoded image
-and a noun phrase in, instances out, cached on both halves.
+## The click path
 
-The click path is one prompt structure, not several. Following SAM 2, every click prompt is a set
-of labelled points: `1` include, `0` exclude, and `2`/`3` reserved for a box's two corners, since
-the network has no separate box input. Points, a box, and a box combined with points are the same
-array filled differently, so what remains to build is the SAM head itself -- the prompt encoder,
-two-way transformer and mask decoder, reconfigured for SAM 3's 72x72 grid at 256 channels and
-loading `tracker.*` -- plus the extra input channel that mask refinement needs.
+Built on `mozo.vendors.sam2_deploy`'s `PromptEncoder`, `MaskDecoder` and `TwoWayTransformer`
+rather than on new modules. This is the one place mozo lets two vendor trees import each other,
+and it is deliberate: the checkpoint stores these weights under `tracker.sam_prompt_encoder` and
+`tracker.sam_mask_decoder` with SAM 2's module names, shapes and token counts, and Meta names the
+neck that feeds them `sam2_convs`. A second copy of ~600 lines that had to stay bit-identical to
+the first forever is a worse failure mode than the coupling -- a divergence between the copies
+would surface as wrong masks, not as an import error.
+
+Configured for 1008 pixels over a 72x72 grid instead of 1024 over 64x64. Every value was read
+back from the published model's own attributes and then confirmed by a strict load:
+`image_size 1008`, `backbone_stride 14`, `sam_image_embedding_size 72`, `low_res_mask_size 288`,
+`sam_prompt_embed_dim 256`, four mask tokens, object scores on, high-resolution features on.
+
+One prompt structure, not several. Every click prompt is a set of labelled points: `1` include,
+`0` exclude, `2`/`3` reserved for a box's two corners, since the network has no box input.
+Points, a box, and a box with points are the same array filled differently.
+
+Three things about it could not be read off the weights, and each was found by measuring:
+
+- **`dynamic_multimask_via_stability` is on.** It carries no parameters, so the strict load could
+  not catch it, and it only changes an answer when the single-mask token is unstable. It survived
+  23 of 24 parity prompts before one image caught it.
+- **The two heads do not share a preprocessing**, and therefore cannot share an image encode.
+  The concept path rounds the resize back to uint8 and multiplies by `1/255`; the click path stays
+  in float and divides by `255`. Both choices are the opposite of the other's, they differ by half
+  a grey level, and that is worth 9e-03 of predicted IoU and several thousand mask pixels. The
+  published model runs the trunk twice for this reason and so does mozo, with a second cache.
+- **`no_mem_embed` applies here too**, as it does on SAM 2's image path -- trained as "there is no
+  memory to attend to", which is a single image's situation exactly.
+
+`tracker.*` is 309 tensors; 149 of them (4.2 M parameters) are the click path and are loaded. The
+other 160 (7.5 M) are memory attention and mask-memory fusion, which have nothing to attend to on
+a still image, and are filtered at load.
+
+**Hole filling is not implemented**, matching `sam2_deploy`, which records the same omission: it
+needs a CUDA connected-components extension. Upstream fills holes up to 256 low-resolution pixels
+before thresholding, so mozo's binary masks come out a *strict subset* of the reference's --
+verified as 0 pixels present in mozo and absent upstream, with every difference lying inside a
+filled hole. The low-resolution logits the masks are thresholded from are bit-identical.
 
 ## Dependencies
 
@@ -110,7 +147,11 @@ loading `tracker.*` -- plus the extra input channel that mask refinement needs.
 Unicode categories (`\p{L}`, `\p{N}`) that the standard library's `re` cannot express, and `ftfy`
 repairs mis-decoded input the way upstream does.
 
-`torchvision` is **not declared**, and is imported lazily inside the box-pooling branch. Only
-exemplar-box prompts reach it; the text-only path never does. That means exemplar boxes currently
-fail at call time rather than at install time — an open decision, either to declare the
-dependency or to write `roi_align` against `grid_sample` and keep the dependency surface clear.
+`torchvision` is a declared core dependency, and `grounding/geometry.py` imports it at module
+scope rather than defending against its absence. It was already a de-facto dependency before SAM 3
+— `rfdetr_deploy` and `depth_anything_v2_deploy` both import it at module scope — and SAM 3 needs
+`roi_align` for exemplar-box pooling. Declaring it is what makes a missing install fail at install
+time instead of inside a forward pass.
+
+Writing `roi_align` against `grid_sample` to drop the dependency was considered and rejected: it
+would remove nothing from the install, since two other families already require torchvision.
