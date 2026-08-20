@@ -19,8 +19,10 @@ from fastapi.testclient import TestClient
 from mozo.registry import get_model_info
 from mozo.vendors.sam3_deploy import checkpoint as loader
 from mozo.vendors.sam3_deploy.config import SPEC, TEXT
-from mozo.vendors.sam3_deploy.image import preprocess
+from mozo.vendors.sam3_deploy.click import ClickHead
+from mozo.vendors.sam3_deploy.image import preprocess, preprocess_click, to_model_coords
 from mozo.vendors.sam3_deploy.predictor import (
+    CLICK_CACHE,
     IMAGE_CACHE,
     PROMPT_CACHE,
     Segmenter,
@@ -92,6 +94,108 @@ def test_preprocessing_normalises_to_minus_one_and_one():
 def test_preprocessing_refuses_anything_that_is_not_rgb():
     with pytest.raises(ValueError, match="HxWx3"):
         preprocess(np.zeros((64, 64), dtype=np.uint8))
+
+
+# --- the click path ------------------------------------------------------------------------
+
+def test_the_two_heads_do_not_preprocess_alike():
+    """The concept path rounds the resize back to uint8 and multiplies by 1/255; the click path
+    does neither. This is the difference that was worth 9e-03 of predicted IoU, so it is pinned
+    here rather than left to a gate that needs 3.45 GB."""
+    image = np.random.default_rng(0).integers(0, 256, (321, 517, 3), dtype=np.uint8)
+    concept, click = preprocess(image), preprocess_click(image)
+    assert concept.shape == click.shape
+    assert not torch.equal(concept, click), "the two transforms must not collapse into one"
+    # Half a grey level in [-1, 1] space, which is what a uint8 round-trip costs.
+    assert (concept - click).abs().max() < 2.0 / 255
+
+
+def test_click_preprocessing_squares_and_normalises_like_its_sibling():
+    batch = preprocess_click(np.zeros((100, 3000, 3), dtype=np.uint8))
+    side = SPEC.trunk.image_size
+    assert batch.shape == (1, 3, side, side)
+    assert torch.allclose(batch, torch.full_like(batch, -1.0))
+
+
+def test_click_preprocessing_refuses_anything_that_is_not_rgb():
+    with pytest.raises(ValueError, match="HxWx3"):
+        preprocess_click(np.zeros((64, 64), dtype=np.uint8))
+
+
+def test_prompt_coordinates_squash_with_the_pixels():
+    """No letterboxing means x and y scale independently, with no padding offset to undo."""
+    side = SPEC.trunk.image_size
+    got = to_model_coords(np.array([[100.0, 50.0]]), (200, 400))
+    assert torch.allclose(got, torch.tensor([[side * 0.25, side * 0.25]]))
+
+
+def test_the_click_head_is_built_at_sam3s_geometry_not_sam2s():
+    """1008 over a 72x72 grid, not 1024 over 64x64 -- read back from the module the checkpoint
+    has to load into. The mask input is four times the grid, which is where 288 comes from."""
+    head = ClickHead()
+    assert (head.image_size, head.grid) == (1008, 72)
+    assert head.sam_prompt_encoder.image_embedding_size == (72, 72)
+    assert head.sam_prompt_encoder.mask_input_size == (288, 288)
+    assert head.sam_mask_decoder.num_mask_tokens == 4
+
+
+def test_the_stability_fallback_is_on():
+    """It carries no weights, so a strict load cannot catch it being wrong -- and it only changes
+    an answer when the single-mask token is unstable, which is how it survived 23 of 24 parity
+    prompts before one image caught it."""
+    assert ClickHead().sam_mask_decoder.dynamic_multimask_via_stability is True
+
+
+def test_the_video_machinery_is_left_behind():
+    """Memory attention and mask-memory fusion have nothing to attend to on a still image."""
+    for key in ("tracker.transformer.", "tracker.maskmem_backbone.", "tracker.obj_ptr_proj."):
+        assert loader._skipped(f"{key}weight")
+    for key in ("tracker.sam_prompt_encoder.", "tracker.sam_mask_decoder.", "tracker.no_mem_embed"):
+        assert not loader._skipped(key), "the click path itself must survive the filter"
+
+
+def test_the_transformer_mlp_is_renamed_not_restructured():
+    assert loader.rename("sam_mask_decoder.transformer.layers.0.mlp.lin1.weight",
+                         loader.TRACKER_RULES) == \
+        "sam_mask_decoder.transformer.layers.0.mlp.layers.0.weight"
+    assert loader.rename("sam_mask_decoder.transformer.layers.1.mlp.lin2.bias",
+                         loader.TRACKER_RULES) == \
+        "sam_mask_decoder.transformer.layers.1.mlp.layers.1.bias"
+
+
+def test_a_box_is_two_corners_with_reserved_labels():
+    """There is no box input. This is what a box actually becomes."""
+    coords, marks = _segmenter()._prompt(
+        None, None, np.array([0.0, 0.0, 400.0, 200.0]), (200, 400))
+    assert coords.shape == (1, 2, 2)
+    assert marks.tolist() == [[2, 3]]
+
+
+def test_a_box_and_its_points_arrive_corners_first():
+    """The encoder adds a different learned embedding per position, so the order is meaning."""
+    coords, marks = _segmenter()._prompt(
+        np.array([[100.0, 100.0]]), np.array([1]),
+        np.array([0.0, 0.0, 400.0, 200.0]), (200, 400))
+    assert marks.tolist() == [[2, 3, 1]], "corners first, then the clicks"
+    assert coords.shape == (1, 3, 2)
+
+
+def test_points_and_labels_have_to_agree_in_number():
+    with pytest.raises(ValueError, match="2 points but 1 labels"):
+        _segmenter()._prompt(
+            np.array([[1.0, 2.0], [3.0, 4.0]]), np.array([1]), None, (200, 400))
+
+
+@pytest.mark.parametrize("kwargs,message", [
+    ({}, "a prompt is required"),
+    ({"labels": np.array([1])}, "a prompt is required"),   # labels alone are not a prompt
+    ({"points": np.zeros((1, 2))}, "points and labels go together"),
+    ({"labels": np.array([1]), "boxes": np.zeros(4)}, "points and labels go together"),
+])
+def test_a_click_without_a_prompt_is_refused(kwargs, message):
+    """Checked before ``self`` or the image is touched, so it needs neither weights nor pixels."""
+    with pytest.raises(ValueError, match=message):
+        Segmenter.segment(None, None, **kwargs)
 
 
 # --- the checkpoint translation ----------------------------------------------------------------
@@ -168,16 +272,19 @@ class _Recorder:
 
 
 def _segmenter():
-    """A Segmenter with its caches, built without touching 3.45 GB of weights.
+    """A Segmenter with its caches and its device, built without touching 3.45 GB of weights.
 
-    ``__new__`` rather than a constructor because ``Segmenter.__init__`` loads the checkpoint;
-    the cache machinery is all that is needed here.
+    ``__new__`` rather than a constructor because ``Segmenter.__init__`` loads the checkpoint.
+    Everything the weightless tests reach for is set here, so there is one of these rather than
+    one per group of attributes.
     """
     from collections import OrderedDict
     from threading import Lock
 
     blank = Segmenter.__new__(Segmenter)
-    blank._images, blank._prompts, blank._lock = OrderedDict(), OrderedDict(), Lock()
+    blank._images, blank._clicks = OrderedDict(), OrderedDict()
+    blank._prompts, blank._lock = OrderedDict(), Lock()
+    blank.device = "cpu"
     return blank
 
 
@@ -218,6 +325,25 @@ def test_a_repeated_prompt_is_encoded_once_and_kept_apart_from_the_images():
     assert PROMPT_CACHE > IMAGE_CACHE
 
 
+def test_the_two_heads_do_not_share_a_cache():
+    """They cannot: their preprocessing differs, so the same photograph produces two different
+    encodes. One cache keyed on pixels alone would serve the click head the concept head's
+    features -- which is wrong by 3.5 standard deviations of the feature map, not by a rounding."""
+    segmenter, encoder = _segmenter(), _Recorder()
+    segmenter._remember(segmenter._images, b"same", encoder, IMAGE_CACHE)
+    segmenter._remember(segmenter._clicks, b"same", encoder, CLICK_CACHE)
+    assert encoder.calls == 2, "the same key in the two caches must not collide"
+    assert len(segmenter._images) == len(segmenter._clicks) == 1
+
+
+def test_the_click_cache_is_bounded_and_evicts_least_recently_used():
+    segmenter, encoder = _segmenter(), _Recorder()
+    for index in range(CLICK_CACHE + 2):
+        segmenter._remember(segmenter._clicks, bytes([index]), encoder, CLICK_CACHE)
+    assert len(segmenter._clicks) == CLICK_CACHE
+    assert encoder.calls == CLICK_CACHE + 2
+
+
 # --- the registry ------------------------------------------------------------------------------
 
 def test_registry_agrees_with_the_adapter():
@@ -249,18 +375,76 @@ def test_the_server_refuses_a_prompted_model_with_no_prompt():
     response = client.post(
         "/predict/sam3/sam3", files={"file": ("x.jpg", b"not really a jpeg", "image/jpeg")}
     )
+    blank = client.post(
+        "/predict/sam3/sam3?text=&text=%20",
+        files={"file": ("x.jpg", b"not really a jpeg", "image/jpeg")},
+    )
+    assert blank.status_code == 400, "prompts that are all whitespace are no prompt at all"
     # The body is deliberately not a JPEG: reaching the prompt complaint rather than a decode
     # failure is what shows the check happens before any work is done.
     assert response.status_code == 400, response.text
     assert "text=" in response.json()["detail"], response.text
 
 
-@pytest.mark.parametrize("empty", ["", "   "])
+@pytest.mark.parametrize("empty", ["", "   ", ["car", ""], ["  "]])
 def test_an_empty_prompt_is_refused_rather_than_guessed(empty):
     """SAM 3 will encode the empty string and return whatever is most salient, which is not what
-    an empty prompt means. The refusal happens before ``self`` or the image is touched, so it
-    needs neither weights nor a real instance."""
+    an empty prompt means. One empty concept among several is still an empty concept, so the
+    whole call is refused rather than that prompt quietly dropped -- a caller who asked for three
+    classes and got two would have no way to tell. The refusal happens before ``self`` or the
+    image is touched, so it needs neither weights nor a real instance."""
     from mozo.adapters.sam3 import Sam3Predictor
 
     with pytest.raises(ValueError, match="concept to look for"):
         Sam3Predictor.predict(None, None, empty)
+
+
+def test_asking_for_nothing_is_refused_too():
+    from mozo.adapters.sam3 import Sam3Predictor
+
+    with pytest.raises(ValueError, match="no text was given"):
+        Sam3Predictor.predict(None, None, [])
+
+
+class _FixedSegmenter:
+    """Stands in for the vendor Segmenter, returning one instance per prompt asked for."""
+
+    def __init__(self):
+        self.prompts = []
+
+    def predict(self, pixels, text, threshold=0.5):
+        self.prompts.append(text)
+        return {
+            "boxes": torch.tensor([[1.0, 2.0, 3.0, 4.0]]),
+            "scores": torch.tensor([0.9]),
+            "masks": torch.zeros(1, 8, 8, dtype=torch.bool),
+        }
+
+
+def test_the_prompt_list_is_the_vocabulary():
+    """With several concepts the prompts become the class list and ``class_ids`` index it --
+    which is what that field is for, and what a single prompt leaves unused. Asserted on the
+    result rather than on the source, so renaming a local cannot break it and passing the wrong
+    vocabulary cannot pass it."""
+    from mozo.adapters.sam3 import Sam3Predictor
+
+    model = Sam3Predictor.__new__(Sam3Predictor)
+    model._segmenter = _FixedSegmenter()
+    found = model.predict(np.zeros((8, 8, 3), dtype=np.uint8), ["car", "person", "dog"])
+
+    assert model._segmenter.prompts == ["car", "person", "dog"], "one decode per concept, in order"
+    assert [int(d.class_id) for d in found] == [0, 1, 2]
+    assert [d.class_name for d in found] == ["car", "person", "dog"]
+
+
+def test_one_concept_still_comes_back_as_one_class():
+    """The single-prompt path is the common one and must be unchanged by the list support."""
+    from mozo.adapters.sam3 import Sam3Predictor
+
+    model = Sam3Predictor.__new__(Sam3Predictor)
+    model._segmenter = _FixedSegmenter()
+    found = model.predict(np.zeros((8, 8, 3), dtype=np.uint8), "car")
+
+    assert model._segmenter.prompts == ["car"]
+    assert [int(d.class_id) for d in found] == [0]
+    assert [d.class_name for d in found] == ["car"]
