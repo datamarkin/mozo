@@ -84,12 +84,25 @@ Against the published model on `tests/fixtures/images/example.jpg`, CPU, float32
 | dot-product scoring (`pred_logits`) | max abs diff **0** |
 | mask head (`pred_masks`) | max abs diff **0** |
 | **whole concept path, end to end** — 5 prompts incl. a multi-word phrase and an absent concept | masks, boxes, logits and presence all max abs diff **0** |
+| exemplar boxes — positive, negative, and two with mixed labels | max abs diff **0** |
+| `Segmenter`, through both caches — masks, boxes and scores after thresholding | max abs diff **0** |
+
+Every other gate prompts with no boxes, so the exemplar row is what exercises `roi_align` and the
+three box projections at all. The two-box case is what makes it meaningful: with a single box the
+reference's sequence-first prompt is indistinguishable from a batch-first one, so a transpose
+would pass unnoticed.
 
 ## Not yet built
 
-A `Segmenter` with the image and prompt caches, the click path (points, boxes and mask
-refinement), and the registry/adapter wiring. The concept path is complete: a decoded image and a
-noun phrase in, instances out.
+The click path and the registry/adapter wiring. The concept path is complete: a decoded image
+and a noun phrase in, instances out, cached on both halves.
+
+The click path is one prompt structure, not several. Following SAM 2, every click prompt is a set
+of labelled points: `1` include, `0` exclude, and `2`/`3` reserved for a box's two corners, since
+the network has no separate box input. Points, a box, and a box combined with points are the same
+array filled differently, so what remains to build is the SAM head itself -- the prompt encoder,
+two-way transformer and mask decoder, reconfigured for SAM 3's 72x72 grid at 256 channels and
+loading `tracker.*` -- plus the extra input channel that mask refinement needs.
 
 ## Dependencies
 
