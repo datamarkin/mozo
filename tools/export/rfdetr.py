@@ -59,6 +59,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(ROOT))
 
+from common import fixtures  # noqa: E402
 from mozo.runtimes import OnnxRunner  # noqa: E402
 from mozo.vendors.rfdetr_deploy import Predictor  # noqa: E402
 from mozo.weights import resolve  # noqa: E402
@@ -91,21 +92,6 @@ SCORE_TOLERANCE = 0.01
 THRESHOLD = 0.5
 
 #: Where the photographs used for verification live.
-FIXTURES = ROOT / "tests" / "fixtures" / "images"
-
-
-def _fixtures() -> list[Path]:
-    """Return the photographs to verify against.
-
-    Raises:
-        SystemExit: If the fixtures directory is empty -- an export verified against nothing is
-            an export that has not been verified.
-    """
-    images = sorted(p for p in FIXTURES.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
-    if not images:
-        raise SystemExit(f"no fixture images in {FIXTURES}. Add photographs to verify against.")
-    return images
-
 
 def _detections(predictor: Predictor, raw: tuple, sizes: list[tuple[int, int]]) -> list[dict]:
     """Post-process raw model outputs into detections, the way ``Predictor.predict`` does.
@@ -226,7 +212,7 @@ def export_variant(variant: str, revision: str | None, weights_dir: Path) -> Non
     # Capture the reference before switching to export mode: ``export()`` replaces ``forward``,
     # so the eager path is unreachable afterwards.
     reference = []
-    for image in _fixtures():
+    for image in fixtures():
         want = predictor.predict(str(image), threshold=THRESHOLD)[0]
         batch, sizes = predictor.preprocess([str(image)])
         reference.append((image, batch, sizes, want))

@@ -47,11 +47,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from common import variant_parser  # noqa: E402
+from common import fixtures, variant_parser  # noqa: E402
 from mozo.image import load_image  # noqa: E402
-
-#: The photographs the comparison runs on.
-FIXTURES = ROOT / "tests" / "fixtures" / "images"
 
 #: Opset the graphs are written at. A constant rather than a flag: which opset mozo publishes is a
 #: property of the artifact, not something a caller should be able to vary per run.
@@ -83,14 +80,6 @@ OUTPUT_NAME = "predictions"
 #: different number of objects, or calls one of them something else, is not the same model.
 BOX_TOLERANCE = 1e-2      # pixels, in the source image's coordinates
 SCORE_TOLERANCE = 1e-3
-
-
-def _fixtures() -> list[Path]:
-    """Photographs to compare on. Real images, because synthetic noise proves nothing here."""
-    images = sorted(p for p in FIXTURES.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
-    if not images:
-        raise SystemExit(f"no fixture images in {FIXTURES}. Add photographs to verify against.")
-    return images
 
 
 def _detections(vendor, source: np.ndarray, forward, imgsz: int) -> tuple[np.ndarray, ...]:
@@ -266,7 +255,7 @@ def run(family: str, *, coreml: bool, description: str = "") -> int:
 
     # Decoded once for the whole run, so every variant and every artifact provably starts from the
     # same pixels and no photograph is decoded twice.
-    sources = {image: load_image(str(image)) for image in _fixtures()}
+    sources = {image: load_image(str(image)) for image in fixtures()}
     for variant in args.variants:
         export_variant(family, vendor, variant, args.revision, args.weights_dir, sources, coreml)
 

@@ -33,6 +33,19 @@ CHUNK = 1 << 20
 #: one family could disagree about which revision they were building.
 REVISION = "2026-08-19"
 
+#: The photographs every export gate compares on. Shared for the same reason ``REVISION`` is:
+#: each family's gate should widen when a photograph is added here, and three private copies of
+#: this path meant adding one widened whichever gates someone remembered.
+FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "images"
+
+
+def fixtures() -> list[Path]:
+    """Photographs to compare on. Real images, because synthetic noise proves nothing here."""
+    images = sorted(p for p in FIXTURES.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
+    if not images:
+        raise SystemExit(f"no fixture images in {FIXTURES}. Add photographs to verify against.")
+    return images
+
 
 def digest(path: Path, algorithm: str = "sha256") -> str:
     """Return the hex digest of a file, read in chunks rather than loaded."""
