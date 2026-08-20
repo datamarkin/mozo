@@ -96,7 +96,9 @@ def payload() -> bytes:
     return FIXTURE.read_bytes()
 
 #: What a synthetic zoo contains: two variants of one family, one revision apart, with a
-#: different artifact set each so selection and absence are both exercised.
+#: different artifact set each so selection and absence are both exercised -- plus one variant
+#: whose graph runtime is split across parts, because SAM 2 publishes an encoder and a decoder
+#: rather than one file and the resolver has to rejoin them without knowing what they are.
 _ZOO = {
     "toy/alpha": {
         "2026-01-01": {"torch-fp32.pth": b"alpha-torch-v1", "LICENSE": b"Apache-2.0"},
@@ -109,6 +111,22 @@ _ZOO = {
     },
     "toy/beta": {
         "2026-01-01": {"torch-fp32.pth": b"beta-torch", "LICENSE": b"MIT"},
+    },
+    "toy/split": {
+        "2026-01-01": {
+            # A NOTICE as well as a LICENCE, because the families that publish split runtimes
+            # are the ones whose terms ask for attribution to travel with the copy -- and every
+            # part has to bring both.
+            "NOTICE": b"attribution",
+            "labels.json": json.dumps([{"id": 0, "name": "thing"}]).encode(),
+            "torch-fp32.pth": b"split-torch",
+            "onnx-fp32-encoder.onnx": b"split-onnx-encoder",
+            "onnx-fp32-decoder.onnx": b"split-onnx-decoder",
+            "coreml-fp16-encoder.zip": b"split-coreml-encoder",
+            "coreml-fp16-decoder.zip": b"split-coreml-decoder",
+            "coreml-fp16-prompt.zip": b"split-coreml-prompt",
+            "LICENSE": b"Apache-2.0",
+        },
     },
 }
 
