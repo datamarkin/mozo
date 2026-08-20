@@ -20,7 +20,7 @@ import json
 import numpy as np
 import pytest
 
-from conftest import FIXTURE, as_pixelflow_reports, published, require_weights
+from conftest import COORD_STEP, FIXTURE, as_pixelflow_reports, published, require_weights
 from mozo.runtimes import executable, select_runtime
 from mozo.weights import WeightsError, artifacts, companions, resolve
 
@@ -28,6 +28,10 @@ from mozo.weights import WeightsError, artifacts, companions, resolve
 FIXTURES = FIXTURE.parent.parent
 
 THRESHOLD = 0.25
+
+#: What a graph may move against torch: what the YOLO exporter already held it to at full
+#: precision, plus one step of PixelFlow's rounding on top.
+BOX_TOLERANCE = 1e-2 + COORD_STEP
 
 ALL = ["nano", "small", "medium", "large", "xlarge"]
 
@@ -193,7 +197,7 @@ class TestMatchesTheVendor:
         assert [int(i) for i in want.class_ids] == [d.class_id for d in got]
         assert want.names == [d.class_name for d in got]
 
-        boxes, scores = as_pixelflow_reports(want.boxes, want.scores)
+        boxes, scores = as_pixelflow_reports(want.boxes, want.scores, want.class_ids)
         assert boxes.tolist() == [[float(v) for v in d.bbox] for d in got]
         assert scores.tolist() == pytest.approx([d.confidence for d in got])
 
@@ -217,14 +221,14 @@ class TestRuntimeAgreement:
         assert len(torch_out) == len(other)
         assert [d.class_name for d in torch_out] == [d.class_name for d in other]
 
-        # Boxes are truncated to integers, so a sub-pixel float difference between the runtimes
-        # can always straddle the boundary and move one edge by one. Anything larger is the model
-        # disagreeing with itself. The float-level check lives in tools/export.
+        # A rounding boundary can move one edge by a step of PixelFlow's coordinate precision;
+        # anything larger is the model disagreeing with itself. The float-level check, before any
+        # rounding, lives in tools/export.
         worst = max(
             (max(abs(a - b) for a, b in zip(x.bbox, y.bbox)) for x, y in zip(torch_out, other)),
             default=0,
         )
-        assert worst <= 1, f"boxes moved {worst} px between torch-fp32 and {runtime}"
+        assert worst <= BOX_TOLERANCE, f"boxes moved {worst} px between torch-fp32 and {runtime}"
 
     def test_auto_picks_the_runtime_that_was_measured_fastest(self):
         """Asserted against the real manifest rather than by loading duplicate predictors.

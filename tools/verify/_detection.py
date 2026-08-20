@@ -11,16 +11,18 @@ The comparison is exact for the torch runtime. Not "close": both paths run the s
 through the same pre-processing and the same suppression, so every detection must agree exactly on
 boxes, scores and class ids. A tolerance there would hide precisely the drift this exists to catch.
 
-The vendor's side is quantised first, because mozo's is: PixelFlow truncates each box coordinate
-to a whole pixel and rounds each score to three decimals, so those are the numbers a mozo user
-actually receives and the only ones the two paths can be compared on. Comparing mozo's rounded
-output against the vendor's full precision would report a difference on every box that is not
-already an integer.
+The vendor's side is quantised first, because mozo's is: PixelFlow rounds each box coordinate to
+two decimals and each score to three, so those are the numbers a mozo user actually receives and
+the only ones the two paths can be compared on.
 
-Graph runtimes are held to one pixel rather than zero, and the reason is that truncation, not the
-executor. ``tools/export/*`` already verified each graph against the torch model to a hundredth of
-a pixel at full precision; a box sitting at 632.9997 on one side and 633.0002 on the other is well
-inside that and still truncates to 632 against 633.
+Graph runtimes are held to two hundredths of a pixel rather than zero, which is one step of that
+rounding either way. A genuine sub-thousandth difference between two executors can still land on
+opposite sides of a rounding boundary and show up as 0.01.
+
+This tolerance used to be a whole pixel, and that was not caution -- it was PixelFlow truncating
+boxes to integers, which put every comparison one truncation boundary away from a 1 px disagreement
+for reasons that had nothing to do with the model. That cost 1.13 mAP on COCO val2017 as well as
+this gate's resolution; with it fixed, the gate is fifty times stricter for free.
 
 This module is shared rather than copied per family, unlike the vendors it checks. It is a *gate*:
 a second copy that nobody updated keeps exiting zero while checking something older than what it
@@ -49,7 +51,7 @@ os.environ.setdefault("MOZO_BASE_URL", f"file://{ROOT / 'weights'}")
 import numpy as np  # noqa: E402
 
 import mozo  # noqa: E402
-from conftest import as_pixelflow_reports  # noqa: E402
+from conftest import COORD_STEP, as_pixelflow_reports  # noqa: E402
 from mozo.image import load_image  # noqa: E402
 from mozo.runtimes import executable  # noqa: E402
 from mozo.weights import artifacts, resolve  # noqa: E402
@@ -58,10 +60,11 @@ from mozo.weights import artifacts, resolve  # noqa: E402
 #: implementations diverge first, rather than only the confident ones everything agrees on.
 THRESHOLD = 0.05
 
-#: What a graph pairing is allowed to move once quantised. One whole pixel, because a difference
-#: far below a pixel can still land either side of a truncation boundary; the exporter is what
-#: holds the graph itself to a hundredth of a pixel, and it does that before quantising.
-BOX_TOLERANCE = 1.0
+#: What a graph may move against torch: what tools/export already held it to at full
+#: precision, plus one step of PixelFlow's rounding on top.
+BOX_TOLERANCE = 1e-2 + COORD_STEP
+
+#: What a score may move by, which is one step of PixelFlow's confidence rounding.
 SCORE_TOLERANCE = 1e-3
 
 
@@ -71,7 +74,7 @@ def _vendor_detections(detector_class, family: str, variant: str, images: dict) 
     found = {}
     for name, pixels in images.items():
         result = detector.predict(pixels, conf=THRESHOLD)
-        boxes, scores = as_pixelflow_reports(result.boxes, result.scores)
+        boxes, scores = as_pixelflow_reports(result.boxes, result.scores, result.class_ids)
         found[name] = (boxes, scores, result.class_ids, result.names)
     return found
 
