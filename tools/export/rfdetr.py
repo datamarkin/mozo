@@ -73,7 +73,18 @@ OPSET = 17
 
 #: What the export must reproduce, per fixture image. Counts and labels are exact because a
 #: detection appearing or vanishing is a behaviour change however small the tensor delta was.
-BOX_TOLERANCE_PX = 1.0
+#:
+#: The box bound is measured rather than assumed. Across all eight variants, torch and the
+#: published ONNX agree to 0.0002-0.0008 px -- except nano, which is 0.0876. So 0.2 px covers the
+#: worst real case twice over and still fails on anything an order of magnitude larger. It was a
+#: whole pixel before, which is eleven times the worst disagreement that has ever occurred here
+#: and a thousand times the typical one: a bound nobody had measured, wide enough to pass an
+#: export that had genuinely broken.
+#:
+#: nano being a hundred times its siblings is not explained. It is well inside the bound and the
+#: detections match exactly, so it is not blocking anything -- but it is the one number here that
+#: looks like a fact about the model rather than about float arithmetic.
+BOX_TOLERANCE_PX = 0.2
 SCORE_TOLERANCE = 0.01
 
 #: Detections below this are noise and would make the count comparison meaningless.

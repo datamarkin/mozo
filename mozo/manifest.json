@@ -297,8 +297,8 @@
             },
             "coreml-fp32": {
               "path": "rfdetr/nano/2026-08-18/coreml-fp32.zip",
-              "sha256": "c73101e782418bb7bf70174ccda85a99fc9c8dc58bf096b8a89edbcdbe01b69d",
-              "size": 99893869
+              "sha256": "953a76d47f85eeca45928510b7c954061ac7c4aa664571c7b90dc31b22a6346e",
+              "size": 99893520
             },
             "labels": {
               "path": "rfdetr/nano/2026-08-18/labels.json",
