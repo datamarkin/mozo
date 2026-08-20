@@ -116,6 +116,7 @@ def predict(
     file: UploadFile = File(..., description="Image file to process."),
     threshold: float = 0.5,
     labels: Optional[str] = None,
+    text: Optional[str] = None,
 ):
     """Run one model over one image.
 
@@ -125,6 +126,8 @@ def predict(
         file: The image.
         threshold: Confidence floor, for detection models.
         labels: Comma-separated class names overriding the model's own, e.g. ``hardhat,vest``.
+        text: The concept to look for, for prompted models -- ``cow``, ``yellow school bus``.
+            Required by those, ignored by the rest.
 
     Returns:
         Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
@@ -138,6 +141,14 @@ def predict(
         task = get_model_info(family, variant)["task_type"]
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+    # Settled here rather than beside the call: nothing about it needs the image or the model,
+    # and asking first is what keeps a forgotten parameter from costing a decode and a
+    # multi-gigabyte load before the caller is told they forgot it.
+    if task == "concept_segmentation" and not (text or "").strip():
+        raise HTTPException(
+            status_code=400, detail=f"{family} is prompted: pass ?text=... naming what to look for."
+        )
 
     # Decode through the same function the Python API uses, so both entry points agree on
     # channel order. A second decoder here is how the two drift apart without anyone noticing.
@@ -161,10 +172,17 @@ def predict(
             parsed = [n.strip() for n in labels.split(",") if n.strip()] if labels else None
             return JSONResponse(
                 content=model.predict(image, threshold=threshold, labels=parsed or None).to_dict())
+        if task == "concept_segmentation":
+            return JSONResponse(
+                content=model.predict(image, text, threshold=threshold).to_dict())
         if task == "depth_estimation":
             return _depth_response(model.predict(image), model.unit)
     except HTTPException:
         raise  # already carries the status it wants; do not re-wrap it as a 500
+    except ValueError as e:
+        # An adapter raising ValueError is rejecting the caller's arguments, which is a 400 --
+        # for every family, rather than something each one arranges separately.
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
