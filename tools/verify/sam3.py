@@ -39,6 +39,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -46,7 +47,7 @@ sys.path.insert(0, str(ROOT))
 
 from mozo.image import load_image  # noqa: E402
 from mozo.vendors.sam3_deploy import Segmenter  # noqa: E402
-from mozo.vendors.sam3_deploy.image import preprocess  # noqa: E402
+from mozo.vendors.sam3_deploy.image import preprocess, preprocess_click  # noqa: E402
 from mozo.weights import manifest  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests"))
@@ -62,6 +63,35 @@ PROMPTS = ["person", "coffee mug", "a person holding a coffee mug", "cow"]
 #: Exemplar boxes, normalised (cx, cy, w, h), with 1 meaning "an example of what I want".
 #: Two boxes rather than one: with a single box a batch/sequence transpose is invisible.
 EXEMPLARS = ([[0.45, 0.55, 0.20, 0.30], [0.15, 0.30, 0.12, 0.14]], [1, 0])
+
+#: Click prompts, as fractions of the image so they follow the fixture rather than its size.
+#: The last two exist for reasons a simpler set would miss: a lone negative point is the only
+#: prompt with nothing to include, and ``multimask_output=False`` is the only one that reaches
+#: the decoder's stability fallback -- a flag carrying no weights, which a strict load cannot
+#: check and which 23 of 24 parity prompts failed to notice being wrong.
+CLICKS: tuple[tuple[str, list, list, list | None, bool], ...] = (
+    ("one positive", [[0.62, 0.55]], [1], None, True),
+    ("positive and negative", [[0.62, 0.55], [0.58, 0.72]], [1, 0], None, True),
+    ("two positives", [[0.62, 0.55], [0.65, 0.60]], [1, 1], None, True),
+    ("box", None, None, [0.55, 0.42, 0.72, 0.78], True),
+    ("box and negative", [[0.58, 0.72]], [0], [0.55, 0.42, 0.72, 0.78], True),
+    ("lone negative", [[0.62, 0.55]], [0], None, True),
+    ("single mask output", [[0.62, 0.55]], [1], None, False),
+)
+
+
+def click_prompt(spec, shape):
+    """Turn one :data:`CLICKS` entry into pixel coordinates for ``shape``."""
+    name, points, labels, box, multimask = spec
+    height, width = shape
+    scale = np.array([width, height], dtype=np.float32)
+    return {
+        "points": None if points is None else np.asarray(points, dtype=np.float32) * scale,
+        "labels": None if labels is None else np.asarray(labels),
+        "boxes": None if box is None
+        else (np.asarray(box, dtype=np.float32).reshape(2, 2) * scale).reshape(4),
+        "multimask_output": multimask,
+    }
 
 
 def digest(tensor: torch.Tensor) -> dict:
@@ -124,8 +154,6 @@ def observe(image: Path, checkpoint: Path) -> dict[str, dict]:
     features = segmenter.encode_image(pixels)
     for level, tensor in enumerate(features["concept"]):
         seen[f"vision.concept.{level}"] = digest(tensor)
-    for level, tensor in enumerate(features["click"]):
-        seen[f"vision.click.{level}"] = digest(tensor)
     seen["vision.positions"] = digest(features["positions"])
 
     # Batched deliberately: padding and the attention mask only have a shape to get wrong when
@@ -161,6 +189,22 @@ def observe(image: Path, checkpoint: Path) -> dict[str, dict]:
     # Re-running a held prompt on a held image must return the identical answer.
     repeat = segmenter.predict(pixels, PROMPTS[0])
     seen["segmenter.cached.masks"] = digest(repeat["masks"])
+
+    # The click path. Its encode is deliberately not the concept path's -- the two preprocess
+    # differently -- so this also pins that the right one is being used.
+    seen["preprocess.click"] = digest(preprocess_click(pixels))
+    for level, tensor in enumerate(segmenter.encode_click(pixels)):
+        seen[f"click.features.{level}"] = digest(tensor)
+    for spec in CLICKS:
+        out = segmenter.segment(pixels, **click_prompt(spec, pixels.shape[:2]))
+        for name in ("masks", "scores", "logits"):
+            seen[f"click.{spec[0]}.{name}"] = digest(out[name])
+
+    # A held image must answer a repeated click identically. A cache that quietly returns
+    # something else is worse than no cache, and this is the only place it would show.
+    repeat = segmenter.segment(pixels, **click_prompt(CLICKS[0], pixels.shape[:2]))
+    seen["click.cached.masks"] = digest(repeat["masks"])
+    seen["click.cached.logits"] = digest(repeat["logits"])
 
     return seen
 
