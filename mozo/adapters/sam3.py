@@ -3,7 +3,7 @@
 
 Every other family in mozo answers a fixed question -- "where are the 80 COCO classes", "how far
 away is each pixel". SAM 3 answers whatever you ask it, so its ``predict`` takes a *prompt*, and
-that one difference propagates: the caller supplies the vocabulary, one concept per call.
+that one difference propagates: the caller supplies the vocabulary, one concept or several.
 
 That fits mozo's rule that a class name comes from the weights or from the user rather than being
 invented. Here it comes from the user, literally -- the phrase you searched for is the name every
@@ -17,10 +17,12 @@ beside them.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Union
 
 import numpy as np
+import torch
 
 from ..image import load_image
 from ..runtimes import get_default_device, select_runtime
@@ -58,6 +60,7 @@ class Sam3Predictor:
         >>> found = model.predict("street.jpg", "taxi")        # doctest: +SKIP
         >>> found[0].class_name                                # doctest: +SKIP
         'taxi'
+        >>> many = model.predict("street.jpg", ["taxi", "cyclist"])   # doctest: +SKIP
     """
 
     #: Meta publishes a single SAM 3 rather than a size ladder, so there is no choice to make.
@@ -95,38 +98,64 @@ class Sam3Predictor:
     def predict(
         self,
         image: Union[str, Path, bytes, np.ndarray],
-        text: str,
+        text: Union[str, Sequence[str]],
         threshold: float = 0.5,
     ) -> "pf.detections.Detections":
-        """Find every instance of ``text``.
+        """Find every instance of each concept in ``text``.
 
         Args:
             image: A file path, encoded image bytes, or an ``HxWx3`` RGB ``uint8`` array.
-            text: The concept to look for, as a noun phrase -- ``"taxi"``, ``"yellow school
-                bus"``. Up to 32 tokens; longer is truncated.
+            text: One concept as a noun phrase -- ``"taxi"``, ``"yellow school bus"`` -- or
+                several, as a sequence. Each is up to 32 tokens; longer is truncated. Several
+                prompts share one image encode but each pays its own decode.
             threshold: Confidence floor.
 
         Returns:
-            A PixelFlow ``Detections`` carrying a box, a mask and a score per instance. Every
-            detection's ``class_name`` is ``text``, because the prompt is the class.
+            A PixelFlow ``Detections`` carrying a box, a mask and a score per instance, with
+            ``class_name`` naming the prompt that found it. With several prompts this is one
+            result carrying several classes rather than one result per prompt.
+
+            Instances found by different prompts may overlap: ask for ``"car"`` and
+            ``"vehicle"`` and the same car comes back twice, under each name. That is what was
+            asked for, so nothing here suppresses it.
 
         Raises:
-            ValueError: If ``text`` is empty. SAM 3 will happily encode the empty string and
-                return whatever it finds most salient, which is not what an empty prompt means.
+            ValueError: If any concept is empty, or none is given. SAM 3 will happily encode the
+                empty string and return whatever it finds most salient, which is not what an
+                empty prompt means.
         """
-        if not text or not text.strip():
+        prompts = [text] if isinstance(text, str) else list(text)
+        if not prompts:
+            raise ValueError("SAM 3 needs a concept to look for; no text was given.")
+        if any(not p.strip() for p in prompts):
             raise ValueError("SAM 3 needs a concept to look for; text was empty.")
 
         pixels = load_image(image)
-        found = self._segmenter.predict(pixels, text, threshold=threshold)
 
-        # One concept per call, so every instance shares a class, and the prompt names it. The
-        # masks are already boolean and already in the source image's pixels, and PixelFlow's
-        # framework-free converter detaches and moves tensors itself -- so they go in as they are.
+        # One decode per prompt, because the head takes one prompt's features against one
+        # image's -- there is no batched form to reach for. The encode is what they share, and
+        # it is the expensive half, so this is the cheap direction of that trade.
+        boxes, scores, masks, class_ids = [], [], [], []
+        for index, prompt in enumerate(prompts):
+            found = self._segmenter.predict(pixels, prompt, threshold=threshold)
+            boxes.append(found["boxes"])
+            scores.append(found["scores"])
+            masks.append(found["masks"])
+            class_ids.append(np.full(len(found["scores"]), index, dtype=np.int64))
+
+        # The prompt list *is* the vocabulary, so class_ids index it. With one prompt this is
+        # the single-class result it has always been; with several it is what class_ids are for.
+        # Masks are already boolean and already in the source image's pixels, and PixelFlow's
+        # converter detaches and moves tensors itself, so they go in as they are.
+        # ``torch.cat`` allocates even for a one-element list, and one prompt is still the
+        # common case -- on a 2 MP image that is a pointless copy of the whole mask stack.
+        def joined(parts):
+            return parts[0] if len(parts) == 1 else torch.cat(parts)
+
         return pf.detections.from_arrays(
-            boxes=found["boxes"],
-            scores=found["scores"],
-            class_ids=np.zeros(len(found["scores"]), dtype=np.int64),
-            masks=found["masks"],
-            labels=[text],
+            boxes=joined(boxes),
+            scores=joined(scores),
+            class_ids=class_ids[0] if len(class_ids) == 1 else np.concatenate(class_ids),
+            masks=joined(masks),
+            labels=prompts,
         )
