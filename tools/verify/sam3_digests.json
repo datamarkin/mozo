@@ -1,0 +1,467 @@
+{
+  "exemplars": {
+    "boxes": [
+      [
+        0.45,
+        0.55,
+        0.2,
+        0.3
+      ],
+      [
+        0.15,
+        0.3,
+        0.12,
+        0.14
+      ]
+    ],
+    "labels": [
+      1,
+      0
+    ]
+  },
+  "image": "example.jpg",
+  "prompts": [
+    "person",
+    "coffee mug",
+    "a person holding a coffee mug",
+    "cow"
+  ],
+  "revision": "2026-08-20",
+  "sha256": "9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e",
+  "stages": {
+    "concept.a person holding a coffee mug.boxes": {
+      "dtype": "float32",
+      "sha256": "d2dc6dddba9383419ea28db572afd195a540738017f6b373313704dc6cb5ac47",
+      "shape": [
+        1,
+        200,
+        4
+      ]
+    },
+    "concept.a person holding a coffee mug.logits": {
+      "dtype": "float32",
+      "sha256": "21694aa1636753520d6a912018be529d3d12289320547525086482b1ad49009b",
+      "shape": [
+        1,
+        200
+      ]
+    },
+    "concept.a person holding a coffee mug.masks": {
+      "dtype": "float32",
+      "sha256": "46d3265b8a3ff7357e84ee116ca7c7b2d9304edda7eb1273aa52d28a9695d8e9",
+      "shape": [
+        1,
+        200,
+        288,
+        288
+      ]
+    },
+    "concept.a person holding a coffee mug.presence": {
+      "dtype": "float32",
+      "sha256": "7066c67f786fe03b82f1f23ab9d71072c7b55f074e519db3dce8569a6ab0d6a6",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "concept.a person holding a coffee mug.semantic": {
+      "dtype": "float32",
+      "sha256": "c8d31e7f868724251e73e841e32c8b2f7ccfa62238393ba74d905a11a1c3541e",
+      "shape": [
+        1,
+        1,
+        288,
+        288
+      ]
+    },
+    "concept.coffee mug.boxes": {
+      "dtype": "float32",
+      "sha256": "4eb57d86947900c7044d2a62ebcd1ed20f0e690238bdbcd5b5e2eea706d3f2a2",
+      "shape": [
+        1,
+        200,
+        4
+      ]
+    },
+    "concept.coffee mug.logits": {
+      "dtype": "float32",
+      "sha256": "516a720d851fe5ea0351cb294d2fe32407b82fbfa55f4008694c2c9d28eb951d",
+      "shape": [
+        1,
+        200
+      ]
+    },
+    "concept.coffee mug.masks": {
+      "dtype": "float32",
+      "sha256": "9688889592de255c3e42509ec44e032ac64898b968d1e3290f1c1b025ae6a1d8",
+      "shape": [
+        1,
+        200,
+        288,
+        288
+      ]
+    },
+    "concept.coffee mug.presence": {
+      "dtype": "float32",
+      "sha256": "df8dd9c0335f8a51212fe002d5216ad94ae614d59a608b4bdcb6455d19f47aca",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "concept.coffee mug.semantic": {
+      "dtype": "float32",
+      "sha256": "b0dd518e6bfca923aba7fe9e698623748b574327164a810b167e079fe54d6a5f",
+      "shape": [
+        1,
+        1,
+        288,
+        288
+      ]
+    },
+    "concept.cow.boxes": {
+      "dtype": "float32",
+      "sha256": "bb4f9231ebae92231f335868af3eb07db7a728eec109efd154b2aa8056e5d730",
+      "shape": [
+        1,
+        200,
+        4
+      ]
+    },
+    "concept.cow.logits": {
+      "dtype": "float32",
+      "sha256": "97c380eac3d1b2148dcaf3c6a22668867e1a2ccd11fdd02a757bd1761242aaf3",
+      "shape": [
+        1,
+        200
+      ]
+    },
+    "concept.cow.masks": {
+      "dtype": "float32",
+      "sha256": "7fcf69242bf17b14f87569b2885f1470b70080796f1c7a9d1e05b6ab2b542ae8",
+      "shape": [
+        1,
+        200,
+        288,
+        288
+      ]
+    },
+    "concept.cow.presence": {
+      "dtype": "float32",
+      "sha256": "fcfac07effb113c3fbdb1914aaa8f3a6a19140521df1df206cc93b70cf11c29e",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "concept.cow.semantic": {
+      "dtype": "float32",
+      "sha256": "2c5f3bcca912a1ca0b3d7a87ffc520744fb3234506d267651eefa4aef5b79544",
+      "shape": [
+        1,
+        1,
+        288,
+        288
+      ]
+    },
+    "concept.person.boxes": {
+      "dtype": "float32",
+      "sha256": "324c9ca90191e39f9ffcb1e9f3ffc8b90837c585d87a53f9ba608f0617d46466",
+      "shape": [
+        1,
+        200,
+        4
+      ]
+    },
+    "concept.person.logits": {
+      "dtype": "float32",
+      "sha256": "d2c448393440d63aee95ef6f941feed35e9e071db189895d66dce549c2b7c19d",
+      "shape": [
+        1,
+        200
+      ]
+    },
+    "concept.person.masks": {
+      "dtype": "float32",
+      "sha256": "3efedb1165c59e7349e885529ecce3641cb4aaf88ba54cde533159001da4be1a",
+      "shape": [
+        1,
+        200,
+        288,
+        288
+      ]
+    },
+    "concept.person.presence": {
+      "dtype": "float32",
+      "sha256": "3de349d043867d8c3499656e95cd187cd5415b917ffe1c6432148163b082383d",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "concept.person.semantic": {
+      "dtype": "float32",
+      "sha256": "99292f702ee71a32327a7c8323b68eeefc6846f8d746a4c66ef57ccb3887751d",
+      "shape": [
+        1,
+        1,
+        288,
+        288
+      ]
+    },
+    "exemplars.boxes": {
+      "dtype": "float32",
+      "sha256": "1ace02ce7adab7b9e81121eff4639f795a02ae46ad0572d9a69305f3df526b53",
+      "shape": [
+        1,
+        200,
+        4
+      ]
+    },
+    "exemplars.logits": {
+      "dtype": "float32",
+      "sha256": "604e43e57a84f37d5a14935b256b370b8141c4253b12b16ffa3769baa998c1e4",
+      "shape": [
+        1,
+        200
+      ]
+    },
+    "exemplars.masks": {
+      "dtype": "float32",
+      "sha256": "41141756604f62e8689072756298929028264f516910ac25433bd232f92494ac",
+      "shape": [
+        1,
+        200,
+        288,
+        288
+      ]
+    },
+    "exemplars.presence": {
+      "dtype": "float32",
+      "sha256": "34ee586e2629068eac82217059f2a6c81c04898eeb8a6fcf93476fa97523da63",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "preprocess": {
+      "dtype": "float32",
+      "sha256": "302324f3bc3a81da608cdf33a736c43c88ac629c12ebd607d29563212970c1ea",
+      "shape": [
+        1,
+        3,
+        1008,
+        1008
+      ]
+    },
+    "segmenter.a person holding a coffee mug.boxes": {
+      "dtype": "float32",
+      "sha256": "41a38f418848eda21e481783e19eff6b7d4dd937770cc529a2cf41fc90d63f51",
+      "shape": [
+        5,
+        4
+      ]
+    },
+    "segmenter.a person holding a coffee mug.masks": {
+      "dtype": "bool",
+      "sha256": "18b327e9cc1a12ebc7f184fd27794b4d57917f603fa3b820b79ca76ca3c6746a",
+      "shape": [
+        5,
+        1281,
+        1920
+      ]
+    },
+    "segmenter.a person holding a coffee mug.scores": {
+      "dtype": "float32",
+      "sha256": "08cf5b6bfcd436ba1fc0d0690e60f8b47cf651aee91b246a4863989b2c73f5fb",
+      "shape": [
+        5
+      ]
+    },
+    "segmenter.cached.masks": {
+      "dtype": "bool",
+      "sha256": "a9189288a4e7a2fb674cac341621353f558275d3c8592de52ca73ad3a5fc613e",
+      "shape": [
+        6,
+        1281,
+        1920
+      ]
+    },
+    "segmenter.coffee mug.boxes": {
+      "dtype": "float32",
+      "sha256": "9ffe97b9b46e4ca73db631b23bfa694248a6c8c560cbcfa2bbca7821f5294873",
+      "shape": [
+        6,
+        4
+      ]
+    },
+    "segmenter.coffee mug.masks": {
+      "dtype": "bool",
+      "sha256": "ddc48afd019deffb71eb95d2efd33c09073724693cdeb4deae55ffa125a1b572",
+      "shape": [
+        6,
+        1281,
+        1920
+      ]
+    },
+    "segmenter.coffee mug.scores": {
+      "dtype": "float32",
+      "sha256": "88851c81144b664dad2c4ae5bf9f948561888d2cafbacec32aac5b866c00eb32",
+      "shape": [
+        6
+      ]
+    },
+    "segmenter.cow.boxes": {
+      "dtype": "float32",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shape": [
+        0,
+        4
+      ]
+    },
+    "segmenter.cow.masks": {
+      "dtype": "bool",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shape": [
+        0,
+        1281,
+        1920
+      ]
+    },
+    "segmenter.cow.scores": {
+      "dtype": "float32",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "shape": [
+        0
+      ]
+    },
+    "segmenter.person.boxes": {
+      "dtype": "float32",
+      "sha256": "68e7e3080177e5ecaef345cfe82c49c95c59b5da610e7918070a799fa39b107b",
+      "shape": [
+        6,
+        4
+      ]
+    },
+    "segmenter.person.masks": {
+      "dtype": "bool",
+      "sha256": "a9189288a4e7a2fb674cac341621353f558275d3c8592de52ca73ad3a5fc613e",
+      "shape": [
+        6,
+        1281,
+        1920
+      ]
+    },
+    "segmenter.person.scores": {
+      "dtype": "float32",
+      "sha256": "43621c03ab649f77c1522c699df288e6404553446e519b7745aa4ecca1ec6b51",
+      "shape": [
+        6
+      ]
+    },
+    "text.embeddings": {
+      "dtype": "float32",
+      "sha256": "8e297add061086904e0768ba99f713f88215117e1ceef98524d3343e70f6feb6",
+      "shape": [
+        32,
+        4,
+        1024
+      ]
+    },
+    "text.features": {
+      "dtype": "float32",
+      "sha256": "93e8519c4b2127b01b91660885a82064eb3ceaf9301d3bd8ffc8f28f344324b2",
+      "shape": [
+        32,
+        4,
+        256
+      ]
+    },
+    "text.mask": {
+      "dtype": "bool",
+      "sha256": "f230cc38071a7f9aa13b01af48205da126821ff8dea782db7fb4591fceaabdc7",
+      "shape": [
+        4,
+        32
+      ]
+    },
+    "tokenizer.ids": {
+      "dtype": "int64",
+      "sha256": "5708761dcba19dbe2a74c3cc871a931c51a95f55b9f0a47eb0da788c0afec428",
+      "shape": [
+        4,
+        32
+      ]
+    },
+    "vision.click.0": {
+      "dtype": "float32",
+      "sha256": "f9857928027dd4a19ada84b8f6c835a2978a5262793e8fb9e49548b4ff460dee",
+      "shape": [
+        1,
+        256,
+        288,
+        288
+      ]
+    },
+    "vision.click.1": {
+      "dtype": "float32",
+      "sha256": "480f9d944eea09419f18cb66da8ffc087bbae6d1ee8d80c2e06758ba73a6307c",
+      "shape": [
+        1,
+        256,
+        144,
+        144
+      ]
+    },
+    "vision.click.2": {
+      "dtype": "float32",
+      "sha256": "1684e7dd413bca433c53f52b4af907d279f924483e3fa854400c7560a49b8840",
+      "shape": [
+        1,
+        256,
+        72,
+        72
+      ]
+    },
+    "vision.concept.0": {
+      "dtype": "float32",
+      "sha256": "6d7dcb9013ca413d959b62b64a6142b21ddc8807fc168c0c05be3904193bff6d",
+      "shape": [
+        1,
+        256,
+        288,
+        288
+      ]
+    },
+    "vision.concept.1": {
+      "dtype": "float32",
+      "sha256": "e7b10c6f1372f546c805e62122c3358530cb30e51d781372fef5a5c550c6c027",
+      "shape": [
+        1,
+        256,
+        144,
+        144
+      ]
+    },
+    "vision.concept.2": {
+      "dtype": "float32",
+      "sha256": "0ac0459463044d8cb718bd0a9a036d9276c83eb7f2b4b29c5c89dda84596218a",
+      "shape": [
+        1,
+        256,
+        72,
+        72
+      ]
+    },
+    "vision.positions": {
+      "dtype": "float32",
+      "sha256": "3c7bf47c9a522bff92adc71e1b405b7a2cd9231d017bbe7a1eb2b9ffe47f87e0",
+      "shape": [
+        1,
+        256,
+        72,
+        72
+      ]
+    }
+  }
+}
