@@ -31,16 +31,20 @@ class VisionEncoder(nn.Module):
         self.neck = Neck(spec)
 
     @torch.no_grad()
-    def forward(self, batch: Tensor) -> dict[str, list[Tensor] | Tensor]:
+    def forward(
+        self, batch: Tensor, stacks: tuple[str, ...] = Neck.STACKS
+    ) -> dict[str, list[Tensor] | Tensor]:
         """Encode a preprocessed batch.
 
         Args:
             batch: ``(B, 3, image_size, image_size)``, normalised to [-1, 1].
+            stacks: Which neck stacks to build -- see :meth:`~..vision.neck.Neck.forward`. A
+                caller that will read only one should ask for only one.
 
         Returns:
-            ``concept`` and ``click`` pyramids, coarsest last, and ``positions``, the coarsest
-            level's encoding. The two pyramids are the whole of what a per-image cache needs to
-            hold; ``positions`` depends only on the fixed input size, so it is memoised by shape
+            The requested pyramids, coarsest last, and ``positions``, the coarsest level's
+            encoding. A pyramid is the whole of what a per-image cache needs to hold;
+            ``positions`` depends only on the fixed input size, so it is memoised by shape
             inside :class:`~..position.SinePositionEmbedding` and shared across every image.
         """
-        return self.neck(self.trunk(batch))
+        return self.neck(self.trunk(batch), stacks)
