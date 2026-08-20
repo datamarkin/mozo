@@ -45,21 +45,41 @@ def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> N
         pytest.skip(f"{family}/{variant} does not publish {runtime}")
 
 
-def as_pixelflow_reports(boxes, scores):
-    """Quantise a model's raw numbers the way PixelFlow quantises what mozo returns.
+#: One step of PixelFlow's coordinate rounding, which is the most a boundary can move an edge by
+#: after two faithful runtimes have both been through it.
+#:
+#: Not a tolerance on its own. What a runtime pairing may move by is this *plus* whatever that
+#: family's exporter already guarantees at full precision, and those differ -- ``tools/export``
+#: holds a YOLO graph to 1e-2 px and an RF-DETR graph to 1.0 px, because a transformer's
+#: selection is a different numerical animal from a convolutional head's. Each suite derives its
+#: own; only this step is shared, because only this step comes from PixelFlow.
+COORD_STEP = 0.01
 
-    PixelFlow truncates each box coordinate to a whole pixel -- 17.81 is reported as 17 -- and
-    rounds each score to three decimals, so those are the only numbers a raw model output and a
-    mozo result can be compared on. Truncation, not rounding: measured against PixelFlow rather
-    than assumed, and rounding to nearest disagrees with it on roughly half of all boxes.
+
+def as_pixelflow_reports(boxes, scores, class_ids):
+    """Put a model's raw numbers through the same door mozo's results go through.
+
+    PixelFlow rounds coordinates and confidences to its own precision, so a raw vendor output and
+    a mozo result can only be compared after both have been rounded the same way. This hands the
+    raw arrays to ``pf.detections.from_arrays`` -- exactly what
+    :meth:`~mozo.adapters._yolo.YOLOPredictor.predict` does -- and reads the numbers back, so the
+    rule applies itself and is never restated here.
+
+    That indirection is the point. This helper used to hardcode the rounding, which meant mozo
+    held a private copy of a policy PixelFlow owns: when PixelFlow stopped truncating boxes to
+    whole pixels, every copy was silently wrong and five files had to be found and patched. A
+    truncation is not a decimals value either, so importing a precision constant would not have
+    caught it -- only going through the real thing does.
 
     Lives here rather than in a family's test because it is a fact about mozo's result boundary,
     not about any one model. ``tools/verify/*.py`` imports it too.
     """
     import numpy as np
+    import pixelflow as pf
 
-    return (np.trunc(np.asarray(boxes, dtype=np.float64)),
-            np.round(np.asarray(scores, dtype=np.float64), 3))
+    rows = pf.detections.from_arrays(boxes=boxes, scores=scores, class_ids=class_ids).to_dict()
+    return (np.array([row["bbox"] for row in rows], dtype=np.float64).reshape(-1, 4),
+            np.array([row["confidence"] for row in rows], dtype=np.float64))
 
 
 @pytest.fixture(scope="session")
