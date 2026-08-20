@@ -1,0 +1,30 @@
+sam3_deploy
+Copyright 2025 The Meta AI Authors and The HuggingFace Team.
+
+This product includes software derived from the SAM 3 implementation in HuggingFace
+Transformers (https://github.com/huggingface/transformers, src/transformers/models/sam3),
+which is licensed under the Apache License, Version 2.0; see the LICENSE file in this
+directory. That implementation is co-authored by Meta AI and HuggingFace and carries an
+Apache-2.0 header, which is why it -- and not facebookresearch/sam3 -- is the source this
+package derives from.
+
+The byte-pair tokenizer and its vocabulary come from OpenAI's CLIP
+(https://github.com/openai/CLIP) and are MIT licensed. `assets/bpe_simple_vocab_16e6.txt.gz`
+is byte-identical to the file published there:
+
+  sha256  924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a
+
+WEIGHTS ARE NOT APACHE-2.0
+--------------------------
+Unlike this code, SAM 3's published checkpoints are covered by Meta's SAM License, a
+bespoke agreement that is not an OSI-approved open-source licence. It carries field-of-use
+restrictions -- no military, nuclear, weapons or espionage use -- that flow through to
+anyone you serve predictions to, and it binds recipients on use rather than on assent. Any
+distribution must ship a copy of that agreement alongside the weights. mozo does not
+redistribute them from this package.
+
+NOT INCLUDED
+------------
+The video path is not part of this package: memory attention, the memory encoder, temporal
+disambiguation and the tracklet bookkeeping that drives them are all left behind, along
+with the training code and the evaluation harness. See PROVENANCE.md.
