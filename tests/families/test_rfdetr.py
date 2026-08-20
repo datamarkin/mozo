@@ -17,10 +17,21 @@ from __future__ import annotations
 import pytest
 
 from mozo.runtimes import select_runtime
-from conftest import FIXTURE, published, require_weights
+from conftest import COORD_STEP, FIXTURE, published, require_weights
 from mozo.weights import WeightsError, artifacts
 
 THRESHOLD = 0.5
+
+#: What the graph may move against torch. Measured across all eight variants rather than assumed:
+#: five agree exactly, seg-medium and seg-large differ by one step of PixelFlow's rounding, and
+#: nano by 0.09. So nine steps, which covers the worst measured case with room and still fails on
+#: anything an order of magnitude larger.
+#:
+#: ``tools/export/rfdetr.py`` allows a whole pixel at full precision, and that is not evidence
+#: this needs to: it is a bound nobody measured, eleven times the worst real disagreement. A
+#: transformer's top-k can reorder where a convolutional head's cannot, which is the reason to
+#: check detections rather than raw tensors -- it is not a reason to accept a pixel of drift.
+BOX_TOLERANCE = 9 * COORD_STEP
 
 DETECTION = ["nano", "small", "medium", "large"]
 SEGMENTATION = ["seg-nano", "seg-small", "seg-medium", "seg-large"]
@@ -113,14 +124,14 @@ class TestRuntimeAgreement:
         assert len(torch_out) == len(onnx_out)
         assert [d.class_name for d in torch_out] == [d.class_name for d in onnx_out]
 
-        # Boxes are stored as integers, so a sub-pixel float difference between the runtimes
-        # can always straddle a rounding boundary and move one edge by one. Anything larger is
-        # the model disagreeing with itself. The float-level check lives in tools/export.
+        # A rounding boundary can move one edge by a step of PixelFlow's coordinate precision;
+        # anything larger is the model disagreeing with itself. The float-level check, before any
+        # rounding, lives in tools/export.
         worst = max(
             (max(abs(a - b) for a, b in zip(x.bbox, y.bbox)) for x, y in zip(torch_out, onnx_out)),
             default=0,
         )
-        assert worst <= 1, f"boxes moved {worst} px between runtimes"
+        assert worst <= BOX_TOLERANCE, f"boxes moved {worst} px between torch-fp32 and onnx-fp32"
 
     def test_auto_picks_torch(self):
         """Asserted against the real manifest rather than by loading a duplicate predictor."""
