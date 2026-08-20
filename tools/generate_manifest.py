@@ -94,7 +94,43 @@ def _scan_revision(revision_dir: Path, root: Path) -> dict[str, dict[str, object
             f"{revision_dir}: no {LICENCE_KEY} file. Every revision ships upstream's licence "
             "alongside the weights."
         )
+    _check_runtime_parts(revision_dir, artifacts)
     return artifacts
+
+
+def _check_runtime_parts(revision_dir: Path, artifacts: dict[str, dict[str, object]]) -> None:
+    """Refuse a runtime split across parts unless every part of it is here.
+
+    A key is ``<framework>-<precision>`` with an optional ``-<part>``, and the third segment is
+    whatever someone named the file. That makes composition a naming convention, which is fine
+    until a half arrives on its own: ``mozo.runtimes.runnable`` would offer ``onnx-fp32``,
+    ``auto`` could select it, and it would fail at load time on somebody else's machine. The
+    manifest is generated from the tree and is where that has to be caught, for the same reason
+    a missing licence is caught here rather than trusted.
+
+    A lone third segment is the ambiguous case -- ``onnx-int8-dynamic`` is one file describing a
+    flavour, not half of anything -- so it is refused too, rather than silently welded into a
+    runtime with whatever else shares its prefix.
+
+    Raises:
+        GenerateError: If a runtime is composed of exactly one part.
+    """
+    from collections import defaultdict
+
+    # ``LICENSE``, ``NOTICE`` and ``labels`` carry no hyphen, so they never reach the count.
+    composed: dict[str, list[str]] = defaultdict(list)
+    for key in artifacts:
+        segments = key.split("-")
+        if len(segments) > 2:
+            composed["-".join(segments[:2])].append(key)
+
+    for runtime, keys in sorted(composed.items()):
+        if len(keys) == 1:
+            raise GenerateError(
+                f"{revision_dir}: {keys[0]!r} names a part of {runtime!r} but is the only one. "
+                f"A runtime split across files needs every part present, and a single suffixed "
+                f"file is indistinguishable from one. Publish the rest, or drop the suffix."
+            )
 
 
 def _scan_variant(variant_dir: Path, root: Path) -> dict[str, object]:
