@@ -22,21 +22,37 @@ from threading import Lock
 import numpy as np
 import torch
 
-from .checkpoint import concept_state_dict, load_state_dict, text_state_dict, vision_state_dict
+# A box is spelled as two corners carrying reserved labels -- there is no box input -- and
+# returned logits are clamped. Both are imported rather than restated: the labels index
+# ``point_embeddings[2]`` and ``[3]`` of the very prompt encoder ClickHead loads weights into, so
+# they belong to that module rather than to this package.
+from ..sam2_deploy.predictor import BOX_BOTTOM_RIGHT, BOX_TOP_LEFT, LOGIT_LIMIT
+from .checkpoint import (
+    concept_state_dict,
+    load_state_dict,
+    text_state_dict,
+    tracker_state_dict,
+    vision_state_dict,
+)
+from .click import ClickHead
 from .grounding import ConceptHead
 from .grounding.boxes import box_cxcywh_to_xyxy
-from .image import preprocess, to_original
+from .image import preprocess, preprocess_click, to_model_coords, to_original
 from .text import TextEncoder, Tokenizer
 from .vision import VisionEncoder
 
 __all__ = ["Segmenter", "instances"]
 
-#: How many images' encoder outputs to keep. Each is 223 MB at fp32 -- the two pyramids, one for
-#: each prompt modality -- so this is the one number in the package that has to be justified
-#: rather than chosen. Two is enough for the job the image cache exists for, which is trying
-#: several prompts on the picture in front of you. SAM 2 keeps five because each of its entries
-#: is 17 MB; scaling that count here would be 1.1 GB and would rule out a Jetson.
+#: How many images' concept-path encoder outputs to keep. Each is 111 MB at fp32 -- one FPN
+#: pyramid -- so this is the one number in the package that has to be justified rather than
+#: chosen. Two is enough for the job the image cache exists for, which is trying several prompts
+#: on the picture in front of you. SAM 2 keeps five because each of its entries is 17 MB; scaling
+#: that count here would rule out a Jetson.
 IMAGE_CACHE = 2
+
+#: How many click-path image encodes to keep, at 111 MB each. Separate from :data:`IMAGE_CACHE`
+#: because the click path needs its own encode -- see :meth:`Segmenter.encode_click`.
+CLICK_CACHE = 2
 
 #: How many encoded prompts to keep. Each is 33 KB, so this is 1 MB and the number is
 #: uninteresting -- it exists only so a server fed unbounded distinct prompts does not grow
@@ -108,9 +124,13 @@ class Segmenter:
         self.text.load_state_dict(text_state_dict(state), strict=True)
         self.concept = ConceptHead()
         self.concept.load_state_dict(concept_state_dict(state), strict=True)
+        # 4.2 M parameters against the trunk's 300 M, and 16 ms to build against a 3.45 GB
+        # checkpoint load. Making it optional would save nothing worth the branch.
+        self.click = ClickHead()
+        self.click.load_state_dict(tracker_state_dict(state), strict=True)
         del state
 
-        for module in (self.vision, self.text, self.concept):
+        for module in (self.vision, self.text, self.concept, self.click):
             module.eval().to(device)
 
         self.tokenizer = Tokenizer()
@@ -118,6 +138,7 @@ class Segmenter:
         self.image_size = self.vision.trunk.spec.image_size
 
         self._images: OrderedDict[bytes, dict] = OrderedDict()
+        self._clicks: OrderedDict[bytes, list] = OrderedDict()
         self._prompts: OrderedDict[str, dict] = OrderedDict()
         # One segmenter instance is shared across requests -- mozo.server runs handlers in a
         # threadpool -- and check-then-act on an OrderedDict is not safe across threads.
@@ -151,8 +172,30 @@ class Segmenter:
         return self._remember(
             self._images,
             key,
-            lambda: self.vision(preprocess(image).to(self.device)),
+            lambda: self.vision(preprocess(image).to(self.device), stacks=("concept",)),
             IMAGE_CACHE,
+        )
+
+    def encode_click(self, image: np.ndarray) -> list[torch.Tensor]:
+        """Return the click pyramid for one image, computing it only if not already held.
+
+        Separate from :meth:`encode_image` because it has to be. The published model runs the
+        trunk twice over the same photograph -- once per head -- because the two heads
+        preprocess differently, and half a grey level of input is worth several thousand mask
+        pixels of output. Sharing one encode between them would be cheaper and would not be SAM
+        3, so there are two encodes and two caches.
+
+        Only the click pyramid is kept. The concept stack this forward also produces belongs to
+        the other preprocessing and would be wrong to serve from here.
+        """
+        key = hashlib.sha256(np.ascontiguousarray(image)).digest()
+        return self._remember(
+            self._clicks,
+            key,
+            lambda: self.vision(
+                preprocess_click(image).to(self.device), stacks=("click",)
+            )["click"],
+            CLICK_CACHE,
         )
 
     def encode_text(self, prompt: str) -> dict:
@@ -209,3 +252,96 @@ class Segmenter:
             labels,
         )
         return instances(result, image.shape[:2], threshold)[0]
+
+    def _prompt(self, points, labels, boxes, shape):
+        """Fold points and boxes into the one point list the prompt encoder takes.
+
+        There is no box input. A box is spelled as its two corners carrying reserved labels, and
+        when a box and points are given together the corners must come first -- the encoder adds
+        a different learned embedding per position, so reordering them changes the answer rather
+        than raising.
+        """
+        if points is None and boxes is None:
+            return None, None
+
+        groups, marks = [], []
+        if boxes is not None:
+            corners = np.asarray(boxes, dtype=np.float32).reshape(-1, 2, 2)
+            groups.append(to_model_coords(corners, shape))
+            marks.append(torch.tensor(
+                [[BOX_TOP_LEFT, BOX_BOTTOM_RIGHT]], dtype=torch.int32
+            ).repeat(len(corners), 1))
+        if points is not None:
+            clicks = np.asarray(points, dtype=np.float32)
+            flags = np.asarray(labels, dtype=np.int32)
+            if clicks.ndim == 2:
+                clicks, flags = clicks[None], flags[None]
+            if clicks.shape[:2] != flags.shape[:2]:
+                raise ValueError(f"{clicks.shape[1]} points but {flags.shape[1]} labels")
+            groups.append(to_model_coords(clicks, shape))
+            marks.append(torch.as_tensor(flags, dtype=torch.int32))
+
+        if len(groups) == 2 and groups[0].shape[0] != groups[1].shape[0]:
+            raise ValueError(
+                f"{groups[0].shape[0]} boxes and {groups[1].shape[0]} point sets: give one point "
+                "set per box, or prompt with only one of the two"
+            )
+        return (torch.cat(groups, dim=1).to(self.device),
+                torch.cat(marks, dim=1).to(self.device))
+
+    def segment(
+        self,
+        image: np.ndarray,
+        points: np.ndarray | None = None,
+        labels: np.ndarray | None = None,
+        boxes: np.ndarray | None = None,
+        mask_input: np.ndarray | None = None,
+        multimask_output: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Segment what the prompt points at, rather than what a phrase names.
+
+        The first click on a photograph pays for an encode of its own -- see
+        :meth:`encode_click` for why it cannot borrow the concept path's. Every click after it
+        on the same photograph costs the decoder alone, which is what makes interactive
+        refinement usable.
+
+        Args:
+            image: ``HxWx3`` RGB ``uint8``, as :func:`mozo.image.load_image` returns.
+            points: ``(N, 2)`` or ``(B, N, 2)`` x, y clicks in the image's own pixels.
+            labels: ``(N,)`` or ``(B, N)``, 1 to include and 0 to exclude. Required with
+                *points*; there is no default, because guessing between include and exclude
+                returns a plausible mask of the wrong thing.
+            boxes: ``(4,)`` or ``(B, 4)`` x1, y1, x2, y2 in the image's own pixels.
+            mask_input: ``(B, 1, 288, 288)`` logits from a previous call, to refine. A multimask
+                call returns three candidates, so select one before passing it back.
+            multimask_output: Return three candidates rather than one. Worth keeping on for a
+                single click, which is ambiguous about whether you meant the part or the whole.
+
+        Returns:
+            ``masks`` ``(B, C, height, width)`` bool in the source image's pixels, ``scores``
+            ``(B, C)`` predicted IoU, and ``logits`` ``(B, C, 288, 288)`` to feed back.
+
+        Raises:
+            ValueError: If no prompt is given, or if points arrive without labels.
+        """
+        if points is None and boxes is None and mask_input is None:
+            raise ValueError("a prompt is required: give points, boxes or mask_input")
+        if (points is None) != (labels is None):
+            raise ValueError("points and labels go together; got one without the other")
+
+        shape = image.shape[:2]
+        click = self.encode_click(image)
+        coords, marks = self._prompt(points, labels, boxes, shape)
+        low_res, iou = self.click(
+            click,
+            coords,
+            marks,
+            None if mask_input is None
+            else torch.as_tensor(mask_input).float().to(self.device),
+            multimask_output,
+        )
+        return {
+            "masks": to_original(low_res, shape) > MASK_THRESHOLD,
+            "scores": iou,
+            "logits": low_res.clamp(-LOGIT_LIMIT, LOGIT_LIMIT),
+        }
