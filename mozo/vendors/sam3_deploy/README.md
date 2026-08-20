@@ -34,15 +34,29 @@ The per-image cache is expensive: **223 MB** for the two pyramids in float32, ag
 
 ## Prompting
 
-| prompt | result |
-|---|---|
-| text | every instance of the concept |
-| text + positive exemplar boxes | "find more like this one" |
-| text + positive and negative boxes | the same, refined |
-| boxes alone | upstream substitutes the literal text `"visual"` |
+A prompt is one structure, not a menu of modes: a phrase, and a set of *exemplars* — boxes, each
+carrying a label saying whether it is an example of the thing you want or of the thing you don't.
+Which fields you fill decides what you get; there is no separate call per combination.
 
-There is **no negative text** — the negative signal is a negative exemplar box — and the concept
-path takes no points. Points and clicks belong to the click head, which shares the image encode.
+| field | |
+|---|---|
+| `text` | the concept, as a noun phrase — up to 32 tokens |
+| `boxes` | exemplars, normalised `(cx, cy, w, h)` |
+| `box_labels` | `1` this is an example, `0` this is not |
+
+Filling only `text` finds every instance of the concept. Adding a positive exemplar says "more
+like this one"; adding a negative one carves back what came out. To prompt with exemplars *only*,
+pass the literal phrase `"visual"` as the text — that is what upstream uses when a caller supplies
+geometry and no concept, and passing it yourself keeps the argument required rather than making a
+substitution behind your back.
+
+Two things decide whether you get what you meant:
+
+- **`box_labels` is required with `boxes` and has no default.** Guessing between a positive and a
+  negative exemplar returns a confident answer to the wrong question, so it raises instead.
+- **There is no negative text.** The negative signal is a negative exemplar, not a second phrase.
+  Nor does this path take points: a point prompt is the *click* head's, and that head shares the
+  image encode rather than duplicating it — which is the whole reason both necks are built.
 
 ```python
 from mozo.vendors.sam3_deploy.grounding import ConceptHead
