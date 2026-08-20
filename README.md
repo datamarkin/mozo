@@ -123,6 +123,48 @@ vocabulary. Mozo never guesses a name.
 > The full licence and a NOTICE naming the exact upstream release are published beside
 > every checkpoint. Complying is the operator's responsibility.
 
+### SAM 3 (1 variant)
+Promptable segmentation. Meta ships a single model rather than a size ladder, so there is
+one variant: `sam3/sam3`.
+
+Two ways to prompt it, off one checkpoint:
+
+- **Name a concept** — `predict(image, "taxi")` returns every instance, with a mask, a
+  box and a score. The phrase you searched for is the class name every detection carries,
+  so there is no fixed vocabulary and nothing for mozo to guess. Pass a list —
+  `predict(image, ["car", "person", "dog"])` — and you get one result carrying several
+  classes, with `class_ids` indexing the prompts. Instances found by different prompts may
+  overlap: ask for `"car"` and `"vehicle"` and the same car comes back under both names.
+- **Point at one thing** — `Segmenter.segment(image, points, labels)` takes clicks
+  (`1` include, `0` exclude), a box, or a previous mask to refine, and returns three
+  candidate masks with predicted IoU. Reached through
+  `mozo.vendors.sam3_deploy` rather than the adapter for now.
+
+Both are verified bit-identical to Meta's implementation, stage by stage through the
+model — see `mozo/vendors/sam3_deploy/PROVENANCE.md`.
+
+Prompts are up to 32 tokens. Inference is a fixed 1008x1008 square — SAM 3 squashes rather
+than letterboxing, so aspect ratio is not preserved.
+
+The model wants a GPU. On Apple silicon MPS the image encoder is about 1.2 s and on CPU
+about 5 s; the encode is cached, so further prompts on the same image cost only their own
+decode. Concepts do not batch — the head takes one prompt at a time — so N concepts cost
+one encode plus N decodes: on MPS, three concepts is about 2.1 s cold and 0.35 s each
+afterwards. Encoded prompts are cached too (33 KB each), so the same three words on the
+next image skip the text tower entirely.
+
+> **Licensing — read this before deploying.** These weights are **not** open source. They
+> carry Meta's **SAM License**, which no other family here does. It **restricts what they
+> may be used for** — military, nuclear, espionage and weapons uses are prohibited — and
+> those restrictions **flow through to whoever you serve predictions to**. It binds on use
+> rather than on signing, and it must travel with the weights if you pass them on. Mozo's
+> own SAM 3 code is Apache-2.0 and derived from `transformers`, not from
+> `facebookresearch/sam3`; the code and the weights are separate works travelling together.
+> The full licence and a NOTICE naming the exact upstream release are published beside the
+> checkpoint. Complying is the operator's responsibility.
+
+Output: PixelFlow `Detections` with masks, boxes and scores
+
 ### Depth Anything V2 (9 variants)
 Monocular depth estimation, in two groups that are not interchangeable.
 
@@ -170,11 +212,24 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26` or `depth_anything_v2`)
+- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `sam3` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
 - `labels` - Comma-separated class labels overriding the model defaults (detection models only)
+- `text` - The concept to look for (prompted models only, required by them). **Repeat the
+  parameter** to ask for several in one request: `?text=car&text=person`. It is deliberately
+  not comma-separated the way `labels` is — a prompt is free text, so `?text=a person, holding
+  a mug` stays one concept rather than becoming two wrong ones.
+
+```bash
+# One concept
+curl -X POST "http://localhost:8000/predict/sam3/sam3?text=taxi" -F "file=@street.jpg"
+
+# Several: one result carrying several classes, sharing one image encode
+curl -X POST "http://localhost:8000/predict/sam3/sam3?text=car&text=person&text=dog" \
+  -F "file=@street.jpg"
+```
 
 ### Health Check
 ```http
