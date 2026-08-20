@@ -25,15 +25,22 @@ import torch
 
 __all__ = [
     "DETECTOR_PREFIX",
+    "TRACKER_PREFIX",
+    "TRACKER_RULES",
     "concept_state_dict",
     "load_state_dict",
     "text_state_dict",
+    "tracker_state_dict",
     "vision_state_dict",
 ]
 
 #: Where the image model lives inside the published checkpoint. Everything under here is what
 #: upstream calls the "detector" -- the concept path plus the shared trunk.
 DETECTOR_PREFIX = "detector."
+
+#: Where the click path lives. Named for the video tracker because that is what owns it upstream,
+#: but the prompt encoder and mask decoder under here are what answers a click on a still image.
+TRACKER_PREFIX = "tracker."
 
 #: Meta's key -> this package's key, applied in order. Values are regex replacements.
 VISION_RULES: tuple[tuple[str, str], ...] = (
@@ -88,6 +95,19 @@ CONCEPT_RULES: tuple[tuple[str, str], ...] = (
     (r"^segmentation_head\.", r"mask."),
 )
 
+#: Meta's key -> this package's key for the click path, applied in order.
+#:
+#: One rule, and it is a naming difference rather than a structural one. The checkpoint stores
+#: the two-way transformer's feed-forward as ``lin1``/``lin2``, which is SAM 1's ``MLPBlock``;
+#: :mod:`mozo.vendors.sam2_deploy` carries SAM 2's ``MLP(num_layers=2)``, whose two ``Linear``
+#: layers are indexed instead of named. The shapes match -- ``lin1`` is ``(2048, 256)`` and
+#: ``layers.0`` is the same -- and both compute ``linear -> ReLU -> linear``, so this renames a
+#: label and changes no arithmetic.
+TRACKER_RULES: tuple[tuple[str, str], ...] = (
+    (r"\.mlp\.lin1\.", r".mlp.layers.0."),
+    (r"\.mlp\.lin2\.", r".mlp.layers.1."),
+)
+
 #: Keys this package does not build, matched by prefix. Two reasons appear here:
 #:
 #: - ``text_projection`` produces the pooled branch of the text tower, which SAM 3's caller drops
@@ -95,11 +115,24 @@ CONCEPT_RULES: tuple[tuple[str, str], ...] = (
 #: - the ``points_*`` projections encode point exemplars, which the geometry encoder supports but
 #:   no public API reaches, and for which there is no Apache-licensed implementation to derive
 #:   the behaviour from.
+#: - everything under ``tracker.`` that is not the prompt encoder or the mask decoder is memory
+#:   attention and mask-memory fusion. Those carry a segmentation from one video frame to the
+#:   next and have nothing to attend to on a still image -- 160 tensors and 7.5 M parameters,
+#:   against the 4.2 M the click path actually runs.
 UNUSED: tuple[str, ...] = (
     "backbone.language_backbone.encoder.text_projection",
     "geometry_encoder.points_direct_project",
     "geometry_encoder.points_pool_project",
     "geometry_encoder.points_pos_enc_project",
+    "tracker.transformer.",
+    "tracker.maskmem_backbone.",
+    "tracker.maskmem_tpos_enc",
+    "tracker.mask_downsample.",
+    "tracker.no_mem_pos_enc",
+    "tracker.no_obj_ptr",
+    "tracker.no_obj_embed_spatial",
+    "tracker.obj_ptr_proj.",
+    "tracker.obj_ptr_tpos_proj.",
 )
 
 
@@ -227,4 +260,29 @@ def concept_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.T
         rename(key, CONCEPT_RULES): tensor
         for key, tensor in source.items()
         if key.startswith(wanted) and not _skipped(key)
+    }
+
+
+def tracker_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Extract the weights :class:`~.click.ClickHead` needs.
+
+    Almost nothing to translate. :class:`~.click.ClickHead` names its three attributes exactly
+    as the checkpoint does -- ``sam_prompt_encoder``, ``sam_mask_decoder``, ``no_mem_embed`` --
+    and the layers underneath them are :mod:`mozo.vendors.sam2_deploy`'s, which already carry
+    Meta's own names. The single exception is :data:`TRACKER_RULES`.
+
+    Args:
+        checkpoint: What :func:`load_state_dict` returned.
+
+    Returns:
+        A state dict keyed for this package, ready for ``load_state_dict(..., strict=True)``.
+
+    Raises:
+        KeyError: If the checkpoint carries no tracker section.
+    """
+    source = _section(checkpoint, TRACKER_PREFIX, "click path")
+    return {
+        rename(key, TRACKER_RULES): tensor
+        for key, tensor in source.items()
+        if not _skipped(f"{TRACKER_PREFIX}{key}")
     }
