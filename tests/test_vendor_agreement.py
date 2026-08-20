@@ -28,6 +28,12 @@ and returns a ranked detection list from the network itself, so it has no ``supp
 ``iou`` -- a fact about the architecture, not a hole in the coverage. :func:`suppresses` is the one
 place that is decided, and both tests report the family they skipped rather than dropping it in
 silence.
+
+The placement invariants are qualified the same way, by :func:`letterboxes`. SAM 2 resizes
+straight to a square and distorts the aspect ratio rather than padding, so there is no border to
+place and nothing here to be right about. Two predicates, two architectural facts, each read in
+one place -- and :func:`test_more_than_one_vendor_was_discovered` holds both to finding somebody,
+because a suite that skips everything reads exactly like a suite that passes everything.
 """
 
 from __future__ import annotations
@@ -42,7 +48,7 @@ import torch
 
 import mozo.vendors
 
-#: Every vendor package that letterboxes, found rather than listed. Discovery is the point: a
+#: Every vendor package with an image module, found rather than listed. Discovery is the point: a
 #: hand-maintained list is the same failure mode one level up -- the fourth detection family would
 #: land with the same silent 1.5 px error and a green suite because nobody remembered to add a
 #: line here. Packages rather than modules, so the tests below derive whichever module they need
@@ -65,6 +71,19 @@ def vendor(request):
     return importlib.import_module(f"{request.param}.image")
 
 
+def letterboxes(package: str) -> bool:
+    """Whether *package* letterboxes at all, asked once for the same reason as :func:`suppresses`.
+
+    A family that resizes straight to a square has no border to place and no padding to undo, so
+    it exposes no ``letterbox`` and no ``BORDER``. SAM 2 is the first: it squashes to 1024x1024
+    and distorts the aspect ratio, which is what it was trained under. Every invariant below is
+    about where a border was written, so on such a family there is nothing to be right or wrong
+    about -- as distinct from being right by accident, which is what a vacuous pass would look
+    like.
+    """
+    return hasattr(importlib.import_module(f"{package}.image"), "letterbox")
+
+
 def suppresses(package: str) -> bool:
     """Whether *package* suppresses at all, asked once so two tests cannot disagree about it.
 
@@ -84,7 +103,14 @@ def _placement(canvas: np.ndarray, border: int) -> tuple[int, int]:
 
 
 def _letterboxed(vendor, height: int, width: int):
-    """Letterbox a black image of *height* x *width* and return the canvas plus the placement."""
+    """Letterbox a black image of *height* x *width* and return the canvas plus the placement.
+
+    The one door all three placement tests go through, so it is also where a family that does not
+    letterbox is declined -- once, rather than in each of them, on the same reasoning that puts
+    :func:`suppresses` in a single place.
+    """
+    if not letterboxes(vendor.__package__):
+        pytest.skip(f"{vendor.__name__} resizes to a square: no border is written to check")
     # Black, so no pixel of the content can be mistaken for the grey border.
     batch, gain, pad_x, pad_y = vendor.letterbox(np.zeros((height, width, 3), np.uint8), SIZE)
     canvas = np.rint(batch[0, 0].numpy() * 255).astype(int)
@@ -157,8 +183,15 @@ def test_a_half_pixel_of_padding_is_actually_exercised():
 
 
 def test_more_than_one_vendor_was_discovered():
-    """Discovery that silently finds nothing would make every test above vacuously pass."""
+    """Discovery that silently finds nothing would make every test above vacuously pass.
+
+    The second assertion guards the skip in :func:`_letterboxed` the same way: a predicate that
+    stopped recognising anyone -- a renamed function, a vendor layout change -- would turn every
+    placement test into a skip, and a suite of skips reads green.
+    """
     assert len(VENDOR_PACKAGES) >= 2, f"expected several vendors, found {VENDOR_PACKAGES}"
+    placing = [package for package in VENDOR_PACKAGES if letterboxes(package)]
+    assert len(placing) >= 2, f"expected several letterboxing vendors, found {placing}"
 
 
 def test_classes_cannot_suppress_each_other_across_the_padded_edge(vendor):
@@ -179,7 +212,7 @@ def test_classes_cannot_suppress_each_other_across_the_padded_edge(vendor):
     box (200) and leaves an overlap of only 0.14. Spanning -1000..10 makes the narrow shift 11
     against a box of 1010, an overlap of 0.98, which suppresses.
     """
-    if not hasattr(vendor, "suppress"):
+    if not suppresses(vendor.__package__):
         pytest.skip(f"{vendor.__name__} is NMS-free: its network returns a detection list")
 
     # (4 + classes, anchors): two anchors, two classes, centre-form boxes sharing one position
