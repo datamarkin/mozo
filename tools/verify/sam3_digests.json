@@ -29,6 +29,252 @@
   "revision": "2026-08-20",
   "sha256": "9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e",
   "stages": {
+    "click.box and negative.logits": {
+      "dtype": "float32",
+      "sha256": "911458c2b28c1157d2d31268c15a47bd5f010e4558cc1be84d0c90f3ebaf8717",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.box and negative.masks": {
+      "dtype": "bool",
+      "sha256": "18f28d9c3c2a29d9be695a0ff300b643203b63579c8d6514ca93d25736116521",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.box and negative.scores": {
+      "dtype": "float32",
+      "sha256": "3ecf3f49b8b8cf9ad728f345e273e4095688ecb35b297a67edb59f7f1cc3afaf",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "click.box.logits": {
+      "dtype": "float32",
+      "sha256": "918a971af4530d12d919a5ecd15816e0491581b527d974defb91ac1bc3c65dbd",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.box.masks": {
+      "dtype": "bool",
+      "sha256": "66d035177b38b131fa4a4c8af9a257bee37a3a4397ef4ddd5e57eb1583b6de69",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.box.scores": {
+      "dtype": "float32",
+      "sha256": "7a19d32e5053cda92168a2b5b29076226ea1cc8f5c272691f3d998d53813ac5a",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "click.cached.logits": {
+      "dtype": "float32",
+      "sha256": "1f5be0862d871cf96ee7cac31954ae9c4bec2dd4b261cb77a9b46575458c5839",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.cached.masks": {
+      "dtype": "bool",
+      "sha256": "a67e37d99ce7610d02cdbbba5a8a7850fda29d667c04c6d205f3e1ecf88b25a7",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.features.0": {
+      "dtype": "float32",
+      "sha256": "5607bb1e5a560c979ed15329eba2ddf985e4c8a9a8fa84066f5c33ba265874e0",
+      "shape": [
+        1,
+        256,
+        288,
+        288
+      ]
+    },
+    "click.features.1": {
+      "dtype": "float32",
+      "sha256": "62188a3a06dedb7c5b46bb0da18a6070654d6664771fe1c3b90b5af20cc5fb3b",
+      "shape": [
+        1,
+        256,
+        144,
+        144
+      ]
+    },
+    "click.features.2": {
+      "dtype": "float32",
+      "sha256": "40abf46abf0556151307bf915923edb9d121f3965fde8912e02700eb39f77dfe",
+      "shape": [
+        1,
+        256,
+        72,
+        72
+      ]
+    },
+    "click.lone negative.logits": {
+      "dtype": "float32",
+      "sha256": "7e0a98914fe064eabc43e791e97c8cdf0483f11971ef8735d08beee43307feef",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.lone negative.masks": {
+      "dtype": "bool",
+      "sha256": "c1da857159e10eae0c53e1be11e2f721c57d34ef498677ecb66568261a52c079",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.lone negative.scores": {
+      "dtype": "float32",
+      "sha256": "b4bdec7d4c3e5e8d1917a678a34eb26904499217a6782d04a937abb1e6750555",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "click.one positive.logits": {
+      "dtype": "float32",
+      "sha256": "1f5be0862d871cf96ee7cac31954ae9c4bec2dd4b261cb77a9b46575458c5839",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.one positive.masks": {
+      "dtype": "bool",
+      "sha256": "a67e37d99ce7610d02cdbbba5a8a7850fda29d667c04c6d205f3e1ecf88b25a7",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.one positive.scores": {
+      "dtype": "float32",
+      "sha256": "b4f2d604d40d1c4d32990a472d99d661c073c2fd5fbb4f1e155b352bd4944cc2",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "click.positive and negative.logits": {
+      "dtype": "float32",
+      "sha256": "8e9915839f0823e3d77c76d507d31f1ac6449a37ae8fc673be042b831da50709",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.positive and negative.masks": {
+      "dtype": "bool",
+      "sha256": "c397f539227519a748e9cc4a4e8312eee3a9ee0e3420a22c54da4e601153c18f",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.positive and negative.scores": {
+      "dtype": "float32",
+      "sha256": "b2a5288ab105841a999e9fadb5352d0d0d01eab869000609b9b158d45a29f869",
+      "shape": [
+        1,
+        3
+      ]
+    },
+    "click.single mask output.logits": {
+      "dtype": "float32",
+      "sha256": "7f5bd4b18fc595f88e71ed28e2d701c88009d2ec3d1759fcf9857ffadde5cae8",
+      "shape": [
+        1,
+        1,
+        288,
+        288
+      ]
+    },
+    "click.single mask output.masks": {
+      "dtype": "bool",
+      "sha256": "52d3cf8d4064d9e5089bb656797fc73b8db73ef5a377c50993f11cec5ab9c9cb",
+      "shape": [
+        1,
+        1,
+        1281,
+        1920
+      ]
+    },
+    "click.single mask output.scores": {
+      "dtype": "float32",
+      "sha256": "0a2c3612bf5492ca10cb21161521f6aed7694d453f0d8ee0563f6c85691ef9ba",
+      "shape": [
+        1,
+        1
+      ]
+    },
+    "click.two positives.logits": {
+      "dtype": "float32",
+      "sha256": "8c306e2822e4ae7c5c67eff4c6d0e4ef76521c665881989fede5033eb2d65f95",
+      "shape": [
+        1,
+        3,
+        288,
+        288
+      ]
+    },
+    "click.two positives.masks": {
+      "dtype": "bool",
+      "sha256": "69b8ff8a6836069a741e9b5a7e48ba58008e5f6e858797e4316ec9e9e2f8f368",
+      "shape": [
+        1,
+        3,
+        1281,
+        1920
+      ]
+    },
+    "click.two positives.scores": {
+      "dtype": "float32",
+      "sha256": "2e38328ad2a89dfcfd52af3b3489fbe39616ab8098e67b515f7af3e32ff0569b",
+      "shape": [
+        1,
+        3
+      ]
+    },
     "concept.a person holding a coffee mug.boxes": {
       "dtype": "float32",
       "sha256": "d2dc6dddba9383419ea28db572afd195a540738017f6b373313704dc6cb5ac47",
@@ -254,6 +500,16 @@
         1008
       ]
     },
+    "preprocess.click": {
+      "dtype": "float32",
+      "sha256": "6d995c45a57c2aa250d3e2be0be77838b526d02d420048e6b00faec7692d85ab",
+      "shape": [
+        1,
+        3,
+        1008,
+        1008
+      ]
+    },
     "segmenter.a person holding a coffee mug.boxes": {
       "dtype": "float32",
       "sha256": "41a38f418848eda21e481783e19eff6b7d4dd937770cc529a2cf41fc90d63f51",
@@ -391,36 +647,6 @@
       "shape": [
         4,
         32
-      ]
-    },
-    "vision.click.0": {
-      "dtype": "float32",
-      "sha256": "f9857928027dd4a19ada84b8f6c835a2978a5262793e8fb9e49548b4ff460dee",
-      "shape": [
-        1,
-        256,
-        288,
-        288
-      ]
-    },
-    "vision.click.1": {
-      "dtype": "float32",
-      "sha256": "480f9d944eea09419f18cb66da8ffc087bbae6d1ee8d80c2e06758ba73a6307c",
-      "shape": [
-        1,
-        256,
-        144,
-        144
-      ]
-    },
-    "vision.click.2": {
-      "dtype": "float32",
-      "sha256": "1684e7dd413bca433c53f52b4af907d279f924483e3fa854400c7560a49b8840",
-      "shape": [
-        1,
-        256,
-        72,
-        72
       ]
     },
     "vision.concept.0": {
