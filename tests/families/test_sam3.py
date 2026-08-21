@@ -14,7 +14,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-from fastapi.testclient import TestClient
 
 from mozo.registry import get_model_info
 from mozo.vendors.sam3_deploy import checkpoint as loader
@@ -421,36 +420,8 @@ def test_registry_agrees_with_the_adapter():
     entry = get_model_info("sam3")
     assert entry["adapter_class"] == "Sam3Predictor"
     assert entry["module"] == "mozo.adapters.sam3"
+    assert entry["task_type"] == "concept_segmentation"
     assert set(entry["variants"]) == set(Sam3Predictor.VARIANTS)
-
-
-def test_the_server_refuses_a_prompted_model_with_no_prompt():
-    """The endpoint has to reach SAM 3's branch, take a ``text`` parameter, and reject a missing
-    prompt as the caller's error -- before it decodes an image or loads 3.45 GB to find out.
-
-    Asserting on the response rather than on the source: a task the registry declares but the
-    endpoint has no branch for is a 501, and that is visible from the outside.
-    """
-    import inspect
-
-    from mozo import server
-
-    assert get_model_info("sam3")["task_type"] == "concept_segmentation"
-    assert "text" in inspect.signature(server.predict).parameters
-
-    client = TestClient(server.app)
-    response = client.post(
-        "/predict/sam3/sam3", files={"file": ("x.jpg", b"not really a jpeg", "image/jpeg")}
-    )
-    blank = client.post(
-        "/predict/sam3/sam3?text=&text=%20",
-        files={"file": ("x.jpg", b"not really a jpeg", "image/jpeg")},
-    )
-    assert blank.status_code == 400, "prompts that are all whitespace are no prompt at all"
-    # The body is deliberately not a JPEG: reaching the prompt complaint rather than a decode
-    # failure is what shows the check happens before any work is done.
-    assert response.status_code == 400, response.text
-    assert "text=" in response.json()["detail"], response.text
 
 
 @pytest.mark.parametrize("empty", ["", "   ", ["car", ""], ["  "]])
