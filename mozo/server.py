@@ -69,6 +69,31 @@ def serve_example_image():
 
 # --- Prediction ---
 
+def _coordinates(value: str, count: int, what: str) -> List[float]:
+    """Parse a comma-separated pixel coordinate from a query parameter.
+
+    Args:
+        value: The raw parameter, e.g. ``"820,640"``.
+        count: How many numbers it must carry.
+        what: What to call it in the error, e.g. ``"point"``.
+
+    Returns:
+        The parsed numbers.
+
+    Raises:
+        ValueError: If it is not *count* numbers. The message says what was given, because a
+            caller who wrote ``?point=820, 640`` and got "expected 2 numbers" learns nothing
+            about which of their several points was the problem.
+    """
+    try:
+        numbers = [float(part) for part in value.split(",")]
+    except ValueError:
+        raise ValueError(f"{what} {value!r} is not numbers; give {count} separated by commas")
+    if len(numbers) != count:
+        raise ValueError(f"{what} {value!r} has {len(numbers)} numbers; {what} takes {count}")
+    return numbers
+
+
 def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
     """Encode a depth map as a 16-bit PNG, with what is needed to read it back in the headers.
 
@@ -122,6 +147,33 @@ def predict(
                     "?text=car&text=person. Not comma-separated -- a prompt is free text and "
                     "may contain a comma of its own.",
     ),
+    point: Optional[List[str]] = Query(
+        None,
+        description="A click, as x,y in the image's own pixels, for promptable models. Repeat "
+                    "it to give several: ?point=820,640&point=900,700. Each needs a ?label=.",
+    ),
+    label: Optional[List[int]] = Query(
+        None,
+        description="1 to include the matching ?point=, 0 to exclude it. One per point, in the "
+                    "same order. Required with ?point= -- guessing between include and exclude "
+                    "returns a confident mask of the wrong thing.",
+    ),
+    box: Optional[str] = Query(
+        None,
+        description="A box, as x1,y1,x2,y2 in the image's own pixels, for promptable models.",
+    ),
+    name: Optional[str] = Query(
+        None,
+        description="What to call what you pointed at, for promptable models. Omitted, "
+                    "detections carry class_name=null -- the model does not know what it "
+                    "segmented and mozo will not invent it.",
+    ),
+    multimask: bool = Query(
+        True,
+        description="For promptable models, return three candidate masks ranked by the model's "
+                    "predicted IoU rather than one. Worth keeping on for a single click, which "
+                    "is genuinely ambiguous about whether you meant the part or the whole.",
+    ),
 ):
     """Run one model over one image.
 
@@ -136,6 +188,12 @@ def predict(
             Required by prompted models, ignored by the rest. Deliberately *not* comma-separated
             the way ``labels`` is: a prompt is free text, and ``"a person, holding a mug"`` is
             one concept rather than two.
+        point: A click, as ``x,y`` in the image's own pixels, for promptable models. Repeatable.
+        label: ``1`` to include the matching *point*, ``0`` to exclude it. One per point, in the
+            same order, and required with them.
+        box: A box, as ``x1,y1,x2,y2`` in the image's own pixels, for promptable models.
+        name: What to call what was pointed at. Omitted, detections carry ``class_name=null``.
+        multimask: Return three candidate masks ranked by predicted IoU rather than one.
 
     Returns:
         Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
@@ -163,6 +221,30 @@ def predict(
                    "every one a concept. Repeat it for several: ?text=car&text=person.",
         )
 
+    # Same reasoning as above: settled before the image is decoded and the weights are loaded,
+    # because a forgotten prompt should not cost a multi-gigabyte load to be told about. Parsed
+    # here as well as checked, so the adapter is handed numbers rather than strings.
+    points = marks = corners = None
+    if task == "promptable_segmentation":
+        if not point and box is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{family} is promptable: point at something. Pass ?point=x,y with a "
+                       "?label=1, or ?box=x1,y1,x2,y2, or both.",
+            )
+        if len(point or []) != len(label or []):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{len(point or [])} point(s) and {len(label or [])} label(s): give one "
+                       "?label= per ?point=, 1 to include it and 0 to exclude it.",
+            )
+        try:
+            points = [_coordinates(p, 2, "point") for p in point] if point else None
+            corners = _coordinates(box, 4, "box") if box is not None else None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        marks = list(label) if label else None
+
     # Decode through the same function the Python API uses, so both entry points agree on
     # channel order. A second decoder here is how the two drift apart without anyone noticing.
     try:
@@ -188,6 +270,11 @@ def predict(
         if task == "concept_segmentation":
             return JSONResponse(
                 content=model.predict(image, text, threshold=threshold).to_dict())
+        if task == "promptable_segmentation":
+            return JSONResponse(content=model.predict(
+                image, points=points, labels=marks, boxes=corners,
+                multimask_output=multimask, name=name,
+            ).to_dict())
         if task == "depth_estimation":
             return _depth_response(model.predict(image), model.unit)
     except HTTPException:
