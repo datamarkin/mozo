@@ -1,0 +1,46 @@
+easyocr_deploy
+Copyright 2020-2024 Jaided AI
+Copyright 2019-present NAVER Corp.
+
+This product includes software developed by Jaided AI and published as EasyOCR
+(https://github.com/JaidedAI/EasyOCR), licensed under the Apache License,
+Version 2.0; see the LICENSE file in this directory.
+
+The published weights are release assets of that same Apache-2.0 repository.
+
+Two upstream projects meet inside EasyOCR, and both are acknowledged here
+because the code in this directory is derived from each of them.
+
+  - CRAFT: Character Region Awareness for Text Detection
+    Copyright (c) 2019-present NAVER Corp.
+    https://github.com/clovaai/CRAFT-pytorch
+    MIT License
+
+    The detector's architecture and its heatmap postprocessing come from here.
+    Baek, Lee, Han, Yun, Lee, "Character Region Awareness for Text Detection",
+    CVPR 2019 (arXiv:1904.01941).
+
+    NAVER published the trained weights (craft_mlt_25k.pth) from Google Drive
+    without stating terms for them separately from the MIT-licensed code. The
+    file redistributed with mozo is the copy Jaided AI publishes as a release
+    asset of its Apache-2.0 repository, and that is the chain relied on. This is
+    recorded rather than glossed: it is one link weaker than the other families
+    here, where the publisher states the checkpoint's licence directly.
+
+  - deep-text-recognition-benchmark
+    Copyright (c) 2019-present NAVER Corp.
+    https://github.com/clovaai/deep-text-recognition-benchmark
+    Apache License, Version 2.0
+
+    The recogniser's architecture -- a convolutional stack, two bidirectional
+    LSTMs and a CTC head -- comes from here. Baek et al., "What Is Wrong With
+    Scene Text Recognition Model Comparisons?", ICCV 2019 (arXiv:1904.01906).
+    The published weights were retrained by Jaided AI, per script.
+
+NOT INCLUDED
+------------
+The training code, the DBNet detector, the beam-search and word-beam-search
+decoders, paragraph grouping, right-to-left display reordering, batched
+multi-image inference, arbitrary-rotation retries and the first-generation
+(ResNet) recogniser are all left behind. See PROVENANCE.md for the full list
+and for why each one is out.
