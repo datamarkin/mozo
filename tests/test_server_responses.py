@@ -9,6 +9,8 @@ those to 256 levels and calls it a picture.
 
 from __future__ import annotations
 
+import re
+
 import cv2
 import numpy as np
 import pytest
@@ -144,3 +146,26 @@ class TestDetectionResponse:
         assert response.headers["content-type"].startswith("application/json")
         body = response.json()
         assert body and all("bbox" in d and "confidence" in d for d in body)
+
+
+def test_every_registered_task_type_has_a_dispatch_arm():
+    """The endpoint encodes one task per arm, and a task with no arm returns 501 at request
+    time. Nothing else holds the two in step: a family can be registered, tested and shipped
+    while being unserveable, and the first person to find out is a caller. This is the guard
+    that made ``text_recognition`` a two-line change rather than a two-line change plus a bug.
+    """
+    import inspect
+
+    from mozo.registry import MODEL_REGISTRY
+    from mozo import server
+
+    source = inspect.getsource(server.predict)
+    registered = {entry["task_type"] for entry in MODEL_REGISTRY.values()}
+    # PROMPTED is dispatched as a set rather than by name, so its members are served by the
+    # ``task in PROMPTED`` arm and will not appear as string literals.
+    served = set(re.findall(r'task == "([a-z_]+)"', source)) | server.PROMPTED
+
+    assert registered <= served, (
+        f"registered but not served: {sorted(registered - served)}. Add an arm to "
+        f"mozo.server.predict, or the endpoint answers 501 for it."
+    )
