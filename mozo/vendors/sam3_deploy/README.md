@@ -15,8 +15,9 @@ SAM 2 answers *"what is under my cursor"*. SAM 3 answers *"where is every cow"* 
 noun phrase and it returns every instance, with a mask, a box and a score. That is the thing
 worth deploying: point a pipeline at 10,000 images with one prompt and let it annotate them.
 
-It also still answers the cursor question. SAM 3 carries a full SAM 2-style click head, so one
-checkpoint and one process serve both — an annotator can run a phrase over a corpus and then
+It also still answers the cursor question. SAM 3 carries its own click head — the same
+architecture SAM 2 uses, with SAM 3's own weights and geometry — so one checkpoint and one
+process serve both — an annotator can run a phrase over a corpus and then
 correct a single instance by hand without a second model being deployed to do it.
 
 ## The three-way seam
@@ -30,12 +31,13 @@ decode           ~650 ms  depends on both
 ```
 
 A phrase encoded once is valid for every image afterwards. An image encoded once serves every
-prompt afterwards — *and* both prompt modalities, because the neck is dual: one ViT pass feeds
-both the concept head and the click head. That is the whole reason to deploy SAM 3 rather than
-running SAM 2 and SAM 3 side by side.
+prompt afterwards. What it does *not* buy is one encode for both heads: they preprocess an image
+differently, so each runs its own trunk pass and reads its own neck stack. One checkpoint and one
+process still serve both, which is the reason to deploy SAM 3 rather than two models.
 
-The per-image cache is expensive: **223 MB** for the two pyramids in float32, against SAM 2's
-16.8 MB. That is a live design constraint, not a footnote.
+The per-image cache is expensive: **111 MB** per entry in float32 for one FPN pyramid, against
+SAM 2's 16.8 MB, and the two heads keep separate entries. That is a live design constraint, not
+a footnote.
 
 ## Prompting
 
@@ -118,7 +120,7 @@ A held image answers a repeated click identically, which the gate checks rather 
 - Fixed 1008x1008 inference. SAM 3 squashes to a square rather than letterboxing, so aspect ratio
   is not preserved and there is no padding to undo.
 - Prompts up to 32 tokens — not CLIP's usual 77.
-- Clicks, boxes and mask refinement, through the same head SAM 2 uses.
+- Clicks, boxes and mask refinement, through SAM 3's own tracker head.
 - CPU and CUDA. CPU runs at about 0.2 images/second; this model wants a GPU.
 
 Not supported: video tracking, and hole filling (which needs a CUDA extension) — so binary masks
