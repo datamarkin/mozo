@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from . import __version__
 from .image import load_image
 from .manager import ModelManager
-from .registry import MODEL_REGISTRY, get_model_info
+from .registry import MODEL_REGISTRY, PROMPTED, get_model_info
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -40,6 +40,7 @@ app = FastAPI(
 app.state.model_manager = ModelManager()
 
 _STATIC = Path(__file__).parent / "static"
+
 
 
 @app.get("/", summary="Health check")
@@ -139,7 +140,12 @@ def predict(
     family: str,
     variant: str,
     file: UploadFile = File(..., description="Image file to process."),
-    threshold: float = 0.5,
+    threshold: Optional[float] = Query(
+        None,
+        description="Confidence floor. Omitted, the family's own published default applies -- "
+                    "these differ, and naming them here would be a second copy of a number each "
+                    "adapter already owns.",
+    ),
     labels: Optional[str] = None,
     text: Optional[List[str]] = Query(
         None,
@@ -181,13 +187,15 @@ def predict(
         family: Model family, e.g. ``rfdetr``.
         variant: Variant within it, e.g. ``nano``.
         file: The image.
-        threshold: Confidence floor, for detection models.
+        threshold: Confidence floor, for detection models. Omitted, each family's own default
+            applies -- these differ, and this endpoint does not have an opinion about which is
+            right for a model it is only routing to.
         labels: Comma-separated class names overriding the model's own, e.g. ``hardhat,vest``.
         text: The concept to look for, for prompted models -- ``cow``, ``yellow school bus``.
             Repeat the parameter to ask for several in one request; they share the image encode.
-            Required by prompted models, ignored by the rest. Deliberately *not* comma-separated
-            the way ``labels`` is: a prompt is free text, and ``"a person, holding a mug"`` is
-            one concept rather than two.
+            Required by every task in :data:`~mozo.registry.PROMPTED`, ignored by the rest. Deliberately *not*
+            comma-separated the way ``labels`` is: a prompt is free text, and ``"a person,
+            holding a mug"`` is one concept rather than two.
         point: A click, as ``x,y`` in the image's own pixels, for promptable models. Repeatable.
         label: ``1`` to include the matching *point*, ``0`` to exclude it. One per point, in the
             same order, and required with them.
@@ -214,7 +222,7 @@ def predict(
     # Deliberately the adapter's own rule, not a looser one. A guard that accepted
     # ``?text=car&text=`` would hand the caller the same 400 from the adapter, but only after
     # decoding the image and loading the weights -- which is the cost this exists to avoid.
-    if task == "concept_segmentation" and (not text or any(not t.strip() for t in text)):
+    if task in PROMPTED and (not text or any(not t.strip() for t in text)):
         raise HTTPException(
             status_code=400,
             detail=f"{family} is prompted: pass ?text=... naming what to look for, and give "
@@ -262,14 +270,16 @@ def predict(
     # How a task is called and how its result is encoded are the same decision, so each task
     # is named exactly once. The registry declares which one applies; a task with no branch
     # here is a family the registry knows and this endpoint has not been taught to serve.
+    # Forwarded only when the caller said one, so an adapter's own default is what applies
+    # otherwise. Restating 0.5 here would silently override OWLv2's 0.1 and return nothing.
+    floor = {} if threshold is None else {"threshold": threshold}
     try:
         if task == "object_detection":
             parsed = [n.strip() for n in labels.split(",") if n.strip()] if labels else None
             return JSONResponse(
-                content=model.predict(image, threshold=threshold, labels=parsed or None).to_dict())
-        if task == "concept_segmentation":
-            return JSONResponse(
-                content=model.predict(image, text, threshold=threshold).to_dict())
+                content=model.predict(image, labels=parsed or None, **floor).to_dict())
+        if task in PROMPTED:
+            return JSONResponse(content=model.predict(image, text, **floor).to_dict())
         if task == "promptable_segmentation":
             return JSONResponse(content=model.predict(
                 image, points=points, labels=marks, boxes=corners,
