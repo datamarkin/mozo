@@ -2,8 +2,10 @@
 
 Computer vision model server with automatic memory management.
 
-Mozo provides HTTP and Python access to 17 published model variants across 2 model families —
-RF-DETR and Depth Anything V2. Models load on-demand and clean up automatically.
+Mozo provides HTTP and Python access to 43 published model variants across 9 model families —
+object detection (RF-DETR, YOLOv8/11/12/26), promptable segmentation (SAM 2, EdgeTAM), concept
+segmentation (SAM 3) and monocular depth (Depth Anything V2). Models load on-demand and clean up
+automatically.
 
 Every family is a **vendored, deployment-only extraction** of its upstream project, verified
 bit-identical to it, so no family requires its upstream package to be installed. `pip install
@@ -123,6 +125,48 @@ vocabulary. Mozo never guesses a name.
 > The full licence and a NOTICE naming the exact upstream release are published beside
 > every checkpoint. Complying is the operator's responsibility.
 
+### SAM 2 (4 variants) and EdgeTAM (1 variant)
+Promptable segmentation: point at something and get back the thing you pointed at.
+`sam2/{tiny,small,base_plus,large}` and `edgetam/edgetam`.
+
+Every prompt is a set of points. A click is a point with a label — `1` to include, `0` to
+exclude. A box is spelled as its two corners carrying reserved labels, because neither model has
+a separate box input; the adapter writes those for you. Points and a box can be combined.
+
+```python
+from mozo import ModelManager
+model = ModelManager().get_model("edgetam", "edgetam")
+
+found = model.predict(image, points=[[820, 640]], labels=[1])   # three candidates, best first
+found = model.predict(image, boxes=[40, 60, 300, 480])
+found = model.predict(image, boxes=[40, 60, 300, 480], points=[[900, 700]], labels=[0])
+```
+
+`multimask_output=True` (the default) returns three candidate masks with the model's own
+predicted IoU as the score, ranked. That is the right setting for a single click, which is
+genuinely ambiguous about whether you meant the handle, the door or the car — take the first
+row, or show all three. With a box the prompt is usually unambiguous and `multimask_output=False`
+is tighter.
+
+**Detections come back with `class_name=None`.** A click does not say what it clicked, and mozo
+will not invent a name for it — a name comes from the weights or from the user. Pass `name="cat"`
+if you know what you pointed at. `class_id` is the index of the prompt that produced the row, so
+a batch of prompts stays separable.
+
+The image encoder is the cost and it depends only on the image, so it is cached on pixel content
+and a second prompt on the same photograph pays only for the decoder. On CPU at 2 MP: EdgeTAM
+encodes in 272 ms and decodes in 33 ms; SAM 2 tiny encodes in 439 ms.
+
+EdgeTAM is SAM 2 distilled for phones — a 9.1M-parameter image path against SAM 2 tiny's 31.4M —
+and its masks agree with SAM 2 tiny's at 0.94 IoU on box prompts. Both are verified bit-identical
+to their upstream implementations; see each vendor's `PROVENANCE.md`.
+
+Unlike SAM 3, both families' published weights are Apache-2.0, the same as their code.
+
+Only the torch runtime is served so far. SAM 2 also publishes ONNX and CoreML artifacts, which
+this adapter refuses rather than quietly answering with torch: a promptable model exports as
+several graphs and needs a runner that keeps the encode and the decode apart.
+
 ### SAM 3 (1 variant)
 Promptable segmentation. Meta ships a single model rather than a size ladder, so there is
 one variant: `sam3/sam3`.
@@ -212,7 +256,8 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `sam3` or `depth_anything_v2`)
+- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `sam2`,
+  `edgetam`, `sam3` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only)
@@ -222,12 +267,36 @@ Parameters:
   not comma-separated the way `labels` is — a prompt is free text, so `?text=a person, holding
   a mug` stays one concept rather than becoming two wrong ones.
 
+- `point`, `label` - A click, as `x,y` in the image's own pixels, and `1` to include it or `0`
+  to exclude it (promptable models only). **Repeat both** to give several, in the same order:
+  `?point=820,640&label=1&point=900,700&label=0`. `label` is required with `point` and has no
+  default — guessing between include and exclude returns a confident mask of the wrong thing.
+- `box` - A box, as `x1,y1,x2,y2` in the image's own pixels (promptable models only). May be
+  combined with points.
+- `name` - What to call what you pointed at (promptable models only). Omitted, detections come
+  back with `class_name: null` — the model does not know what it segmented and mozo will not
+  invent a name for it.
+- `multimask` - Return three candidate masks ranked by predicted IoU rather than one
+  (promptable models only, default `true`).
+
 ```bash
 # One concept
 curl -X POST "http://localhost:8000/predict/sam3/sam3?text=taxi" -F "file=@street.jpg"
 
 # Several: one result carrying several classes, sharing one image encode
 curl -X POST "http://localhost:8000/predict/sam3/sam3?text=car&text=person&text=dog" \
+  -F "file=@street.jpg"
+
+# Click one thing: three candidate masks, best first
+curl -X POST "http://localhost:8000/predict/edgetam/edgetam?point=820,640&label=1" \
+  -F "file=@street.jpg"
+
+# Refine with a second click that excludes what you got too much of
+curl -X POST "http://localhost:8000/predict/sam2/tiny?point=820,640&label=1&point=900,700&label=0" \
+  -F "file=@street.jpg"
+
+# A box, one mask, named by you
+curl -X POST "http://localhost:8000/predict/sam2/tiny?box=40,60,300,480&multimask=false&name=cat" \
   -F "file=@street.jpg"
 ```
 
