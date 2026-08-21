@@ -96,8 +96,12 @@ def images() -> list[Path]:
     return rendered + ([FIXTURE] if FIXTURE.is_file() else [])
 
 
-def upstream_reader(variant: str):
-    """Upstream's reader for *variant*, on CPU, unquantized."""
+def upstream_reader(variant: str, device: str = "cpu"):
+    """Upstream's reader for *variant*, unquantized.
+
+    The gate always wants CPU; ``tools/bench`` passes the device it is timing, because a
+    comparison across two devices measures the devices.
+    """
     try:
         import easyocr
     except ImportError:
@@ -105,7 +109,10 @@ def upstream_reader(variant: str):
             "This gate compares against the published package. Install it with:\n"
             "    pip install easyocr"
         ) from None
-    return easyocr.Reader(LANGUAGES[variant], gpu=False, verbose=False, quantize=False)
+    # ``gpu`` is upstream's device selector, not a boolean about CUDA: False pins CPU and a
+    # string names a device. It resolves mps on its own when handed True on Apple silicon.
+    return easyocr.Reader(LANGUAGES[variant], gpu=False if device == "cpu" else device,
+                          verbose=False, quantize=False)
 
 
 class Comparison:
