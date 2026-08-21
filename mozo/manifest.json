@@ -217,6 +217,30 @@
         }
       }
     },
+    "edgetam/edgetam": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "edgetam/edgetam/2026-08-21/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "edgetam/edgetam/2026-08-21/NOTICE",
+              "sha256": "2728c09010b9a76f6341c70177e8ad2756a1bfda225a71b3483f4a487a9d195e",
+              "size": 1569
+            },
+            "torch-fp32": {
+              "path": "edgetam/edgetam/2026-08-21/torch-fp32.pth",
+              "sha256": "ed2d4850b8792c239689b043c47046ec239b6e808a3d9b6ae676c803fd8780df",
+              "size": 56116523
+            }
+          }
+        }
+      }
+    },
     "rfdetr/large": {
       "latest": "2026-08-18",
       "revisions": {
