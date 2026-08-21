@@ -35,7 +35,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from ..sam2_deploy.image import to_model_coords as sam2_to_model_coords
 from .config import SPEC, Spec
 
 __all__ = ["preprocess", "preprocess_click", "to_model_coords", "to_original"]
@@ -119,12 +118,6 @@ def to_model_coords(
 ) -> torch.Tensor:
     """Scale x, y prompt coordinates from source pixels into the encoder's square.
 
-    Delegates to :mod:`mozo.vendors.sam2_deploy`, which is where this mapping's two measured
-    facts already live: that the copy is load-bearing, and that normalising before scaling is
-    not interchangeable with multiplying by a combined ratio. The click path already runs SAM 2's
-    prompt encoder and mask decoder, so these are the coordinates *that* module was measured
-    against -- keeping a second copy here would be keeping a second chance for them to drift.
-
     The squash makes this simpler than it is for a letterboxing model, not harder: x and y each
     scale by their own factor and there is no padding offset to subtract. It is the same mapping
     :func:`preprocess_click` applies to the pixels, so a click lands on the feature it was
@@ -138,7 +131,15 @@ def to_model_coords(
     Returns:
         The same shape, as a float tensor in ``[0, size]``.
     """
-    return sam2_to_model_coords(coords, shape, spec.trunk.image_size)
+    height, width = shape
+    # ``torch.tensor`` copies, which is what keeps the in-place divides below off the caller's
+    # array -- ``as_tensor`` would share memory with a float32 input and scale it under them.
+    scaled = torch.tensor(np.asarray(coords, dtype=np.float32))
+    # Normalise then scale, rather than multiplying by the combined ratio. The two differ in the
+    # last bits of a float, which is enough to move a click across a pixel boundary.
+    scaled[..., 0] /= width
+    scaled[..., 1] /= height
+    return scaled * spec.trunk.image_size
 
 
 def to_original(masks: torch.Tensor, shape: tuple[int, int]) -> torch.Tensor:

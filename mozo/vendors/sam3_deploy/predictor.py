@@ -22,16 +22,11 @@ from threading import Lock
 import numpy as np
 import torch
 
-# A box is spelled as two corners carrying reserved labels -- there is no box input -- and
-# returned logits are clamped. Both are imported rather than restated: the labels index
-# ``point_embeddings[2]`` and ``[3]`` of the very prompt encoder ClickHead loads weights into, so
-# they belong to that module rather than to this package.
-from ..sam2_deploy.predictor import BOX_BOTTOM_RIGHT, BOX_TOP_LEFT, LOGIT_LIMIT
 from .checkpoint import (
     concept_state_dict,
     load_state_dict,
     text_state_dict,
-    tracker_state_dict,
+    click_state_dict,
     vision_state_dict,
 )
 from .click import ClickHead
@@ -58,6 +53,15 @@ CLICK_CACHE = 2
 #: uninteresting -- it exists only so a server fed unbounded distinct prompts does not grow
 #: without limit.
 PROMPT_CACHE = 32
+
+#: A box is spelled as two corners carrying these reserved labels -- there is no box input.
+#: They index the prompt encoder's four point embeddings, which is what ``point_embeddings``
+#: being 4 in :data:`~.config.CLICK` means.
+BOX_TOP_LEFT, BOX_BOTTOM_RIGHT = 2, 3
+
+#: Returned logits are clamped to this. They exist to be fed back as ``mask_input``, and a logit
+#: free to grow each round would eventually swamp the click meant to correct it.
+LOGIT_LIMIT = 32.0
 
 #: Above this a mask logit is foreground.
 MASK_THRESHOLD = 0.0
@@ -127,7 +131,7 @@ class Segmenter:
         # 4.2 M parameters against the trunk's 300 M, and 16 ms to build against a 3.45 GB
         # checkpoint load. Making it optional would save nothing worth the branch.
         self.click = ClickHead()
-        self.click.load_state_dict(tracker_state_dict(state), strict=True)
+        self.click.load_state_dict(click_state_dict(state), strict=True)
         del state
 
         for module in (self.vision, self.text, self.concept, self.click):
