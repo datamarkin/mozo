@@ -1,0 +1,38 @@
+owlv2_deploy
+Copyright 2023 The Google Research Authors.
+Copyright 2023 The HuggingFace Inc. team.
+
+This product includes software developed by Google Research, published as the
+OWL-ViT project inside Scenic (https://github.com/google-research/scenic/tree/
+main/scenic/projects/owl_vit), and described in "Scaling Open-Vocabulary Object
+Detection" (Minderer, Gritsenko, Houlsby; NeurIPS 2023, arXiv:2306.09683).
+
+Google's own release is written in JAX/Flax. The modules here are extracted from
+the PyTorch implementation that HuggingFace publishes as
+transformers/models/owlv2, which is licensed under the Apache License, Version
+2.0; see the LICENSE file in this directory, which is byte-identical to the one
+published with both projects.
+
+The published checkpoints are Apache-2.0 as well -- Google licenses the code and
+the model weights under the same terms. Nothing in this family carries a separate
+weights licence.
+
+The byte-pair tokenizer and its vocabulary are OpenAI's, not Google's:
+
+  - CLIP
+    Copyright (c) 2021 OpenAI
+    https://github.com/openai/CLIP
+    MIT License
+
+  assets/bpe_simple_vocab_16e6.txt.gz is byte-identical to the file published
+  there (sha256 924691ac288e54409236115652ad4aa250f48203de50a9e4722a6ecd48d6804a),
+  and the vocabulary it builds is identical, id for id, to the vocab.json and
+  merges.txt Google publishes beside each checkpoint.
+
+NOT INCLUDED
+------------
+Image-guided detection -- querying with a cropped example instead of a phrase --
+is not part of this package, nor is the CLIP contrastive head the published
+checkpoints still carry. The training code, the evaluation harness and the
+position-embedding interpolation that lets the model run at an unpublished
+resolution are all left behind. See PROVENANCE.md for the full list and for why.
