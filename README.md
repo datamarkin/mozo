@@ -240,8 +240,13 @@ reading order: a two-column page interleaves.
 
 Two graphs: CRAFT locates the text, a CRNN reads it. There is no NMS — a detection is a
 connected component of two heatmaps, one scoring "inside a character" and one "between two
-characters of the same word". On CPU that is about 200 ms a page, within 1% of the
-published package running the same weights, and detection is 86% of it.
+characters of the same word". About 200 ms a page on CPU and 31 ms on Apple silicon,
+within 1% and 22% respectively of the published package running the same weights on the
+same device.
+
+Note that the GPU path is not bit-identical to the CPU one — strings and quadrilaterals
+are exact, confidences move by up to 2.2e-05. The verification below is a CPU claim; pass
+`device="cpu"` if you need exactly those numbers.
 
 Verified against `easyocr` at every stage — preprocessed tensor, both heatmaps,
 quadrilaterals, each crop, the decoded string and its confidence — with no tolerance: 1,275
