@@ -76,9 +76,8 @@ class CRNN(nn.Module):
                  hidden_size: int = 256) -> None:
         super().__init__()
         self.FeatureExtraction = VGGFeatures(input_channel, output_channel)
-        # The extractor already leaves height at 1, so this pool is a no-op on a well-formed
-        # crop. It is kept because it is what the published graph does, and because it is the
-        # only thing standing between a mis-sized input and a shape error deep in the LSTM.
+        # Averages the three rows the extractor leaves, down to one. Not a formality: 64 halved
+        # five times is 4, and a 2x2 valid convolution takes that to 3.
         self.AdaptiveAvgPool = nn.AdaptiveAvgPool2d((None, 1))
         self.SequenceModeling = nn.Sequential(
             BidirectionalLSTM(output_channel, hidden_size, hidden_size),
@@ -94,7 +93,14 @@ class CRNN(nn.Module):
         extracted, so the argument is dropped rather than accepted and discarded.
         """
         visual = self.FeatureExtraction(image)
-        # ``(B, C, H, W)`` -> ``(B, W, C, H)``, so the pool reduces height and the sequence axis
-        # ends up second, which is what ``batch_first`` LSTMs want.
+        # ``(B, C, H, W)`` -> ``(B, W, C, H)``, so the sequence axis ends up second, which is
+        # what ``batch_first`` LSTMs want, and the three rows are last so the pool can average
+        # them away.
+        #
+        # ``.mean(dim=3)`` is the same arithmetic on paper and is not the same in float: the
+        # pool divides its sum by three where mean multiplies by a reciprocal, which moves the
+        # confidence by up to 1e-06. That substitution is also the only thing that would make
+        # this graph traceable under a dynamic width, so it is why there is no ONNX recogniser
+        # -- see PROVENANCE.md.
         visual = self.AdaptiveAvgPool(visual.permute(0, 3, 1, 2)).squeeze(3)
         return self.Prediction(self.SequenceModeling(visual).contiguous())
