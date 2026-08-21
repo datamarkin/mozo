@@ -182,6 +182,54 @@ def test_a_half_pixel_of_padding_is_actually_exercised():
     assert fractional >= 3
 
 
+def test_no_vendor_reaches_outside_itself():
+    """A vendor may import the standard library, torch and itself. Nothing else.
+
+    ``mozo/vendors/__init__.py`` states the rule -- "no vendor knows what mozo is" -- and it was
+    broken anyway: SAM 3's click head imported SAM 2's layers, so a re-sync of one family would
+    have moved the other's masks with nothing to notice. A rule nothing checks is a preference.
+
+    Resolved with ``ast`` rather than by grepping import lines, because the failure this exists
+    to prevent is a *shared substrate*: put two layers in ``mozo/vendors/_common.py`` and a
+    substring search over vendor names stays green while both families move together. Relative
+    imports are resolved against the module's own package, which is the only way to see that
+    ``from ....utilities import x`` is still inside its own vendor.
+    """
+    import ast
+
+    root = Path(mozo.vendors.__file__).parent
+    vendors = sorted(p.name for p in root.iterdir() if p.is_dir() and p.name.endswith("_deploy"))
+    assert len(vendors) >= 2, f"with one vendor this proves nothing, found {vendors}"
+
+    offenders = []
+    for vendor in vendors:
+        allowed = f"mozo.vendors.{vendor}"
+        for source in sorted((root / vendor).rglob("*.py")):
+            parts = source.relative_to(root).with_suffix("").parts
+            module = ".".join(("mozo", "vendors") + parts)
+            package = module.rsplit(".", 1)[0] if source.name != "__init__.py" else module
+            for node in ast.walk(ast.parse(source.read_text())):
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level:
+                        base = package
+                        for _ in range(node.level - 1):
+                            base = base.rsplit(".", 1)[0]
+                        names = [f"{base}.{node.module}" if node.module else base]
+                    else:
+                        names = [node.module or ""]
+                else:
+                    continue
+                for name in names:
+                    if name.startswith("mozo") and not name.startswith(allowed):
+                        offenders.append(f"{source.relative_to(root)}:{node.lineno} -> {name}")
+
+    assert not offenders, (
+        "vendors must not reach outside themselves:\n  " + "\n  ".join(offenders)
+    )
+
+
 def test_more_than_one_vendor_was_discovered():
     """Discovery that silently finds nothing would make every test above vacuously pass.
 
