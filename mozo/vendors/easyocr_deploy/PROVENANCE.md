@@ -125,6 +125,35 @@ arrays rather than comparing through either decoder. Measured: with the same inp
 photograph is bit-identical; through upstream's path entry its confidence differs in the third
 decimal, entirely from the JPEG decode.
 
+## Devices
+
+The gate runs on CPU, and the parity claim is a CPU claim. mozo's default device is whatever
+`get_default_device()` picks, which on Apple silicon is `mps`, and **mps is not bit-identical to
+CPU**: across all five variants and every fixture, 58 of 275 comparisons differ. Every string and
+every quadrilateral is exact; only the confidence moves, by at most 2.2e-05.
+
+That is a backend difference rather than an extraction one -- the same reduction on two devices --
+and it is recorded because the verified path and the default path are not the same path. Anyone
+who needs the verified numbers should ask for `device="cpu"`.
+
+It is worth the trade for most callers: 31 ms a page against 202 ms.
+
+## Export
+
+Neither graph is published, and both reasons are measured rather than assumed.
+
+**CRAFT exports and is slower.** 83.1 MB, parity 1.8e-07, and 280 ms against torch's 185 ms on
+CPU -- 0.66x. Against the 17 ms a page it takes on mps, an ONNX detector is not a runtime anyone
+would select.
+
+**The recogniser does not export.** `AdaptiveAvgPool2d((None, 1))` has an output size that depends
+on the input's width, which cannot be traced under a dynamic width; the exporter refuses with
+"adaptive pooling, since output_size is not constant". The one substitution that would trace --
+a mean over the same axis -- is the same arithmetic on paper and not in float, because the pool
+divides its sum by three where mean multiplies by a reciprocal. Measured at up to 1e-06 on the
+confidence, which fails the gate. A fixed crop width would also trace, and would mean padding
+every line to the longest one the model can take.
+
 ## Measured traps
 
 Each of these changes the output, and each is the kind a tolerance would hide. They are recorded
