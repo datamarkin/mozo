@@ -129,21 +129,71 @@ def test_prompt_coordinates_squash_with_the_pixels():
     assert torch.allclose(got, torch.tensor([[side * 0.25, side * 0.25]]))
 
 
-def test_the_click_head_is_built_at_sam3s_geometry_not_sam2s():
-    """1008 over a 72x72 grid, not 1024 over 64x64 -- read back from the module the checkpoint
-    has to load into. The mask input is four times the grid, which is where 288 comes from."""
+def test_the_click_head_is_built_at_sam3s_geometry():
+    """1008 over a 72x72 grid, and a mask input four times the grid, which is where 288 comes
+    from. Every value is ``transformers/models/sam3_tracker``'s own config default, and every
+    one is confirmed by the published checkpoint loading strict."""
     head = ClickHead()
     assert (head.image_size, head.grid) == (1008, 72)
-    assert head.sam_prompt_encoder.image_embedding_size == (72, 72)
-    assert head.sam_prompt_encoder.mask_input_size == (288, 288)
-    assert head.sam_mask_decoder.num_mask_tokens == 4
+    assert head.prompt_encoder.grid == 72
+    assert head.prompt_encoder.mask_input_size == 288
+    assert head.mask_decoder.num_mask_tokens == 4
 
 
-def test_the_stability_fallback_is_on():
-    """It carries no weights, so a strict load cannot catch it being wrong -- and it only changes
-    an answer when the single-mask token is unstable, which is how it survived 23 of 24 parity
-    prompts before one image caught it."""
-    assert ClickHead().sam_mask_decoder.dynamic_multimask_via_stability is True
+def test_the_click_geometry_is_the_trunks():
+    """``ClickSpec`` restates the trunk's square and the neck's width so the head reads one spec.
+    They are the same physical numbers, and nothing about a shape mismatch would catch them
+    drifting: a click would simply land on the wrong feature. So they are pinned."""
+    from mozo.vendors.sam3_deploy.config import CLICK, SPEC
+
+    assert CLICK.image_size == SPEC.trunk.image_size
+    assert CLICK.patch == SPEC.trunk.patch
+    assert CLICK.grid == SPEC.trunk.grid
+    assert CLICK.hidden == SPEC.fpn_hidden
+
+
+def test_asking_for_one_mask_consults_the_candidates():
+    """Asking for one mask does not mean taking token 0 whatever it looks like. When that token
+    is unstable the decoder returns the best candidate instead -- the behaviour that survived 23
+    of 24 parity prompts before one image caught it missing."""
+    from mozo.vendors.sam3_deploy.click.decoder import MaskDecoder
+
+    decoder = MaskDecoder()
+    # Token 0 is a coin-flip mask (stability near zero); candidate 2 is decisive.
+    masks = torch.zeros(1, 1, 4, 8, 8)
+    masks[0, 0, 0] = torch.linspace(-0.04, 0.04, 64).reshape(8, 8)
+    masks[0, 0, 3] = 5.0
+    iou = torch.tensor([[[0.9, 0.1, 0.2, 0.8]]])
+
+    chosen, score = decoder._stable(masks, iou)
+    assert torch.equal(chosen[0, 0, 0], masks[0, 0, 3]), "an unstable token 0 falls back"
+    assert score.item() == pytest.approx(0.8)
+
+
+def test_a_stable_single_token_is_kept():
+    from mozo.vendors.sam3_deploy.click.decoder import MaskDecoder
+
+    decoder = MaskDecoder()
+    masks = torch.full((1, 1, 4, 8, 8), 5.0)
+    masks[0, 0, 3] = -5.0
+    iou = torch.tensor([[[0.4, 0.1, 0.2, 0.9]]])
+    chosen, score = decoder._stable(masks, iou)
+    assert torch.equal(chosen[0, 0, 0], masks[0, 0, 0]), "a decisive token 0 is not second-guessed"
+    assert score.item() == pytest.approx(0.4)
+
+
+def test_several_prompt_sets_run_in_one_call():
+    """The batch lands on the prompt axis: one image, several prompt sets. Putting it on the
+    image axis instead makes the second set fail to broadcast against the one image it asks
+    about, which is what ``predict``'s documented ``(B, N, 2)`` needs."""
+    head = ClickHead().eval()
+    click = [torch.zeros(1, 256, 288, 288), torch.zeros(1, 256, 144, 144),
+             torch.zeros(1, 256, 72, 72)]
+    points = torch.tensor([[[500.0, 400.0]], [[300.0, 200.0]]])
+    labels = torch.tensor([[1], [1]], dtype=torch.int32)
+
+    masks, iou = head(click, points, labels, None, True)
+    assert masks.shape[0] == 2 and iou.shape[0] == 2
 
 
 def test_the_video_machinery_is_left_behind():
@@ -154,13 +204,30 @@ def test_the_video_machinery_is_left_behind():
         assert not loader._skipped(key), "the click path itself must survive the filter"
 
 
-def test_the_transformer_mlp_is_renamed_not_restructured():
-    assert loader.rename("sam_mask_decoder.transformer.layers.0.mlp.lin1.weight",
-                         loader.TRACKER_RULES) == \
-        "sam_mask_decoder.transformer.layers.0.mlp.layers.0.weight"
-    assert loader.rename("sam_mask_decoder.transformer.layers.1.mlp.lin2.bias",
-                         loader.TRACKER_RULES) == \
-        "sam_mask_decoder.transformer.layers.1.mlp.layers.1.bias"
+@pytest.mark.parametrize("meta,ours", [
+    ("sam_mask_decoder.transformer.layers.0.mlp.lin1.weight",
+     "mask_decoder.transformer.layers.0.mlp.layers.0.weight"),
+    ("sam_mask_decoder.transformer.layers.1.self_attn.out_proj.bias",
+     "mask_decoder.transformer.layers.1.self_attn.o_proj.bias"),
+    ("sam_mask_decoder.transformer.layers.0.norm3.weight",
+     "mask_decoder.transformer.layers.0.layer_norm3.weight"),
+    ("sam_mask_decoder.transformer.norm_final_attn.weight",
+     "mask_decoder.transformer.layer_norm_final_attn.weight"),
+    ("sam_mask_decoder.iou_prediction_head.layers.1.weight",
+     "mask_decoder.iou_prediction_head.layers.1.weight"),
+    ("sam_mask_decoder.output_hypernetworks_mlps.2.layers.2.bias",
+     "mask_decoder.output_hypernetworks_mlps.2.layers.2.bias"),
+    ("sam_mask_decoder.output_upscaling.1.weight", "mask_decoder.upscale_layer_norm.weight"),
+    ("sam_prompt_encoder.mask_downscaling.4.bias", "prompt_encoder.mask_embed.layer_norm2.bias"),
+    ("sam_prompt_encoder.pe_layer.positional_encoding_gaussian_matrix",
+     "prompt_encoder.shared_embedding.positional_embedding"),
+])
+def test_the_click_rename_table_only_renames(meta, ours):
+    """The checkpoint follows ``facebookresearch/sam3``; this package follows ``transformers``.
+    Every rule moves a name or reindexes a Sequential whose members we name -- none of them is
+    the place a number changes. The parity gate proves that; this keeps the table readable.
+    """
+    assert loader.rename(meta, loader.CLICK_RULES) == ours
 
 
 def test_a_box_is_two_corners_with_reserved_labels():
