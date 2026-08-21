@@ -8,8 +8,11 @@ detection and recognition is worth the seam it introduces.
     python tools/bench/easyocr.py
     python tools/bench/easyocr.py --variants english korean --devices cpu mps
 
-**The comparison is legitimate because both sides run the same weights.** The same two
-checkpoints, the same images, the same device, the same torch. Both are timed end to end, from an
+**The comparison is legitimate because both sides run the same weights on the same device.**
+The same two checkpoints, the same images, the same torch. Upstream selects a device too --
+its ``gpu`` argument is a selector rather than a boolean about CUDA, and it resolves mps on
+Apple silicon -- so timing mozo on a GPU against upstream on a CPU would measure the two
+devices and report the gap as mozo's. Both are timed end to end, from an
 ``HxWx3`` array to located strings, because that is the work a caller asks for. Upstream is timed
 through ``detect`` and ``recognize`` on the same two arrays the vendor gets, for the same reason
 the gate does it that way: timing ``readtext`` on a path would measure two different JPEG
@@ -105,7 +108,7 @@ def run(variant: str, device: str, iters: int, compare: bool) -> None:
         return
 
     try:
-        up = upstream_reader(variant)
+        up = upstream_reader(variant, device)
     except SystemExit as missing:
         print(f"  upstream               {missing}")
         return
