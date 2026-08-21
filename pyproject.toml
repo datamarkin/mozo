@@ -35,7 +35,7 @@ dependencies = [
     # FastAPI needs this to accept the multipart upload every /predict endpoint takes. Without
     # it mozo.server raises at import, not at request time -- so it was never optional.
     "python-multipart",
-    # SAM 3 tokenizes prompts with CLIP's byte-pair encoder. ``regex`` is not optional for
+    # SAM 3 and OWLv2 tokenize prompts with CLIP's byte-pair encoder. ``regex`` is not optional for
     # correctness -- the split pattern uses Unicode categories (\p{L}, \p{N}) that the standard
     # library's ``re`` cannot express -- and ``ftfy`` repairs mis-decoded input the way upstream
     # does. Both declare no version bounds and pull in nothing but ``wcwidth``, so neither adds
@@ -87,3 +87,6 @@ mozo = ["static/*", "manifest.json"]
 # (MIT), byte-identical to the one openai/CLIP publishes, so it ships in the wheel rather than
 # being downloaded -- a prompt should not need a network round trip to tokenize.
 "mozo.vendors.sam3_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
+# OWLv2 tokenizes prompts through the same CLIP vocabulary, and carries its own copy of it:
+# a vendored package may not import another, and a shared asset would be that by another name.
+"mozo.vendors.owlv2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
