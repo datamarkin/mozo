@@ -101,13 +101,22 @@ on all seven; binary masks are excluded from the comparison for the hole-filling
 
 ## The click path
 
-Built on `mozo.vendors.sam2_deploy`'s `PromptEncoder`, `MaskDecoder` and `TwoWayTransformer`
-rather than on new modules. This is the one place mozo lets two vendor trees import each other,
-and it is deliberate: the checkpoint stores these weights under `tracker.sam_prompt_encoder` and
-`tracker.sam_mask_decoder` with SAM 2's module names, shapes and token counts, and Meta names the
-neck that feeds them `sam2_convs`. A second copy of ~600 lines that had to stay bit-identical to
-the first forever is a worse failure mode than the coupling -- a divergence between the copies
-would surface as wrong masks, not as an import error.
+Derived from `transformers/models/sam3_tracker` (Apache-2.0), which is SAM 3's own tracker --
+the same provenance as the concept path, and the reason none of it comes from `sam2_deploy`. No
+vendor imports another vendor: each has to be reproducible against its own upstream, and a shared
+substrate would let one family's re-sync move another's masks.
+
+An earlier version of this package did import SAM 2's `PromptEncoder`, `MaskDecoder` and
+`TwoWayTransformer`, on the argument that the architectures are the same and a second copy would
+have to stay bit-identical forever. The architectures *are* the same; the argument was still
+wrong. It left SAM 3's numbers descending from SAM 2's extraction of a different upstream,
+inheriting whatever divergences that extraction carries, with no gate on the SAM 2 side to catch
+a re-sync. `sam3_tracker` is the right source and was available the whole time.
+
+Deriving from it also turned two findings from guesses into facts: `dynamic_multimask_via_stability`
+is a declared config field rather than something bisected out of 24 parity prompts, and the
+geometry comes from `Sam3TrackerPromptEncoderConfig` rather than from reading the reference's
+runtime attributes.
 
 Configured for 1008 pixels over a 72x72 grid instead of 1024 over 64x64. Every value was read
 back from the published model's own attributes and then confirmed by a strict load:
@@ -118,7 +127,20 @@ One prompt structure, not several. Every click prompt is a set of labelled point
 `0` exclude, `2`/`3` reserved for a box's two corners, since the network has no box input.
 Points, a box, and a box with points are the same array filled differently.
 
-Three things about it could not be read off the weights, and each was found by measuring:
+Three divergences from `transformers` were needed, each found by measuring rather than reading,
+and each in the same category as the concept path's thirteen:
+
+- **`LayerNorm2d` is written out** rather than permuting into `nn.LayerNorm`. Same normalisation,
+  different last bits, and the difference survives the upscaling path into the mask -- 7.6e-06 on
+  a logit, two ulp, enough to move pixels across the threshold.
+- **The prompt encoder always pads a not-a-point token.** Upstream pads whenever no separate box
+  input is given, and this package never gives one: a box arrives folded into the points as its
+  two corners carrying labels 2 and 3.
+- **`repeat_interleave` runs only when there is something to repeat.** `transformers` calls it
+  unconditionally; repeating once still materialises a contiguous copy, which changes the
+  attention kernel torch selects and moves the result by 8e-06.
+
+Three further things could not be read off the weights at all, and each was found by measuring:
 
 - **`dynamic_multimask_via_stability` is on.** It carries no parameters, so the strict load could
   not catch it, and it only changes an answer when the single-mask token is unstable. It survived

@@ -44,18 +44,6 @@ Written for this package:
   `sam2/utils/transforms.py`. This is what removes `torchvision`.
 - `predictor.py` — checkpoint loading, prompt assembly, and the encoder-output cache.
 
-## What depends on this package
-
-`mozo/vendors/sam3_deploy` imports from here, which no other vendor does. SAM 3's click head is
-this package's `sam/prompt_encoder.py`, `sam/mask_decoder.py` and `sam/transformer.py`, built at
-SAM 3's geometry and loaded from SAM 3's checkpoint; `sam3_deploy/predictor.py` also imports
-`to_model_coords` and the `BOX_TOP_LEFT`/`BOX_BOTTOM_RIGHT`/`LOGIT_LIMIT` constants.
-
-This matters when re-syncing. The policy for `sam/*.py` is to take them verbatim from a newer
-upstream, and doing that silently changes SAM 3's numbers as well as SAM 2's. SAM 2 has no
-fingerprint gate of its own, so the thing that would catch it is `tools/verify/sam3.py`, which
-needs SAM 3's 3.45 GB checkpoint. Run it after any re-sync of those three files.
-
 ## What was deliberately left behind
 
 The whole video tracker: `memory_attention.py`, `memory_encoder.py`, `sam2_video_predictor.py`
