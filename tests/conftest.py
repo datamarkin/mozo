@@ -23,6 +23,11 @@ GENERATOR = ROOT / "tools" / "generate_manifest.py"
 #: callers want the bytes and half want the decoded image.
 FIXTURE = ROOT / "tests" / "fixtures" / "images" / "example.jpg"
 
+#: Images with text on them, for the families that read rather than classify. Kept apart from
+#: ``images/`` because every other family's gate and bench iterate that directory whole, and a
+#: page of rendered text is not a photograph to compare detections on.
+TEXT_FIXTURES = ROOT / "tests" / "fixtures" / "text"
+
 
 def published(family: str, variant: str) -> list[str]:
     """The artifact keys *variant* publishes, or ``[]`` if it publishes nothing at all.
