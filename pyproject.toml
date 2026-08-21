@@ -30,7 +30,10 @@ dependencies = [
     "torch",
     "Pillow",
     "numpy",
-    "pixelflow",
+    # 0.2.0 is where ``Detection.text`` and ``from_arrays(texts=, segments=)`` landed. The
+    # EasyOCR adapter needs both: a read string is not a class name, and a text quadrilateral
+    # flattened to a box loses the orientation that made it worth keeping.
+    "pixelflow>=0.2.0",
     "click",
     # FastAPI needs this to accept the multipart upload every /predict endpoint takes. Without
     # it mozo.server raises at import, not at request time -- so it was never optional.
@@ -90,3 +93,11 @@ mozo = ["static/*", "manifest.json"]
 # OWLv2 tokenizes prompts through the same CLIP vocabulary, and carries its own copy of it:
 # a vendored package may not import another, and a shared asset would be that by another name.
 "mozo.vendors.owlv2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
+# EasyOCR reads its alphabet from a text file per variant. The Chinese one is 6,718
+# characters; a literal that size is not something anyone can read past, and the alphabet is
+# part of the model definition rather than of the weights, so it ships here.
+"mozo.vendors.easyocr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.txt"]
+# Shipped late: both of these carried their attribution only in the repository, so an
+# install had the code without the terms it is redistributed under.
+"mozo.vendors.sam2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
+"mozo.vendors.edgetam_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
