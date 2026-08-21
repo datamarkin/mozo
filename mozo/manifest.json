@@ -241,6 +241,102 @@
         }
       }
     },
+    "owlv2/base": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "owlv2/base/2026-08-21/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "owlv2/base/2026-08-21/NOTICE",
+              "sha256": "d9e9d637e55d8ba8f594499b30e31385571acec9fbe0e833dffa8309b6a14316",
+              "size": 673
+            },
+            "torch-fp32": {
+              "path": "owlv2/base/2026-08-21/torch-fp32.pth",
+              "sha256": "56c7c1adff4a422d9ceba3fc744d8595a29a05ac4714497a9472d1ffc2e7332f",
+              "size": 620006741
+            }
+          }
+        }
+      }
+    },
+    "owlv2/base-ensemble": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "owlv2/base-ensemble/2026-08-21/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "owlv2/base-ensemble/2026-08-21/NOTICE",
+              "sha256": "11acbbbfb6c00c3e3be481a12771230e7e7dd2152cb6225e6d8e903430809adc",
+              "size": 732
+            },
+            "torch-fp32": {
+              "path": "owlv2/base-ensemble/2026-08-21/torch-fp32.pth",
+              "sha256": "69feda8b53b1c9e2a85ae756bf58c120c3c1b4b4a4d97d4876578c1809a63d76",
+              "size": 620006741
+            }
+          }
+        }
+      }
+    },
+    "owlv2/large": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "owlv2/large/2026-08-21/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "owlv2/large/2026-08-21/NOTICE",
+              "sha256": "fc5e7bdbf34dc154622bd734bfc6444d119fb2d422cec95b242df2d896246771",
+              "size": 675
+            },
+            "torch-fp32": {
+              "path": "owlv2/large/2026-08-21/torch-fp32.pth",
+              "sha256": "3f442c5e2875819ae6173b4f30f399e9c9ae51ed731184dfbed0f09eb85ce23f",
+              "size": 1750647637
+            }
+          }
+        }
+      }
+    },
+    "owlv2/large-ensemble": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "owlv2/large-ensemble/2026-08-21/LICENSE",
+              "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+              "size": 11357
+            },
+            "NOTICE": {
+              "path": "owlv2/large-ensemble/2026-08-21/NOTICE",
+              "sha256": "55b88be896d0b5eca7a5c3857a29515c11b9c248fcab78b0c0aebd9a14c717c2",
+              "size": 734
+            },
+            "torch-fp32": {
+              "path": "owlv2/large-ensemble/2026-08-21/torch-fp32.pth",
+              "sha256": "2934e1f32c68b49f62e9b7a415c22080a8bf197c50c6f4408f4a60e21e0be252",
+              "size": 1750647637
+            }
+          }
+        }
+      }
+    },
     "rfdetr/large": {
       "latest": "2026-08-18",
       "revisions": {
