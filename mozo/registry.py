@@ -39,6 +39,20 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         ],
     },
 
+    'edgetam': {
+        'adapter_class': 'EdgeTamPredictor',
+        'module': 'mozo.adapters.edgetam',
+        'task_type': 'promptable_segmentation',
+        'description': (
+            'EdgeTAM by Meta — promptable segmentation, SAM 2 distilled for phones. Click a '
+            'point or draw a box and it returns the thing you pointed at, with a mask, a box '
+            'and the model\'s own predicted IoU. A 9.1M-parameter image path against SAM 2 '
+            'tiny\'s 31.4M. One published model, so one variant. Code and weights are both '
+            'Apache 2.0.'
+        ),
+        'variants': ['edgetam'],
+    },
+
     'rfdetr': {
         'adapter_class': 'RFDETRPredictor',
         'module': 'mozo.adapters.rfdetr',
@@ -52,6 +66,19 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
             'nano', 'small', 'medium', 'large',
             'seg-nano', 'seg-small', 'seg-medium', 'seg-large',
         ],
+    },
+
+    'sam2': {
+        'adapter_class': 'Sam2Predictor',
+        'module': 'mozo.adapters.sam2',
+        'task_type': 'promptable_segmentation',
+        'description': (
+            'SAM 2 by Meta — promptable segmentation. Click a point or draw a box and it '
+            'returns the thing you pointed at, with a mask, a box and the model\'s own '
+            'predicted IoU. 4 variants (tiny/small/base_plus/large); the image path only, not '
+            'the video tracker. Unlike SAM 3, the weights are Apache 2.0 like the code.'
+        ),
+        'variants': ['tiny', 'small', 'base_plus', 'large'],
     },
 
     'sam3': {
