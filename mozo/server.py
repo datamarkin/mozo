@@ -285,6 +285,8 @@ def predict(
                 image, points=points, labels=marks, boxes=corners,
                 multimask_output=multimask, name=name,
             ).to_dict())
+        if task == "text_recognition":
+            return JSONResponse(content=model.predict(image).to_dict())
         if task == "depth_estimation":
             return _depth_response(model.predict(image), model.unit)
     except HTTPException:
