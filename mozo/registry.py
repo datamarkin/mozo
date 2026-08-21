@@ -46,6 +46,21 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         ],
     },
 
+    'easyocr': {
+        'adapter_class': 'EasyOCRPredictor',
+        'module': 'mozo.adapters.easyocr',
+        'task_type': 'text_recognition',
+        'description': (
+            'EasyOCR by Jaided AI — text detection and recognition. Finds every line of text '
+            'and reads it, returning the string, the four corners as read and a confidence. '
+            'Two graphs: CRAFT locates, a CRNN reads. A variant is a script rather than a '
+            'language — 5 of them, covering 88% of upstream\'s own downloads, with latin alone '
+            'spanning 41 languages. Detections carry text, not a class name: OCR reads content, '
+            'it does not pick a class out of a vocabulary. Code and weights are Apache 2.0.'
+        ),
+        'variants': ['english', 'latin', 'chinese-simplified', 'japanese', 'korean'],
+    },
+
     'edgetam': {
         'adapter_class': 'EdgeTamPredictor',
         'module': 'mozo.adapters.edgetam',
