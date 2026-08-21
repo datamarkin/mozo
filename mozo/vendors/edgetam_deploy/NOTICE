@@ -1,0 +1,34 @@
+edgetam_deploy
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This product includes software developed by Meta Platforms, Inc., extracted from the
+EdgeTAM project (https://github.com/facebookresearch/EdgeTAM) and reduced to its
+single-image inference path. It is licensed under the Apache License, Version 2.0;
+see the LICENSE file in this directory, which is byte-identical to the one published
+there.
+
+Like SAM 2 and unlike SAM 3, EdgeTAM's published checkpoint is Apache-2.0 as well --
+Meta licenses the code and the model weights under the same terms. Nothing in this
+family carries a separate weights licence.
+
+EdgeTAM's image trunk is RepViT-M1, which upstream does not carry: it builds it through
+the timm library at construction time. The modules are carried here instead, extracted
+from that library, whose copyright notice travels with them:
+
+  - PyTorch Image Models (timm)
+    Copyright 2019 Ross Wightman
+    https://github.com/huggingface/pytorch-image-models
+    Apache License 2.0
+
+  timm's own implementation is in turn adapted from the RepViT authors' release:
+
+  - RepViT: Revisiting Mobile CNN From ViT Perspective
+    https://github.com/jameslahm/RepViT
+    Apache License 2.0
+
+NOT INCLUDED
+------------
+The video tracker is not part of this package: memory attention, the memory encoder,
+the 2-D Spatial Perceiver that is EdgeTAM's own contribution, object pointers and the
+frame bookkeeping that drives them are all left behind, along with the training code
+and the automatic mask generator. See PROVENANCE.md for the full list and for why.
