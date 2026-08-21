@@ -217,6 +217,126 @@
         }
       }
     },
+    "easyocr/chinese-simplified": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "easyocr/chinese-simplified/2026-08-21/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "easyocr/chinese-simplified/2026-08-21/NOTICE",
+              "sha256": "58883e9ee2fad9372c8635bcbf34b78d3c6b3af4712c4eb366b441fdf29416de",
+              "size": 1238
+            },
+            "torch-fp32": {
+              "path": "easyocr/chinese-simplified/2026-08-21/torch-fp32.pth",
+              "sha256": "aad3c953a08badbda00b5fd2d5dd8e503e9689e8af10cc061cefcc7721b1579b",
+              "size": 105125385
+            }
+          }
+        }
+      }
+    },
+    "easyocr/english": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "easyocr/english/2026-08-21/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "easyocr/english/2026-08-21/NOTICE",
+              "sha256": "b21b74fb8bff1e9af180cc8dcb8232feed3d0c9af0debe3ec89b6cd5829a29a8",
+              "size": 1229
+            },
+            "torch-fp32": {
+              "path": "easyocr/english/2026-08-21/torch-fp32.pth",
+              "sha256": "6238897ec6c512fbbf9cdb493f1c197961d9275ae8f7bc8fbecf0c1c452fe6c2",
+              "size": 98318025
+            }
+          }
+        }
+      }
+    },
+    "easyocr/japanese": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "easyocr/japanese/2026-08-21/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "easyocr/japanese/2026-08-21/NOTICE",
+              "sha256": "dce6ad7e51db6c44e51f95d66ace1eb809df2d881653415ea733c817e0283fa7",
+              "size": 1232
+            },
+            "torch-fp32": {
+              "path": "easyocr/japanese/2026-08-21/torch-fp32.pth",
+              "sha256": "86c7f3311debcbc72e7d1f5aa70b6d9d7da6afc0e83ae62aee0690e0a3ac80d9",
+              "size": 100495305
+            }
+          }
+        }
+      }
+    },
+    "easyocr/korean": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "easyocr/korean/2026-08-21/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "easyocr/korean/2026-08-21/NOTICE",
+              "sha256": "7afcba98c042fa2f413dc9c2d7a4ce4f2f7b3c0578a8efa42e3c181cff35ef98",
+              "size": 1226
+            },
+            "torch-fp32": {
+              "path": "easyocr/korean/2026-08-21/torch-fp32.pth",
+              "sha256": "26388a1863fbc236cbf8498d43a2f44d663f8bfcd8cf29987b1f30f1df1eef74",
+              "size": 99255561
+            }
+          }
+        }
+      }
+    },
+    "easyocr/latin": {
+      "latest": "2026-08-21",
+      "revisions": {
+        "2026-08-21": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "easyocr/latin/2026-08-21/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "easyocr/latin/2026-08-21/NOTICE",
+              "sha256": "72ccf6b963a1d544181e75cb402521c838bc2fdafcbf4a1e49d7c882f0c9a36c",
+              "size": 1223
+            },
+            "torch-fp32": {
+              "path": "easyocr/latin/2026-08-21/torch-fp32.pth",
+              "sha256": "510b30a0b296f276a16c617d42d1820987bb963240b2841e6b42a7c5d5455bd2",
+              "size": 98580169
+            }
+          }
+        }
+      }
+    },
     "edgetam/edgetam": {
       "latest": "2026-08-21",
       "revisions": {
