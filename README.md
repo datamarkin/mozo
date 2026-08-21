@@ -2,10 +2,10 @@
 
 Computer vision model server with automatic memory management.
 
-Mozo provides HTTP and Python access to 47 published model variants across 10 model families —
+Mozo provides HTTP and Python access to 52 published model variants across 11 model families —
 object detection (RF-DETR, YOLOv8/11/12/26), open-vocabulary detection (OWLv2), promptable
-segmentation (SAM 2, EdgeTAM), concept segmentation (SAM 3) and monocular depth
-(Depth Anything V2). Models load on-demand and clean up automatically.
+segmentation (SAM 2, EdgeTAM), concept segmentation (SAM 3), text recognition (EasyOCR) and
+monocular depth (Depth Anything V2). Models load on-demand and clean up automatically.
 
 Every family is a **vendored, deployment-only extraction** of its upstream project, verified
 bit-identical to it, so no family requires its upstream package to be installed. `pip install
@@ -210,6 +210,46 @@ bit-identical. `tools/verify/owlv2.py` needs neither a checkout nor a network, o
 
 Output: PixelFlow `Detections` with boxes and scores
 
+### EasyOCR (5 variants)
+Text recognition. Finds every line of text on a page and reads it.
+
+```python
+found = model.predict("sign.jpg")
+found[0].text                # 'EXIT 42' — what it says
+found[0].class_name          # None — OCR reads content, it does not pick a class
+found[0].segments            # the four corners as read, for rotated text
+```
+
+**A variant is a script, not a language**: `english`, `latin`, `chinese-simplified`,
+`japanese`, `korean`. `latin` alone covers 41 languages and reads every character its
+charset holds. Upstream instead picks a checkpoint from a language list and then suppresses
+characters outside those languages at decode time, so its output depends on something that
+is not a property of the weights — ask mozo's `latin` for `café` and you get `café`.
+
+These five are 88% of upstream's own download counts, out of the seventeen recognisers it
+publishes.
+
+**Detections carry `text`, not a class name.** Every other family here names a class from a
+fixed vocabulary; this one produces content that belongs to no vocabulary, and PixelFlow
+keeps the two apart. `class_id` and `class_name` are `None`.
+
+The quadrilateral is kept in `segments` with its axis-aligned hull in `bbox`, because
+real-world text is rotated and a box alone throws the orientation away. Level lines come
+back top to bottom, followed by tilted ones — that is upstream's ordering, and it is not a
+reading order: a two-column page interleaves.
+
+Two graphs: CRAFT locates the text, a CRNN reads it. There is no NMS — a detection is a
+connected component of two heatmaps, one scoring "inside a character" and one "between two
+characters of the same word". On CPU that is about 200 ms a page, within 1% of the
+published package running the same weights, and detection is 86% of it.
+
+Verified against `easyocr` at every stage — preprocessed tensor, both heatmaps,
+quadrilaterals, each crop, the decoded string and its confidence — with no tolerance: 1,275
+comparisons across the five variants, every one bit-identical. `tools/verify/easyocr.py`
+needs `pip install easyocr` and the weights.
+
+Output: PixelFlow `Detections` with `text`, a quad and a confidence
+
 ### SAM 3 (1 variant)
 Promptable segmentation. Meta ships a single model rather than a size ladder, so there is
 one variant: `sam3/sam3`.
@@ -300,7 +340,7 @@ Content-Type: multipart/form-data
 
 Parameters:
 - `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `owlv2`,
-  `sam2`, `edgetam`, `sam3` or `depth_anything_v2`)
+  `easyocr`, `sam2`, `edgetam`, `sam3` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
 - `threshold` - Confidence threshold (detection models only). Omitted, the family's own published
