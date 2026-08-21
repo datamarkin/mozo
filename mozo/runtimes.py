@@ -164,7 +164,12 @@ def providers_for(device: str) -> list[str]:
     return ["CPUExecutionProvider"]
 
 
-def select_runtime(device: str, published: list[str], requested: str = "auto") -> str:
+def select_runtime(
+    device: str,
+    published: list[str],
+    requested: str = "auto",
+    executes: tuple[str, ...] | None = None,
+) -> str:
     """Choose which published artifact to run on *device*.
 
     Args:
@@ -172,6 +177,11 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
         published: Artifact keys the model publishes, from :func:`mozo.weights.artifacts`.
         requested: An explicit runtime such as ``"onnx-fp16"``, or ``"auto"`` to take the best
             published option for the device.
+        executes: Frameworks the *caller* can run, e.g. ``("torch",)``. A published artifact is
+            no use to an adapter that has no code to execute it, and that is a fact about the
+            adapter rather than about the machine -- so it belongs here, beside the two filters
+            that already narrow the choice, and not in a check the caller makes after this
+            function has already answered. ``None`` means the caller can run anything published.
 
     Returns:
         A runtime name, which is an artifact key for a family that publishes its runtime as one
@@ -190,16 +200,27 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
         'onnx-fp32'
         >>> select_runtime("cpu", ["onnx-fp32-decoder", "onnx-fp32-encoder", "torch-fp32"])
         'torch-fp32'
+        >>> select_runtime("cpu", ["onnx-fp32", "torch-fp32"], executes=("torch",))
+        'torch-fp32'
     """
+    offered = runnable(published)
+    supported = ([key for key in offered if framework_of(key) in executes]
+                 if executes is not None else offered)
+
     if requested != "auto":
-        if requested not in runnable(published):
+        if requested not in offered:
             raise RuntimeError_(
                 f"{requested!r} is not published for this model. "
-                f"Available: {', '.join(runnable(published))}"
+                f"Available: {', '.join(offered)}"
+            )
+        if requested not in supported:
+            raise RuntimeError_(
+                f"{requested!r} is published for this model, but this family can only execute "
+                f"{', '.join(executes)}. Available: {', '.join(supported) or 'nothing'}"
             )
         return requested
 
-    usable = executable(published)
+    usable = [key for key in executable(published) if key in supported]
     for key in _PREFERENCE.get(device.split(":")[0], _PREFERENCE["cpu"]):
         if key in usable:
             return key
@@ -209,7 +230,7 @@ def select_runtime(device: str, published: list[str], requested: str = "auto") -
         return usable[0]
     raise RuntimeError_(
         "nothing this model publishes can run here. Published: "
-        f"{', '.join(runnable(published)) or 'nothing runnable'}"
+        f"{', '.join(offered) or 'nothing runnable'}"
     )
 
 
