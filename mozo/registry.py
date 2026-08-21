@@ -15,9 +15,16 @@ To add a family: add an entry below, and give its adapter the same ``VARIANTS``.
 
 from __future__ import annotations
 
-__all__ = ["MODEL_REGISTRY", "get_model_info"]
+__all__ = ["MODEL_REGISTRY", "PROMPTED", "get_model_info"]
 
 from typing import Any
+
+#: Task types whose model is asked a question in words. They differ in what comes back -- SAM 3
+#: answers with masks, OWLv2 with boxes -- but the request is the same shape, and so is the way a
+#: missing prompt has to be refused. Named here rather than in the server because it is a
+#: statement about the task vocabulary, and this is the module that owns those strings; the
+#: endpoint and the tests both read it from here rather than keeping copies in step.
+PROMPTED = frozenset({"concept_segmentation", "open_vocabulary_detection"})
 
 #: Family -> where its adapter lives, what it does, and which variants it publishes.
 #: An empty ``variants`` list means the family accepts any variant name.
@@ -51,6 +58,20 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
             'Apache 2.0.'
         ),
         'variants': ['edgetam'],
+    },
+
+    'owlv2': {
+        'adapter_class': 'OwlV2Predictor',
+        'module': 'mozo.adapters.owlv2',
+        'task_type': 'open_vocabulary_detection',
+        'description': (
+            'OWLv2 by Google Research — open-vocabulary detection. Name anything in words '
+            'and it returns boxes for it, with no class list and no training. 4 variants: '
+            'base-ensemble/large-ensemble average the self-trained and fine-tuned checkpoints, '
+            'base/large are self-training only. Boxes, not masks — pair it with SAM 2 or '
+            'EdgeTAM for those. Unlike SAM 3, the code and all four checkpoints are Apache 2.0.'
+        ),
+        'variants': ['base-ensemble', 'base', 'large-ensemble', 'large'],
     },
 
     'rfdetr': {
