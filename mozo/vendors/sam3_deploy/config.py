@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 
 __all__ = [
     "BlockSpec",
+    "CLICK",
+    "ClickSpec",
     "DECODER",
     "DecoderSpec",
     "FUSION",
@@ -205,6 +207,50 @@ class Spec:
     std: tuple[float, float, float] = (0.5, 0.5, 0.5)
 
 
+@dataclass(frozen=True)
+class ClickSpec(BlockSpec):
+    """The click head's geometry.
+
+    Every value is ``transformers/models/sam3_tracker``'s own config default, and every one is
+    confirmed by loading the published checkpoint strict -- a shape that disagreed would not fit.
+
+    ``image_size``, ``patch`` and ``hidden`` are not independent readings of that config: they
+    are the trunk's square, the trunk's patch and the neck's width, which this head runs on.
+    They are restated here so the head reads one spec rather than three, and
+    ``tests/families/test_sam3.py`` pins them equal to :data:`SPEC` -- a hand-kept coincidence
+    would put a click on the wrong feature without any shape mismatch to catch it.
+
+    Args:
+        image_size: The square an image is resized to, and prompts are scaled into.
+        patch: Trunk patch size. ``grid`` is what the two of them make.
+        point_embeddings: Exclude, include, and a box's two corners. There is no box input.
+        mask_channels: Hidden channels of the mask-refinement downscaler.
+        multimask_outputs: Candidate masks besides the single-mask token.
+        downsample: How far cross-attention projects down before attending. Self-attention
+            does not.
+        iou_head_depth: Depth of the IoU head.
+        stability_delta: How far either side of the threshold the stability check looks.
+        stability_thresh: Below this, the single-mask token is replaced by the best candidate.
+    """
+
+    image_size: int = 1008
+    patch: int = 14
+    layers: int = 2
+    point_embeddings: int = 4
+    mask_channels: int = 16
+    multimask_outputs: int = 3
+    downsample: int = 2
+    iou_head_depth: int = 3
+    layer_norm_eps: float = 1e-6
+    stability_delta: float = 0.05
+    stability_thresh: float = 0.98
+
+    @property
+    def grid(self) -> int:
+        """Side of the feature grid the click head attends over: 1008 // 14 = 72."""
+        return self.image_size // self.patch
+
+
 #: The published model. Meta ships one.
 SPEC = Spec()
 
@@ -225,3 +271,6 @@ SCORING = ScoringSpec()
 
 #: The mask head's.
 MASK = MaskSpec()
+
+#: The click head's geometry.
+CLICK = ClickSpec()
