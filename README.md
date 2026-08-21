@@ -2,10 +2,10 @@
 
 Computer vision model server with automatic memory management.
 
-Mozo provides HTTP and Python access to 43 published model variants across 9 model families —
-object detection (RF-DETR, YOLOv8/11/12/26), promptable segmentation (SAM 2, EdgeTAM), concept
-segmentation (SAM 3) and monocular depth (Depth Anything V2). Models load on-demand and clean up
-automatically.
+Mozo provides HTTP and Python access to 47 published model variants across 10 model families —
+object detection (RF-DETR, YOLOv8/11/12/26), open-vocabulary detection (OWLv2), promptable
+segmentation (SAM 2, EdgeTAM), concept segmentation (SAM 3) and monocular depth
+(Depth Anything V2). Models load on-demand and clean up automatically.
 
 Every family is a **vendored, deployment-only extraction** of its upstream project, verified
 bit-identical to it, so no family requires its upstream package to be installed. `pip install
@@ -167,6 +167,49 @@ Only the torch runtime is served so far. SAM 2 also publishes ONNX and CoreML ar
 this adapter refuses rather than quietly answering with torch: a promptable model exports as
 several graphs and needs a runner that keeps the encode and the decode apart.
 
+### OWLv2 (4 variants)
+Open-vocabulary detection. Name anything in words and it returns boxes for it — no class
+list, no fine-tuning, no vocabulary agreed in advance.
+
+```python
+found = model.predict("kitchen.jpg", ["kettle", "a mug", "the window"])
+found[0].class_name          # 'kettle' — the phrase you searched for
+```
+
+`base-ensemble` and `large-ensemble` average Google's self-trained and fine-tuned
+checkpoints and are what the paper reports; `base` and `large` are self-training only.
+
+**This is mozo's permissively-licensed way to ask a model a question in words.** SAM 3
+below answers a similar question with masks, but its weights carry Meta's SAM License and
+bind whoever you serve predictions to. OWLv2 is Apache-2.0 on the code and on all four
+checkpoints.
+
+Boxes only, no masks — pair it with SAM 2 or EdgeTAM if you want those: a box from here is
+a prompt there.
+
+Phrases go in verbatim, up to 16 tokens, and all of them share one image forward *and* one
+text forward, so twenty phrases cost barely more than one. Scores are similarities through
+a sigmoid rather than class probabilities, so they run low: 0.3 is confident here, and the
+default floor is 0.1 rather than the 0.5 the closed-vocabulary detectors use.
+
+There is no non-maximum suppression, because the published postprocessing has none. A
+detection is a patch: the model scores every patch against every phrase and predicts one
+box per patch, so overlapping boxes on a large object are expected and suppressing them is
+the caller's policy.
+
+Inference is a fixed square — 960 for base, 1008 for large — reached by padding the image
+bottom and right to a square first, so the aspect ratio *is* preserved and a 4:3 photograph
+spends a quarter of its patches on padding. On CPU at 2 MP, `base-ensemble` is about 1.1 s,
+which is within 1% of `transformers` running the same weights; the image encode is cached,
+so a second vocabulary on the same photograph is about 50 ms.
+
+Verified against `transformers` on every stage — tokenizer, preprocessing, both towers, all
+three heads, and the final boxes — with no tolerance: 225 comparisons per variant, every one
+bit-identical. `tools/verify/owlv2.py` needs neither a checkout nor a network, only
+`pip install transformers` and the weights.
+
+Output: PixelFlow `Detections` with boxes and scores
+
 ### SAM 3 (1 variant)
 Promptable segmentation. Meta ships a single model rather than a size ladder, so there is
 one variant: `sam3/sam3`.
@@ -256,11 +299,13 @@ Content-Type: multipart/form-data
 ```
 
 Parameters:
-- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `sam2`,
-  `edgetam`, `sam3` or `depth_anything_v2`)
+- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `owlv2`,
+  `sam2`, `edgetam`, `sam3` or `depth_anything_v2`)
 - `variant` - Model variant (e.g., `nano`, `indoor-small`)
 - `file` - Image file
-- `threshold` - Confidence threshold (detection models only)
+- `threshold` - Confidence threshold (detection models only). Omitted, the family's own published
+  default applies. These differ — see each family's section above — and the endpoint deliberately
+  does not restate them.
 - `labels` - Comma-separated class labels overriding the model defaults (detection models only)
 - `text` - The concept to look for (prompted models only, required by them). **Repeat the
   parameter** to ask for several in one request: `?text=car&text=person`. It is deliberately
@@ -280,6 +325,10 @@ Parameters:
   (promptable models only, default `true`).
 
 ```bash
+# Boxes for anything you can name, under a permissive licence
+curl -X POST "http://localhost:8000/predict/owlv2/base-ensemble?text=kettle&text=a%20mug" \
+  -F "file=@kitchen.jpg"
+
 # One concept
 curl -X POST "http://localhost:8000/predict/sam3/sam3?text=taxi" -F "file=@street.jpg"
 
