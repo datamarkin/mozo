@@ -51,11 +51,15 @@ property of the weights. See `PROVENANCE.md`.
 
 Median over eight fixture pages, one M-series CPU, `english`:
 
-| | |
-|---|---|
-| per page | 201 ms |
-| detection alone | 85% of that |
-| against the published package | 0.99x |
+| | cpu | mps |
+|---|---|---|
+| per page | 202 ms | **31 ms** |
+| detection alone | 86% of it | 56% of it |
+| against the published package | 0.99x | 1.22x |
+
+mps is 6.5x faster and **not bit-identical** -- strings and quadrilaterals are exact, confidences
+move by up to 2.2e-05. The gate verifies CPU; ask for `device="cpu"` if you need the verified
+numbers. See `PROVENANCE.md`.
 
 The remaining 15% is the recogniser, and it is almost all `torch.lstm` and `conv2d`: one crop
 per forward is the cost, and that is a parity constraint rather than an oversight. The
