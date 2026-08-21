@@ -140,7 +140,34 @@ It is worth the trade for most callers: 31 ms a page against 202 ms.
 
 ## Export
 
-Neither graph is published, and both reasons are measured rather than assumed.
+Neither graph is published in any runtime, and every reason is measured rather than assumed.
+
+**CoreML is the fastest thing here and still not publishable.** At a fixed shape both graphs
+convert and both beat every torch path:
+
+| | torch-cpu | torch-mps | CoreML |
+|---|---|---|---|
+| CRAFT at 320x480 | 174.8 ms | 18.8 ms | **13.8 ms** |
+| recogniser at 64x256 | 12.0 ms | 6.4 ms | **3.8 ms** |
+
+Two things stop it, and the second is the real one.
+
+Parity: 1.8e-07 on the detector and **1.6e-05** on the recogniser. The second is above the
+1.4e-05 that batching moves the logits by, which is already known to flip a marginal character.
+
+Geometry: those numbers are *at a fixed shape*, and this model does not have one. The detector's
+input is the page scaled to fit 2,560 and padded to a multiple of 32, so its shape follows the
+photograph; the recogniser's width is `ceil(aspect) x 64` per line, and padding a line out to a
+fixed width replicates its last column into more decode steps, which can change what it says.
+With flexible shapes neither converts at all -- the detector's U-Net upsamples to another
+tensor's runtime shape (`Unable to map torch_upsample_bilinear to core upsample`) and the
+recogniser hits the same adaptive pool ONNX does. Enumerating shapes instead would mean 6,241
+combinations for the detector, which is not a package anyone would ship.
+
+So CoreML here would mean publishing a model with a different geometry from the one that was
+verified, and a recogniser off by enough to change a character. mozo's other CoreML families --
+RF-DETR, YOLO, SAM 2 -- are all fixed-geometry by nature, so the question never arose for them.
+This is the first family whose input shape is a property of the input.
 
 **CRAFT exports and is slower.** 83.1 MB, parity 1.8e-07, and 280 ms against torch's 185 ms on
 CPU -- 0.66x. Against the 17 ms a page it takes on mps, an ONNX detector is not a runtime anyone
