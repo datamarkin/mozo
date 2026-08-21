@@ -26,11 +26,11 @@ import torch
 __all__ = [
     "DETECTOR_PREFIX",
     "TRACKER_PREFIX",
-    "TRACKER_RULES",
+    "CLICK_RULES",
     "concept_state_dict",
     "load_state_dict",
     "text_state_dict",
-    "tracker_state_dict",
+    "click_state_dict",
     "vision_state_dict",
 ]
 
@@ -97,16 +97,46 @@ CONCEPT_RULES: tuple[tuple[str, str], ...] = (
 
 #: Meta's key -> this package's key for the click path, applied in order.
 #:
-#: One rule, and it is a naming difference rather than a structural one. The checkpoint stores
-#: the two-way transformer's feed-forward as ``lin1``/``lin2``, which is SAM 1's ``MLPBlock``;
-#: :mod:`mozo.vendors.sam2_deploy` carries SAM 2's ``MLP(num_layers=2)``, whose two ``Linear``
-#: layers are indexed instead of named. The shapes match -- ``lin1`` is ``(2048, 256)`` and
-#: ``layers.0`` is the same -- and both compute ``linear -> ReLU -> linear``, so this renames a
-#: label and changes no arithmetic.
-TRACKER_RULES: tuple[tuple[str, str], ...] = (
-    (r"\.mlp\.lin1\.", r".mlp.layers.0."),
-    (r"\.mlp\.lin2\.", r".mlp.layers.1."),
+#: A longer table than the other three, because the click head derives from
+#: ``transformers/models/sam3_tracker`` while the checkpoint follows ``facebookresearch/sam3``,
+#: and the two disagree about names far more here than they do in the towers. Nothing below
+#: changes a number: every rule renames a module or reindexes a ``Sequential`` whose members
+#: this package gives names to.
+CLICK_RULES: tuple[tuple[str, str], ...] = (
+    # --- the two-way transformer, before anything generic ---------------------------------
+    # Every attention here calls its output projection ``out_proj``; ours follows
+    # ``transformers`` and calls it ``o_proj``. One rule covers the blocks and the final pass.
+    (r"^sam_mask_decoder\.transformer\.(.+)\.out_proj\.",
+     r"mask_decoder.transformer.\1.o_proj."),
+    (r"^sam_mask_decoder\.transformer\.layers\.(\d+)\.norm(\d)\.",
+     r"mask_decoder.transformer.layers.\1.layer_norm\2."),
+    # The block's feed-forward is ``Mlp``, whose ``layers.N`` is the checkpoint's own naming
+    # everywhere else; only these two keys spell it differently.
+    (r"^sam_mask_decoder\.transformer\.layers\.(\d+)\.mlp\.lin1\.",
+     r"mask_decoder.transformer.layers.\1.mlp.layers.0."),
+    (r"^sam_mask_decoder\.transformer\.layers\.(\d+)\.mlp\.lin2\.",
+     r"mask_decoder.transformer.layers.\1.mlp.layers.1."),
+    (r"^sam_mask_decoder\.transformer\.norm_final_attn\.",
+     r"mask_decoder.transformer.layer_norm_final_attn."),
+    (r"^sam_mask_decoder\.transformer\.", r"mask_decoder.transformer."),
+    # --- the upscaling Sequential, whose members are named here ----------------------------
+    # The indices it skips are activations, which carry no weights.
+    (r"^sam_mask_decoder\.output_upscaling\.0\.", r"mask_decoder.upscale_conv1."),
+    (r"^sam_mask_decoder\.output_upscaling\.1\.", r"mask_decoder.upscale_layer_norm."),
+    (r"^sam_mask_decoder\.output_upscaling\.3\.", r"mask_decoder.upscale_conv2."),
+    (r"^sam_mask_decoder\.", r"mask_decoder."),
+    # --- prompt encoder --------------------------------------------------------------------
+    (r"^sam_prompt_encoder\.pe_layer\.positional_encoding_gaussian_matrix$",
+     r"prompt_encoder.shared_embedding.positional_embedding"),
+    (r"^sam_prompt_encoder\.mask_downscaling\.0\.", r"prompt_encoder.mask_embed.conv1."),
+    (r"^sam_prompt_encoder\.mask_downscaling\.1\.", r"prompt_encoder.mask_embed.layer_norm1."),
+    (r"^sam_prompt_encoder\.mask_downscaling\.3\.", r"prompt_encoder.mask_embed.conv2."),
+    (r"^sam_prompt_encoder\.mask_downscaling\.4\.", r"prompt_encoder.mask_embed.layer_norm2."),
+    (r"^sam_prompt_encoder\.mask_downscaling\.6\.", r"prompt_encoder.mask_embed.conv3."),
+    (r"^sam_prompt_encoder\.", r"prompt_encoder."),
 )
+
+
 
 #: Keys this package does not build, matched by prefix. Two reasons appear here:
 #:
@@ -263,13 +293,8 @@ def concept_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.T
     }
 
 
-def tracker_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-    """Extract the weights :class:`~.click.ClickHead` needs.
-
-    Almost nothing to translate. :class:`~.click.ClickHead` names its three attributes exactly
-    as the checkpoint does -- ``sam_prompt_encoder``, ``sam_mask_decoder``, ``no_mem_embed`` --
-    and the layers underneath them are :mod:`mozo.vendors.sam2_deploy`'s, which already carry
-    Meta's own names. The single exception is :data:`TRACKER_RULES`.
+def click_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Extract and translate the weights :class:`~.click.ClickHead` needs.
 
     Args:
         checkpoint: What :func:`load_state_dict` returned.
@@ -281,8 +306,24 @@ def tracker_state_dict(checkpoint: dict[str, torch.Tensor]) -> dict[str, torch.T
         KeyError: If the checkpoint carries no tracker section.
     """
     source = _section(checkpoint, TRACKER_PREFIX, "click path")
-    return {
-        rename(key, TRACKER_RULES): tensor
-        for key, tensor in source.items()
-        if not _skipped(f"{TRACKER_PREFIX}{key}")
-    }
+
+    out: dict[str, torch.Tensor] = {}
+    corners: dict[int, torch.Tensor] = {}
+    for key, tensor in source.items():
+        if _skipped(f"{TRACKER_PREFIX}{key}"):
+            continue
+        # The one structural difference. Upstream keeps four separate one-row embeddings, one
+        # per label; ``transformers`` keeps a single table indexed by the label, which is what
+        # lets the prompt encoder add them with an index rather than four ``where`` branches.
+        # Stacking them in label order is the whole of the change -- no value moves.
+        index = re.fullmatch(r"sam_prompt_encoder\.point_embeddings\.(\d+)\.weight", key)
+        if index:
+            corners[int(index.group(1))] = tensor
+            continue
+        out[rename(key, CLICK_RULES)] = tensor
+
+    if corners:
+        out["prompt_encoder.point_embed.weight"] = torch.cat(
+            [corners[i] for i in sorted(corners)], dim=0
+        )
+    return out
