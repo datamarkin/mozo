@@ -93,6 +93,11 @@ mozo = ["static/*", "manifest.json"]
 # OWLv2 tokenizes prompts through the same CLIP vocabulary, and carries its own copy of it:
 # a vendored package may not import another, and a shared asset would be that by another name.
 "mozo.vendors.owlv2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
+# Grounding DINO tokenizes prompts with BERT's WordPiece rather than CLIP's byte-pair encoder,
+# so it carries its own vocabulary -- Google's `bert-base-uncased` vocab.txt, 30,522 entries,
+# Apache-2.0. Upstream downloads it through `transformers` on first use; shipping it is what
+# makes tokenizing a prompt need no network and no `transformers` install.
+"mozo.vendors.grounding_dino_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
 # EasyOCR reads its alphabet from a text file per variant. The Chinese one is 6,718
 # characters; a literal that size is not something anyone can read past, and the alphabet is
 # part of the model definition rather than of the weights, so it ships here.

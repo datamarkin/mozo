@@ -75,6 +75,22 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         'variants': ['edgetam'],
     },
 
+    'grounding_dino': {
+        'adapter_class': 'GroundingDinoPredictor',
+        'module': 'mozo.adapters.grounding_dino',
+        'task_type': 'open_vocabulary_detection',
+        'description': (
+            'Grounding DINO by IDEA Research — open-vocabulary detection. Describe anything in '
+            'words and it returns boxes for it, with no class list and no training. 2 variants: '
+            'tiny (Swin-T) and base (Swin-B, 8.3 box AP better zero-shot). Text is fused into '
+            'the image features six times over and the decoder attends back to the words, so a '
+            'phrase is read rather than treated as a bag of words — reach for it over OWLv2 '
+            'when the prompt is a description. Boxes, not masks — pair it with SAM 2 or EdgeTAM '
+            'for those. Code is Apache 2.0, and the authors publish the weights under it too.'
+        ),
+        'variants': ['tiny', 'base'],
+    },
+
     'owlv2': {
         'adapter_class': 'OwlV2Predictor',
         'module': 'mozo.adapters.owlv2',
