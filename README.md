@@ -1,392 +1,230 @@
 # Mozo
 
-Computer vision model server with automatic memory management.
+[![PyPI](https://img.shields.io/pypi/v/mozo)](https://pypi.org/project/mozo/)
+[![Python](https://img.shields.io/pypi/pyversions/mozo)](https://pypi.org/project/mozo/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Mozo provides HTTP and Python access to 52 published model variants across 11 model families —
-object detection (RF-DETR, YOLOv8/11/12/26), open-vocabulary detection (OWLv2), promptable
-segmentation (SAM 2, EdgeTAM), concept segmentation (SAM 3), text recognition (EasyOCR) and
-monocular depth (Depth Anything V2). Models load on-demand and clean up automatically.
+### 52 computer vision models. One `pip install`. No dependency hell.
 
-Every family is a **vendored, deployment-only extraction** of its upstream project, verified
-bit-identical to it, so no family requires its upstream package to be installed. `pip install
-mozo` and a model runs; there is no per-family build step and no Docker image.
+Normally each of these models arrives with its own package — `ultralytics`, `transformers`,
+`easyocr`, `sam2`, `rfdetr` — and each pins torch, numpy and OpenCV to something slightly
+different. Put a few in one environment and something breaks. The usual escape is a container
+per model, and paying for that forever.
 
-## Quick Start
+Mozo ships none of them. Every model's inference path is vendored into mozo itself and verified
+**bit-identical** to the original implementation — so one environment runs all 52, and gives
+you the original's exact numbers rather than something close.
 
 ```bash
 pip install mozo
 mozo start
 ```
 
-Server starts on `http://localhost:8000` with all models available via REST API.
+No Docker, no Kubernetes, no per-model build step, no conversion step, no `git clone` of
+anything.
 
-### Examples
+Serve  from one install, in one process, behind one API.
 
-Object detection:
-```bash
-curl -X POST "http://localhost:8000/predict/rfdetr/medium" \
-  -F "file=@image.jpg"
-```
-
-Depth estimation:
-```bash
-curl -X POST "http://localhost:8000/predict/depth_anything_v2/small" \
-  -F "file=@image.jpg" -D headers.txt --output depth.png
-
-# depth.png is a 16-bit PNG; headers.txt carries what it means:
-#   X-Depth-Unit: metres | none      X-Depth-Min / X-Depth-Max: the endpoints
-#   depth = min + png / 65535 * (max - min)
-```
-
-List available models:
-```bash
-curl http://localhost:8000/models
-```
-
-## Features
-
-- **37 Published Variants** - RF-DETR (8), Depth Anything V2 (9) and four YOLO generations (5 each), weights hosted and hash-verified
-- **Vendored Architectures** - no upstream package needed, each verified bit-identical to it
-- **Multiple Runtimes** - the same model as torch, ONNX or CoreML, chosen automatically per device
-- **Lazy Loading** - Models load on first use and are reused across requests
-- **PixelFlow Integration** - Detection models return a unified format for filtering and annotation
-- **Thread-Safe** - Concurrent requests share one loaded model, built once
-- **Production Ready** - Multiple workers, configurable timeouts, health checks
-
-## Installation
+## Install
 
 ```bash
-# Basic installation
 pip install mozo
+```
 
-# Optional runtimes (install as needed)
+That is the whole install — twelve ordinary dependencies, not one of them a model package.
+
+```bash
+# Optional runtimes, for the families that publish those artifacts
 pip install 'mozo[onnx]'     # onnxruntime
-pip install 'mozo[coreml]'   # coremltools, macOS only — the fastest RF-DETR path on Apple silicon
+pip install 'mozo[coreml]'   # coremltools, macOS only
 ```
 
-No family needs an extra. The extras add *ways to execute* the same model, not models: without
-them `runtime="auto"` simply does not select those artifacts.
+No family needs an extra. The extras add *ways to execute* a model, not models: without them
+`runtime="auto"` simply does not select those artifacts.
 
-## Available Models
+## Using it
 
-### RF-DETR (8 variants)
-Real-time transformer detection and instance segmentation by Roboflow. Apache 2.0.
+Two interfaces over the same models, plus a browser page for testing them.
 
-- Detection: `nano`, `small`, `medium`, `large`
-- Segmentation: `seg-nano`, `seg-small`, `seg-medium`, `seg-large`
+| | |
+|---|---|
+| **HTTP server** | serve models to other machines, or to a language that is not Python |
+| **Python API** | build a pipeline, a script or a notebook, in-process |
+| *Test UI* | see what a model does to your own image before writing anything |
 
-Output: PixelFlow `Detections` — boxes, masks, class names, confidence scores
+### 1. HTTP server
 
-Every variant publishes two runtimes, and they are verified to return the same
-detections:
-
-```python
-model = manager.get_model('rfdetr', 'small')                        # torch
-model = manager.get_model('rfdetr', 'small', runtime='onnx-fp32')   # ONNX Runtime
+```bash
+mozo start
 ```
 
-Class names ship with the weights, so they are the vocabulary the checkpoint was
-trained on rather than an assumption. A checkpoint of your own that carries no
-names returns `class_id` with `class_name` unset — pass `labels=[...]` to name
-them. Mozo never guesses a name.
-
-### YOLOv8, YOLO11, YOLO12 and YOLO26 (5 variants each)
-Real-time detection by Ultralytics. **The weights are AGPL-3.0**, unlike the rest of
-mozo — see the licensing note below.
-
-- All four families: `nano`, `small`, `medium`, `large`, `xlarge`
-
-YOLO26 is NMS-free: its head fires once per object and the network returns a ranked
-detection list, so there is no overlap threshold to tune. The others suppress in the
-usual way. Either way `predict` takes a confidence threshold and returns the same
-PixelFlow result.
-
-Output: PixelFlow `Detections` — boxes, class names, confidence scores
-
-```python
-model = manager.get_model('yolov8', 'nano')                         # torch
-model = manager.get_model('yolov11', 'nano', runtime='onnx-fp32')   # ONNX Runtime
+```bash
+curl -X POST "http://localhost:8000/predict/rfdetr/medium" -F "file=@street.jpg"
 ```
 
-YOLOv8 and YOLO12 also publish a CoreML artifact, which is by far the fastest way to run
-them on Apple silicon. YOLO11 and YOLO26 do not: the `C2PSA` block they share makes
-Apple's Metal graph compiler abort the process, and the configuration that avoids that is
-slower than torch on MPS. `runtime="auto"` handles this by itself — it only ever chooses
-among what a variant actually publishes, so nothing in mozo carries a per-family
-exception.
-
-Class names come from the checkpoint, so a fine-tuned model publishes its own
-vocabulary. Mozo never guesses a name.
-
-> **Licensing.** These weights are AGPL-3.0, or covered by a commercial licence from
-> Ultralytics. Mozo's own code stays Apache-2.0 — they are separate works travelling
-> together — but anything you export from them inherits their terms, and **serving
-> predictions from them over a network places AGPL-3.0 section 13 obligations on you**.
-> The full licence and a NOTICE naming the exact upstream release are published beside
-> every checkpoint. Complying is the operator's responsibility.
-
-### SAM 2 (4 variants) and EdgeTAM (1 variant)
-Promptable segmentation: point at something and get back the thing you pointed at.
-`sam2/{tiny,small,base_plus,large}` and `edgetam/edgetam`.
-
-Every prompt is a set of points. A click is a point with a label — `1` to include, `0` to
-exclude. A box is spelled as its two corners carrying reserved labels, because neither model has
-a separate box input; the adapter writes those for you. Points and a box can be combined.
-
-```python
-from mozo import ModelManager
-model = ModelManager().get_model("edgetam", "edgetam")
-
-found = model.predict(image, points=[[820, 640]], labels=[1])   # three candidates, best first
-found = model.predict(image, boxes=[40, 60, 300, 480])
-found = model.predict(image, boxes=[40, 60, 300, 480], points=[[900, 700]], labels=[0])
+```json
+[
+  {"bbox": [0.0, 113.24, 763.19, 1269.33], "class_name": "person", "confidence": 0.917},
+  {"bbox": [709.0, 773.0, 1366.0, 1143.0], "class_name": "laptop", "confidence": 0.854}
+]
 ```
 
-`multimask_output=True` (the default) returns three candidate masks with the model's own
-predicted IoU as the score, ranked. That is the right setting for a single click, which is
-genuinely ambiguous about whether you meant the handle, the door or the car — take the first
-row, or show all three. With a box the prompt is usually unambiguous and `multimask_output=False`
-is tighter.
+Trimmed for reading. The real response carries every PixelFlow field on every detection —
+`masks`, `segments`, `text`, `class_id`, `metadata` and the rest — including the ones that are
+`null`, because `masks: null` beside a filled `segments` is a difference worth being able to see.
 
-**Detections come back with `class_name=None`.** A click does not say what it clicked, and mozo
-will not invent a name for it — a name comes from the weights or from the user. Pass `name="cat"`
-if you know what you pointed at. `class_id` is the index of the prompt that produced the row, so
-a batch of prompts stays separable.
+The catalogue is answerable without loading anything:
 
-The image encoder is the cost and it depends only on the image, so it is cached on pixel content
-and a second prompt on the same photograph pays only for the decoder. On CPU at 2 MP: EdgeTAM
-encodes in 272 ms and decodes in 33 ms; SAM 2 tiny encodes in 439 ms.
+```bash
+curl http://localhost:8000/models          # all 52, no torch import, no weights
+curl http://localhost:8000/models/loaded   # what is resident right now
+```
 
-EdgeTAM is SAM 2 distilled for phones — a 9.1M-parameter image path against SAM 2 tiny's 31.4M —
-and its masks agree with SAM 2 tiny's at 0.94 IoU on box prompts. Both are verified bit-identical
-to their upstream implementations; see each vendor's `PROVENANCE.md`.
+Full parameter reference below, and the server documents itself at
+`http://localhost:8000/docs`.
 
-Unlike SAM 3, both families' published weights are Apache-2.0, the same as their code.
-
-Only the torch runtime is served so far. SAM 2 also publishes ONNX and CoreML artifacts, which
-this adapter refuses rather than quietly answering with torch: a promptable model exports as
-several graphs and needs a runner that keeps the encode and the decode apart.
-
-### OWLv2 (4 variants)
-Open-vocabulary detection. Name anything in words and it returns boxes for it — no class
-list, no fine-tuning, no vocabulary agreed in advance.
+### 2. Python API
 
 ```python
+import mozo
+
+model = mozo.get_model("rfdetr/medium")
+
+for found in model.predict("street.jpg"):
+    print(found.class_name, found.confidence, found.bbox)
+#   person 0.92 [0.0, 113.24, 763.19, 1269.33]
+#   laptop 0.85 [709.0, 773.0, 1366.0, 1143.0]
+```
+
+`predict` takes a path, encoded bytes, or an RGB array, and returns a unified PixelFlow `Detections` —
+iterable, indexable, and the same shape from every family here.
+
+```python
+# Ask for something in words
+model = mozo.get_model("owlv2/base-ensemble")
 found = model.predict("kitchen.jpg", ["kettle", "a mug", "the window"])
 found[0].class_name          # 'kettle' — the phrase you searched for
-```
 
-`base-ensemble` and `large-ensemble` average Google's self-trained and fine-tuned
-checkpoints and are what the paper reports; `base` and `large` are self-training only.
-
-**This is mozo's permissively-licensed way to ask a model a question in words.** SAM 3
-below answers a similar question with masks, but its weights carry Meta's SAM License and
-bind whoever you serve predictions to. OWLv2 is Apache-2.0 on the code and on all four
-checkpoints.
-
-Boxes only, no masks — pair it with SAM 2 or EdgeTAM if you want those: a box from here is
-a prompt there.
-
-Phrases go in verbatim, up to 16 tokens, and all of them share one image forward *and* one
-text forward, so twenty phrases cost barely more than one. Scores are similarities through
-a sigmoid rather than class probabilities, so they run low: 0.3 is confident here, and the
-default floor is 0.1 rather than the 0.5 the closed-vocabulary detectors use.
-
-There is no non-maximum suppression, because the published postprocessing has none. A
-detection is a patch: the model scores every patch against every phrase and predicts one
-box per patch, so overlapping boxes on a large object are expected and suppressing them is
-the caller's policy.
-
-Inference is a fixed square — 960 for base, 1008 for large — reached by padding the image
-bottom and right to a square first, so the aspect ratio *is* preserved and a 4:3 photograph
-spends a quarter of its patches on padding. On CPU at 2 MP, `base-ensemble` is about 1.1 s,
-which is within 1% of `transformers` running the same weights; the image encode is cached,
-so a second vocabulary on the same photograph is about 50 ms.
-
-Verified against `transformers` on every stage — tokenizer, preprocessing, both towers, all
-three heads, and the final boxes — with no tolerance: 225 comparisons per variant, every one
-bit-identical. `tools/verify/owlv2.py` needs neither a checkout nor a network, only
-`pip install transformers` and the weights.
-
-Output: PixelFlow `Detections` with boxes and scores
-
-### EasyOCR (5 variants)
-Text recognition. Finds every line of text on a page and reads it.
-
-```python
+# Read the text on a sign
+model = mozo.get_model("easyocr/english")
 found = model.predict("sign.jpg")
 found[0].text                # 'EXIT 42' — what it says
 found[0].class_name          # None — OCR reads content, it does not pick a class
-found[0].segments            # the four corners as read, for rotated text
+
+# Measure depth
+model = mozo.get_model("depth_anything_v2/indoor-small")
+depth = model.predict("room.jpg")    # HxW float32, at the input's resolution
+model.unit                           # 'metres' — or None, and then it is not a distance
 ```
 
-**A variant is a script, not a language**: `english`, `latin`, `chinese-simplified`,
-`japanese`, `korean`. `latin` alone covers 41 languages and reads every character its
-charset holds. Upstream instead picks a checkpoint from a language list and then suppresses
-characters outside those languages at decode time, so its output depends on something that
-is not a property of the weights — ask mozo's `latin` for `café` and you get `café`.
-
-These five are 88% of upstream's own download counts, out of the seventeen recognisers it
-publishes.
-
-**Detections carry `text`, not a class name.** Every other family here names a class from a
-fixed vocabulary; this one produces content that belongs to no vocabulary, and PixelFlow
-keeps the two apart. `class_id` and `class_name` are `None`.
-
-The quadrilateral is kept in `segments` with its axis-aligned hull in `bbox`, because
-real-world text is rotated and a box alone throws the orientation away. Level lines come
-back top to bottom, followed by tilted ones — that is upstream's ordering, and it is not a
-reading order: a two-column page interleaves.
-
-Two graphs: CRAFT locates the text, a CRNN reads it. There is no NMS — a detection is a
-connected component of two heatmaps, one scoring "inside a character" and one "between two
-characters of the same word". About 200 ms a page on CPU and 31 ms on Apple silicon,
-within 1% and 22% respectively of the published package running the same weights on the
-same device.
-
-Note that the GPU path is not bit-identical to the CPU one — strings and quadrilaterals
-are exact, confidences move by up to 2.2e-05. The verification below is a CPU claim; pass
-`device="cpu"` if you need exactly those numbers.
-
-Verified against `easyocr` at every stage — preprocessed tensor, both heatmaps,
-quadrilaterals, each crop, the decoded string and its confidence — with no tolerance: 1,275
-comparisons across the five variants, every one bit-identical. `tools/verify/easyocr.py`
-needs `pip install easyocr` and the weights.
-
-Output: PixelFlow `Detections` with `text`, a quad and a confidence
-
-### SAM 3 (1 variant)
-Promptable segmentation. Meta ships a single model rather than a size ladder, so there is
-one variant: `sam3/sam3`.
-
-Two ways to prompt it, off one checkpoint:
-
-- **Name a concept** — `predict(image, "taxi")` returns every instance, with a mask, a
-  box and a score. The phrase you searched for is the class name every detection carries,
-  so there is no fixed vocabulary and nothing for mozo to guess. Pass a list —
-  `predict(image, ["car", "person", "dog"])` — and you get one result carrying several
-  classes, with `class_ids` indexing the prompts. Instances found by different prompts may
-  overlap: ask for `"car"` and `"vehicle"` and the same car comes back under both names.
-- **Point at one thing** — `Segmenter.segment(image, points, labels)` takes clicks
-  (`1` include, `0` exclude), a box, or a previous mask to refine, and returns three
-  candidate masks with predicted IoU. Reached through
-  `mozo.vendors.sam3_deploy` rather than the adapter for now.
-
-Both are verified bit-identical to Meta's implementation, stage by stage through the
-model — see `mozo/vendors/sam3_deploy/PROVENANCE.md`.
-
-Prompts are up to 32 tokens. Inference is a fixed 1008x1008 square — SAM 3 squashes rather
-than letterboxing, so aspect ratio is not preserved.
-
-The model wants a GPU. On Apple silicon MPS the image encoder is about 1.2 s and on CPU
-about 5 s; the encode is cached, so further prompts on the same image cost only their own
-decode. Concepts do not batch — the head takes one prompt at a time — so N concepts cost
-one encode plus N decodes: on MPS, three concepts is about 2.1 s cold and 0.35 s each
-afterwards. Encoded prompts are cached too (33 KB each), so the same three words on the
-next image skip the text tower entirely.
-
-> **Licensing — read this before deploying.** These weights are **not** open source. They
-> carry Meta's **SAM License**, which no other family here does. It **restricts what they
-> may be used for** — military, nuclear, espionage and weapons uses are prohibited — and
-> those restrictions **flow through to whoever you serve predictions to**. It binds on use
-> rather than on signing, and it must travel with the weights if you pass them on. Mozo's
-> own SAM 3 code is Apache-2.0 and derived from `transformers`, not from
-> `facebookresearch/sam3`; the code and the weights are separate works travelling together.
-> The full licence and a NOTICE naming the exact upstream release are published beside the
-> checkpoint. Complying is the operator's responsibility.
-
-Output: PixelFlow `Detections` with masks, boxes and scores
-
-### Depth Anything V2 (9 variants)
-Monocular depth estimation, in two groups that are not interchangeable.
-
-**Relative depth** — output is inverse depth on an arbitrary per-image scale: larger
-means nearer, and that is all it means. Two images cannot be compared to each other,
-and no value is a distance.
-
-- `small` - Fastest, lowest memory (Apache-2.0)
-- `base` - Balanced performance (**CC-BY-NC-4.0**, non-commercial)
-- `large` - Best accuracy (**CC-BY-NC-4.0**, non-commercial)
-
-**Metric depth** — output is in metres, from fine-tunes on Hypersim (indoor, 0–20 m)
-and Virtual KITTI 2 (outdoor, 0–80 m). All Apache-2.0 per their model cards.
-
-- `indoor-small`, `indoor-base`, `indoor-large`
-- `outdoor-small`, `outdoor-base`, `outdoor-large`
-
-`predictor.unit` is `"metres"` for the metric variants and `None` for the relative
-ones — mozo never guesses a unit.
-
-Output: `HxW` float32 array at the input's resolution
-
-## Server
+### Try it in the browser
 
 ```bash
-# Start with defaults (0.0.0.0:8000, auto-reload enabled)
-mozo start
-
-# Custom port
-mozo start --port 8080
-
-# Production mode with multiple workers
-mozo start --workers 4
-
-# Check version
-mozo version
+mozo start        # then open http://localhost:8000/test-ui
 ```
 
-## API Reference
+![The mozo test UI](docs/test-ui.png)
 
-### Run Prediction
+Pick any of the 52, run it on your own image, and see the response two ways at once: drawn on
+the image, and as the raw PixelFlow record. Hovering a box lights its row and its JSON, so when
+something lands somewhere surprising its numbers are one click away.
+
+## Verification
+
+Vendoring a model normally means maintaining something that quietly drifts from the original. The
+whole claim above rests on that not happening, so it is checked rather than asserted — **with no
+tolerance.** Exact equality, because a tolerance hides precisely the drift a check exists to catch.
+
+The gates in `tools/verify/` compare every intermediate stage against the original implementation,
+not just the final answer: 1,275 comparisons for EasyOCR, 226 for OWLv2, every one identical. Nine
+of the eleven families ship one; all eleven have their parity measured and recorded in
+`mozo/vendors/<family>_deploy/PROVENANCE.md`, with the upstream commit it was built from.
+
+Because the extraction *is* the implementation rather than a wrapper around one, none of this
+costs anything at run time: EasyOCR runs within 1% of the published package on the same weights.
+
+## Models
+
+### Object detection
+
+| Family | Variants | Weights | Runtimes | Output |
+|---|---|---|---|---|
+| `rfdetr` | `nano` `small` `medium` `large`, and `seg-` of each | Apache-2.0 | torch, onnx, coreml | boxes, masks, class names |
+| `yolov8` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
+| `yolov11` | same five | **AGPL-3.0** | torch, onnx | boxes, class names |
+| `yolov12` | same five | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
+| `yolov26` | same five | **AGPL-3.0** | torch, onnx | boxes, class names |
+
+### Text-prompted
+
+Name a thing in words. No class list, no fine-tuning, no vocabulary agreed in advance.
+
+| Family | Variants | Weights | Prompt | Output |
+|---|---|---|---|---|
+| `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens | boxes, no NMS |
+| `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens | masks, boxes |
+
+### Promptable segmentation
+
+Point at something, get back the thing you pointed at.
+
+| Family | Variants | Weights | Prompt | Output |
+|---|---|---|---|---|
+| `sam2` | `tiny` `small` `base_plus` `large` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
+| `edgetam` | `edgetam` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
+
+### Text recognition
+
+| Family | Variants (scripts) | Weights | Output |
+|---|---|---|---|
+| `easyocr` | `english` `latin` `chinese-simplified` `japanese` `korean` | Apache-2.0 | `text` + quad + confidence, no `class_name` |
+
+A variant is a script, not a language: `latin` alone covers 41 languages.
+
+### Depth
+
+| Family | Variants | Weights | Unit | Output |
+|---|---|---|---|---|
+| `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless | `HxW` float32 |
+| | `base` `large` | **CC-BY-NC-4.0** | relative, unitless | `HxW` float32 |
+| | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** | `HxW` float32 |
+
+Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
+distance. `model.unit` says which, and is `None` rather than a guess.
+
+How each family behaves and why — OWLv2 suppressing nothing, the encoder cache, EasyOCR's line
+ordering, prompt semantics — is in [docs/models.md](docs/models.md).
+
+## HTTP API
+
 ```http
 POST /predict/{family}/{variant}
 Content-Type: multipart/form-data
 ```
 
-Parameters:
-- `family` - Model family (`rfdetr`, `yolov8`, `yolov11`, `yolov12`, `yolov26`, `owlv2`,
-  `easyocr`, `sam2`, `edgetam`, `sam3` or `depth_anything_v2`)
-- `variant` - Model variant (e.g., `nano`, `indoor-small`)
-- `file` - Image file
-- `threshold` - Confidence threshold (detection models only). Omitted, the family's own published
-  default applies. These differ — see each family's section above — and the endpoint deliberately
-  does not restate them.
-- `labels` - Comma-separated class labels overriding the model defaults (detection models only)
-- `text` - The concept to look for (prompted models only, required by them). **Repeat the
-  parameter** to ask for several in one request: `?text=car&text=person`. It is deliberately
-  not comma-separated the way `labels` is — a prompt is free text, so `?text=a person, holding
-  a mug` stays one concept rather than becoming two wrong ones.
+| Parameter | Applies to | Meaning |
+|---|---|---|
+| `file` | all | The image. Required. |
+| `threshold` | detection, text-prompted | Confidence floor. Omitted, the family's own published default applies — they differ, and the endpoint deliberately does not restate them. |
+| `labels` | detection | Comma-separated class names overriding the model's own. |
+| `text` | text-prompted | The concept to look for. Required by those families. Repeat it for several. |
+| `point`, `label` | promptable | A click as `x,y`, and `1` to include or `0` to exclude. Repeat both together. |
+| `box` | promptable | A box as `x1,y1,x2,y2`. May be combined with points. |
+| `name` | promptable | What to call what you pointed at. |
+| `multimask` | promptable | Three candidate masks rather than one. Default `true`. |
 
-- `point`, `label` - A click, as `x,y` in the image's own pixels, and `1` to include it or `0`
-  to exclude it (promptable models only). **Repeat both** to give several, in the same order:
-  `?point=820,640&label=1&point=900,700&label=0`. `label` is required with `point` and has no
-  default — guessing between include and exclude returns a confident mask of the wrong thing.
-- `box` - A box, as `x1,y1,x2,y2` in the image's own pixels (promptable models only). May be
-  combined with points.
-- `name` - What to call what you pointed at (promptable models only). Omitted, detections come
-  back with `class_name: null` — the model does not know what it segmented and mozo will not
-  invent a name for it.
-- `multimask` - Return three candidate masks ranked by predicted IoU rather than one
-  (promptable models only, default `true`).
+`text` is deliberately not comma-separated the way `labels` is: a prompt is free text, so
+`?text=a person, holding a mug` stays one concept rather than becoming two wrong ones. `label` is
+required with `point` and has no default — guessing between include and exclude returns a
+confident mask of the wrong thing.
 
 ```bash
 # Boxes for anything you can name, under a permissive licence
 curl -X POST "http://localhost:8000/predict/owlv2/base-ensemble?text=kettle&text=a%20mug" \
   -F "file=@kitchen.jpg"
 
-# One concept
-curl -X POST "http://localhost:8000/predict/sam3/sam3?text=taxi" -F "file=@street.jpg"
-
-# Several: one result carrying several classes, sharing one image encode
-curl -X POST "http://localhost:8000/predict/sam3/sam3?text=car&text=person&text=dog" \
-  -F "file=@street.jpg"
-
 # Click one thing: three candidate masks, best first
 curl -X POST "http://localhost:8000/predict/edgetam/edgetam?point=820,640&label=1" \
-  -F "file=@street.jpg"
-
-# Refine with a second click that excludes what you got too much of
-curl -X POST "http://localhost:8000/predict/sam2/tiny?point=820,640&label=1&point=900,700&label=0" \
   -F "file=@street.jpg"
 
 # A box, one mask, named by you
@@ -394,164 +232,174 @@ curl -X POST "http://localhost:8000/predict/sam2/tiny?box=40,60,300,480&multimas
   -F "file=@street.jpg"
 ```
 
-### Health Check
-```http
-GET /
-```
+Depth answers with an image rather than JSON:
 
-Returns server status and loaded models.
-
-### List Models
-```http
-GET /models
-```
-
-Returns all available model families and variants.
-
-### List Loaded Models
-```http
-GET /models/loaded
-```
-
-Returns the models currently in memory.
-
-## How It Works
-
-**Lazy Loading**
-Models load on first request, not at server startup. This keeps startup time instant regardless of available models.
-
-**Smart Caching**
-Loaded models stay in memory and are reused across requests. First request is slower (model download + load), subsequent requests are fast.
-
-**Thread Safety**
-A model is built once however many requests arrive for it at the same moment, and a request for a model already in memory never waits behind an unrelated load.
-
-Example flow:
 ```bash
-# Server starts instantly (no models loaded)
-mozo start
+curl -X POST "http://localhost:8000/predict/depth_anything_v2/indoor-small" \
+  -F "file=@room.jpg" -D headers.txt --output depth.png
 
-# First request loads model
-curl -X POST "http://localhost:8000/predict/rfdetr/medium" -F "file=@test.jpg"
-# Output: [mozo] loading rfdetr/medium
-
-# Subsequent requests reuse loaded model
-curl -X POST "http://localhost:8000/predict/rfdetr/medium" -F "file=@test2.jpg"
-# Served from memory, nothing logged
+# depth.png is a 16-bit PNG; headers.txt carries what it means:
+#   X-Depth-Unit: metres | none      X-Depth-Min / X-Depth-Max: the endpoints
+#   depth = min + png / 65535 * (max - min)
 ```
 
-## Python SDK
+16-bit rather than 8, because six of the nine variants predict metres and quantising those to 256
+levels would discard the measurement.
 
-For direct integration in Python applications:
+The other endpoints: `GET /` for health and residency, `GET /models` for the catalogue,
+`GET /models/loaded` for what is in memory, `GET /test-ui` for the browser page, and `GET /docs`
+for the generated OpenAPI reference.
+
+## Python API
+
+`mozo.get_model` uses one process-wide cache. When you want a separate lifetime — a batch job
+that should release its models at the end — build your own manager and drop it:
 
 ```python
 from mozo import ModelManager
 
-manager = ModelManager()
-model = manager.get_model('rfdetr', 'medium')
+models = ModelManager()
+model = models.get_model("rfdetr", "medium", device="cpu")
 
-# A path, encoded bytes, or an RGB array. Decode with mozo.image.load_image rather than
-# cv2.imread, which returns BGR and would silently give a slightly wrong answer.
-detections = model.predict('image.jpg')
-
-# Filter results
-high_confidence = detections.filter_by_confidence(0.8)
-
-# A separate manager is a separate lifetime — drop it and its models go with it
-scratch = ModelManager()
+scratch = ModelManager()      # a separate lifetime; drop it and its models go with it
 ```
 
-### Custom Weights
+`device` takes `"cuda"`, `"mps"`, `"cpu"`, or `None` to take the best available.
 
-Fine-tuned checkpoints load through the same API, on architectures Mozo supports:
+### Your own checkpoints
+
+Fine-tuned weights load through the same API, on architectures mozo supports:
 
 ```python
-model = manager.get_model(
-    'rfdetr', 'my-training',
-    checkpoint_path='runs/best.pth',
-    model_size='small', project_type='detection',
-    labels=['hardhat', 'vest'],
+model = models.get_model(
+    "rfdetr", "my-training",
+    checkpoint_path="runs/best.pth",
+    model_size="small", project_type="detection",
+    labels=["hardhat", "vest"],
 )
 ```
 
-### PixelFlow Integration
+Everything that changes what gets built is part of the cache identity — a checkpoint, a pinned
+revision, a runtime — so two people's `my-training` are two models rather than one.
 
-Detection models return PixelFlow Detections objects - a unified format across all ML frameworks:
+### PixelFlow
+
+Every detection family returns the same object, so filtering and annotation are written once:
 
 ```python
-# Works the same for either family, or a checkpoint of your own
-detections = model.predict(image)
-
-# Filter and annotate
 import pixelflow as pf
-filtered = detections.filter_by_confidence(0.8).filter_by_class_id([0, 2])
+
+found = model.predict(image)
+filtered = found.filter_by_confidence(0.8).filter_by_class_id([0, 2])
+
 annotated = pf.annotate.box(image, filtered)
 annotated = pf.annotate.label(annotated, filtered)
 
-# Export
 json_output = filtered.to_json()
 ```
 
-Learn more: [PixelFlow](https://github.com/datamarkin/pixelflow)
+More: [PixelFlow](https://github.com/datamarkin/pixelflow)
+
+## How it works
+
+**Nothing loads until it is asked for.** The server starts instantly whatever is published, and
+the first request for a family downloads and loads it. That first request is slow — minutes, for
+a multi-gigabyte family on a cold cache — and every one after it is not.
+
+**Nothing is evicted.** A model stays for the life of the process. This is deliberate: an earlier
+version bounded the cache by model count, and a count cannot tell 0.10 GB from 1.34 GB. The same
+number could not be right for a 6 GB laptop and an 80 GB accelerator, and measured, it broke the
+obvious deployment — detection, segmentation and depth from one instance, 0.60 GB between them —
+into a 762 ms eviction on every request. **Memory is yours to manage, and the lever is which
+models you ask for.**
+
+**A model is built once** however many requests arrive for it at the same moment, and a request
+for a model already in memory never waits behind an unrelated load.
+
+**Weights resolve from a manifest that ships inside the package**, so working out which bytes a
+model refers to needs no network and no configuration. Every artifact is verified by sha256 after
+download, and its licence and a NOTICE naming the exact upstream release are published beside it.
 
 ## Configuration
 
-### Environment Variables
+| Variable | Meaning |
+|---|---|
+| `MOZO_CACHE` | Where downloads live. Default `~/.cache/mozo`. |
+| `MOZO_BASE_URL` | Serve artifacts from a mirror instead of the manifest's. A `file://` URL pointing at a `weights/` tree works, which is how an air-gapped host can be fed from removable media. |
+| `MOZO_OFFLINE` | Set to `1` to refuse downloads. A missing file raises an error naming the exact path, URL and hash, so it can be placed by hand. |
+| `PYTORCH_ENABLE_MPS_FALLBACK` | Set to `1` on Apple silicon so unimplemented ops fall back to CPU rather than failing. |
+
+## Deploying
 
 ```bash
-# Enable MPS fallback for macOS (Apple Silicon)
-export PYTORCH_ENABLE_MPS_FALLBACK=1
-
-# Configure HuggingFace cache location
-export HF_HOME=~/.cache/huggingface
+mozo start                      # 0.0.0.0:8000
+mozo start --port 8080
+mozo start --workers 4          # read the note below first
+mozo start --reload             # development; forces one worker
 ```
 
-### Memory Management
+It is a real server — FastAPI on uvicorn, thread-safe, with weights verified by hash — and three
+things about it are yours to arrange:
 
-Models load on first use and stay for the life of the process. Memory is yours to manage: load
-what you need, and use a separate `ModelManager` when you want a separate lifetime.
+- **`--workers N` multiplies memory by N.** Workers are separate processes and share nothing, so
+  each loads its own copy of every model it serves. Four workers serving SAM 3 is four times
+  3.4 GB, not one. Prefer one worker unless you have measured otherwise.
+- **There is no authentication and no rate limiting**, and the default bind is `0.0.0.0`. Put it
+  behind something before it faces a network you do not control.
+- **Nothing is evicted**, so a process asked for every family will eventually hold every family.
+  Decide what an instance serves rather than letting callers decide for it.
 
-## Extending Mozo
+## What mozo does not do
 
-Add new models in 3 steps:
+- **No training and no fine-tuning.** Bring a checkpoint; mozo runs it.
+- **No video, no tracking, no streams.** One image per request.
+- **No batching.** One image per forward, which is what keeps results bit-identical.
+- **No model conversion.** ONNX and CoreML artifacts are published where a family exports
+  cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
+- **It is not a model hub.** The catalogue is a curated 52, chosen because each one could be
+  extracted and verified. Growth is deliberate and slow.
 
-1. Create adapter in `mozo/adapters/your_model.py`
-2. Register in `mozo/registry.py`
-3. Use via HTTP or Python API
+## Extending
 
-## Architecture
+1. Write an adapter in `mozo/adapters/your_model.py`
+2. Register it in `mozo/registry.py`
+3. It is available over HTTP, in Python, and in the test UI
 
 ```
-HTTP Request → FastAPI Server → ModelManager → Adapter → Vendor
-                                      ↓
-                                Thread-safe cache
+HTTP request → FastAPI server → ModelManager → Adapter → Vendor
+                                     ↓
+                               thread-safe cache
 ```
 
-Components:
-- **Server** - FastAPI REST API
-- **Manager** - Thread-safe cache of loaded models
-- **Registry** - Catalog of families, answerable without importing torch
-- **Adapters** - One per family, translating between mozo and a vendor
-- **Weights** - Manifest lookup, download, hash verification
-- **Runtimes** - Device detection and artifact selection (torch / ONNX / CoreML)
-- **Image** - The one decode boundary: RGB, uint8, HxWx3
+The rule that keeps this honest: **a vendor imports no other vendor and never imports mozo.**
+Duplication between vendors is deliberate, so a family can be re-extracted from a newer upstream
+release without touching anything else. `tests/test_vendor_agreement.py` enforces it, and each
+vendor's `PROVENANCE.md` records the exact upstream commit it came from and what was changed.
 
 ## Development
 
 ```bash
-# Install in development mode
 pip install -e .
-
-# Start server with auto-reload
-mozo start
+mozo start --reload
+pytest
 ```
 
-## Documentation
+## Links
 
 - [Repository](https://github.com/datamarkin/mozo)
 - [Issues](https://github.com/datamarkin/mozo/issues)
+- [PixelFlow](https://github.com/datamarkin/pixelflow) — the result format
 
 ## License
 
-Mozo's own code is **Apache-2.0**. 
-The weights have their own licenses.
+Mozo's own code is **Apache-2.0**, and so is every vendored extraction under `mozo/vendors/`.
+
+The weights are separate works travelling with it. Of the 52 published variants, **29 are
+Apache-2.0**, 20 are **AGPL-3.0** (every YOLO variant), 2 are **CC-BY-NC-4.0** (Depth Anything
+`base` and `large`), and 1 carries Meta's **SAM License** (SAM 3). The full licence and a NOTICE
+naming the exact upstream release are published beside every checkpoint.
+
+**YOLO weights are AGPL-3.0**, or covered by a commercial licence from Ultralytics.
+And serving predictions from them over a network places  AGPL-3.0 section 13 obligations on you.
+
+Complying with either is the operator's responsibility.
