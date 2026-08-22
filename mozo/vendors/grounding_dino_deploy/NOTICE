@@ -1,0 +1,57 @@
+grounding_dino_deploy
+Copyright 2023 - present, IDEA Research.
+
+This product includes software developed by IDEA Research, published as
+GroundingDINO (https://github.com/IDEA-Research/GroundingDINO) and described in
+"Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object
+Detection" (Liu, Zeng, Ren, Li, Zhang, Yang, Li, Yang, Su, Zhu, Zhang; ECCV 2024,
+arXiv:2303.05499).
+
+The modules here are extracted from that repository, which is licensed under the
+Apache License, Version 2.0; see the LICENSE file in this directory, which is
+byte-identical to the one published there.
+
+Upstream itself derives from DINO and Deformable DETR (IDEA Research, Apache-2.0)
+and from the Swin Transformer (Microsoft, MIT). Those lineages are carried in the
+per-file headers of the original repository and are preserved in spirit here: the
+Swin backbone in vision/swin.py and the deformable attention in ops.py are the
+same architectures, reduced to inference.
+
+ON THE WEIGHTS
+--------------
+The published checkpoints are Apache-2.0, but that is not stated in the GitHub
+repository. Its LICENSE covers the code and its README's checkpoint table gives
+no terms at all. The authors state the licence on the two Hugging Face
+repositories the README links to for those exact files:
+
+  - https://huggingface.co/ShilongLiu/GroundingDINO      (the first author's
+    mirror, serving groundingdino_swint_ogc.pth and groundingdino_swinb_cogcoor.pth)
+  - https://huggingface.co/IDEA-Research/grounding-dino-tiny
+    and .../grounding-dino-base                          (the organisation's account)
+
+Both are tagged apache-2.0. mozo publishes the weights on that basis, and the
+NOTICE placed beside each checkpoint records where the claim is made -- because a
+reader who checks only the GitHub LICENSE finds a code licence and no mention of
+a checkpoint.
+
+THE TEXT VOCABULARY
+-------------------
+The tokenizer's vocabulary is Google's, not IDEA Research's:
+
+  - BERT
+    Copyright 2018 The Google AI Language Team Authors
+    https://huggingface.co/bert-base-uncased
+    Apache License, Version 2.0
+
+  assets/vocab.txt.gz is Google's bert-base-uncased vocab.txt, 30,522 entries,
+  compressed and otherwise unmodified. Upstream downloads this file through
+  `transformers.AutoTokenizer`; it ships here so that tokenizing a prompt needs
+  no network. The *weights* of the BERT tower are not Google's -- they are IDEA
+  Research's fine-tuned copy, carried inside the Grounding DINO checkpoint.
+
+NOT INCLUDED
+------------
+The CUDA/C++ deformable-attention extension, denoising training, the one-stage
+query branch, gradient checkpointing, auxiliary decoder outputs, BERT's pooler,
+the RoBERTa text-encoder option, the ResNet backbone option, and the training and
+evaluation harnesses. See PROVENANCE.md for the full list and for why.
