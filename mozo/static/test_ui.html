@@ -1,534 +1,1421 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mozo Model Testing Interface</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mozo</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Tokens.
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+   Greys have equal RGB channels on purpose. This page exists to judge an image,
+   and a tinted surround shifts how its colours read; the same reason photo and
+   video tools sit their canvas on neutral grey rather than white or black.
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
+   One accent, amber, and it means exactly one thing: this is the record you
+   are pointed at. Nothing else on the page is allowed to be coloured, so the
+   annotations never compete with the photograph underneath them.
+--------------------------------------------------------------------------- */
+:root {
+  --bg:        #2e2e2e;
+  --panel:     #262626;
+  --stage:     #1b1b1b;
+  --line:      #3d3d3d;
+  --line-soft: #333333;
+  --ink:       #e6e6e6;
+  --ink-dim:   #909090;
+  --ink-faint: #5e5e5e;
+  --select:    #e0a253;
 
-        header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --prose: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-        header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
+  --rail: 38px;
+  --pad: 16px;
+}
 
-        header p {
-            opacity: 0.9;
-            font-size: 1.1em;
-        }
+* { box-sizing: border-box; }
 
-        .content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            padding: 30px;
-        }
+html, body {
+  height: 100%;
+  margin: 0;
+}
 
-        .panel {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 12px;
-            border: 2px solid #e9ecef;
-        }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 12px/1.5 var(--mono);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-        .panel h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+/* --- Rail ---------------------------------------------------------------- */
 
-        .image-section {
-            text-align: center;
-        }
+.rail {
+  flex: none;
+  height: var(--rail);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 var(--pad);
+}
 
-        #imagePreview {
-            width: 100%;
-            max-height: 400px;
-            object-fit: contain;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            background: white;
-            border: 2px dashed #dee2e6;
-        }
+.wordmark {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: inline-block;
-            text-align: center;
-        }
+.rail .version { color: var(--ink-faint); }
 
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
+.rail .spacer { flex: 1; }
 
-        .btn:active {
-            transform: translateY(0);
-        }
+.rail .census { color: var(--ink-dim); }
 
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
+/* --- Frame --------------------------------------------------------------- */
 
-        .file-input-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-            width: 100%;
-            margin-bottom: 10px;
-        }
+.frame {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr) 360px;
+}
 
-        .file-input-wrapper input[type=file] {
-            position: absolute;
-            left: -9999px;
-        }
+.column {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+.column.instrument { background: var(--panel); border-right: 1px solid var(--line); }
+.column.readout    { background: var(--panel); border-left: 1px solid var(--line); }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #495057;
-            font-weight: 600;
-        }
+/* --- Instrument panel ---------------------------------------------------- */
 
-        select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1em;
-            background: white;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
+.instrument .scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pad);
+}
 
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+.field { margin-bottom: 14px; }
 
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1em;
-            background: white;
-            transition: border-color 0.2s;
-        }
+.field > label,
+.legend {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
 
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+select, input[type="text"], input[type="number"] {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--stage);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
 
-        #results {
-            margin-top: 30px;
-            padding: 30px;
-            background: white;
-            border-radius: 12px;
-            min-height: 200px;
-        }
+select { appearance: none; padding-right: 22px; cursor: pointer; }
 
-        #results h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 1.5em;
-        }
+.select-wrap { position: relative; }
+.select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 9px; top: 50%;
+  width: 5px; height: 5px;
+  margin-top: -4px;
+  border-right: 1px solid var(--ink-dim);
+  border-bottom: 1px solid var(--ink-dim);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
 
-        #resultsContent {
-            position: relative;
-        }
+input::placeholder { color: var(--ink-faint); }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #667eea;
-        }
+select:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 1px solid var(--select);
+  outline-offset: 1px;
+}
 
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
+.about {
+  margin: -4px 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+.about .task {
+  color: var(--ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
 
-        .error {
-            background: #fff5f5;
-            color: #c53030;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #fc8181;
-        }
+/* The one place on this page that carries real prose rather than data, and the
+   only place that leaves the monospace. */
+.about .description {
+  font-family: var(--prose);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
 
-        .success {
-            background: #f0fff4;
-            color: #22543d;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #68d391;
-        }
+.group { display: none; }
+.group.on { display: block; }
 
-        pre {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-size: 0.9em;
-            line-height: 1.5;
-        }
+/* --- Buttons ------------------------------------------------------------- */
 
-        canvas {
-            border-radius: 8px;
-            max-width: 100%;
-        }
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--stage);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
 
-        .result-image {
-            max-width: 100%;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
+button:hover:not(:disabled) { border-color: var(--ink-faint); }
+button:disabled { color: var(--ink-faint); cursor: default; }
 
-        .info-badge {
-            display: inline-block;
-            background: #e9ecef;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 0.9em;
-            color: #495057;
-            margin-top: 10px;
-        }
+button.run {
+  width: 100%;
+  padding: 9px;
+  background: var(--ink);
+  color: var(--stage);
+  border-color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
 
-        @media (max-width: 768px) {
-            .content {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+button.run:hover:not(:disabled) { background: #fff; border-color: #fff; }
+button.run:disabled { background: var(--line); border-color: var(--line); color: var(--ink-faint); }
+
+.row { display: flex; gap: 6px; }
+.row > * { flex: 1; }
+
+.toggle { display: flex; gap: 0; }
+
+.toggle button {
+  flex: 1;
+  border-radius: 0;
+  border-right-width: 0;
+}
+.toggle button:first-child { border-radius: 2px 0 0 2px; }
+.toggle button:last-child  { border-radius: 0 2px 2px 0; border-right-width: 1px; }
+.toggle button[aria-pressed="true"] {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* --- Prompt chips -------------------------------------------------------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  background: var(--stage);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.chip button {
+  all: unset;
+  cursor: pointer;
+  color: var(--ink-faint);
+  line-height: 1;
+}
+.chip button:hover { color: var(--ink); }
+
+/* --- Footer of the instrument panel -------------------------------------- */
+
+.instrument .foot {
+  flex: none;
+  padding: var(--pad);
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.source {
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Stage --------------------------------------------------------------- */
+
+.stage-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--stage);
+}
+
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+canvas.picking { cursor: crosshair; }
+
+.dropzone {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(224, 162, 83, 0.08);
+  border: 1px dashed var(--select);
+  color: var(--select);
+  pointer-events: none;
+}
+.dropzone.on { display: flex; }
+
+.stage-foot {
+  flex: none;
+  height: 30px;
+  padding: 0 var(--pad);
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  color: var(--ink-dim);
+}
+
+
+/* --- Readout ------------------------------------------------------------- */
+
+.tabs {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-faint);
+  padding: 9px 0;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.readout .scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pane { display: none; }
+.pane.on { display: block; }
+
+/* Detection list. Three columns of one record: what it is, how sure, where. */
+
+.record {
+  display: block;
+  width: 100%;
+  padding: 8px var(--pad);
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.record:hover { background: #2b2b2b; }
+
+.record.lit,
+.record.lit:hover {
+  background: #332b1e;
+  border-left-color: var(--select);
+}
+
+.record .headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.record .index { color: var(--ink-faint); }
+
+.record .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record .name.unnamed { color: var(--ink-faint); }
+.record .score { color: var(--ink-dim); }
+
+.record .where {
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.record .badge {
+  color: var(--ink-dim);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
+/* JSON pane */
+
+.json-note {
+  padding: 8px var(--pad);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.json-note span { flex: 1; }
+
+.json-block {
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.json-block:hover { background: #2b2b2b; }
+
+.json-block.lit,
+.json-block.lit:hover {
+  background: #332b1e;
+  border-left-color: var(--select);
+}
+
+.json-block pre {
+  margin: 0;
+  padding: 8px var(--pad);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.json-block .k { color: var(--ink); }
+.json-block .nul { color: var(--ink-faint); }
+.json-block .elided { color: var(--select); }
+
+/* Status blocks: empty, working, failed. Each says what to do next. */
+
+.status {
+  padding: var(--pad);
+  color: var(--ink-dim);
+  line-height: 1.6;
+}
+
+.status .headline {
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.status.failed .headline { color: var(--select); }
+
+.status dl {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+}
+.status dt { color: var(--ink-faint); }
+.status dd { margin: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .record, .json-block, button { transition: background-color 80ms linear, border-color 80ms linear; }
+}
+
+@media (max-width: 1080px) {
+  .frame { grid-template-columns: 210px minmax(0, 1fr); }
+  .column.readout {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 40vh;
+  }
+  .frame { grid-template-rows: minmax(0, 1fr) auto; }
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🚀 Mozo Model Testing Interface</h1>
-            <p>Interactive testing for dynamic model management system</p>
-        </header>
 
-        <div class="content">
-            <!-- Image Upload Section -->
-            <div class="panel image-section">
-                <h2>📸 Image Input</h2>
-                <img id="imagePreview" src="/static/example.jpg" alt="Preview">
-                <div class="file-input-wrapper">
-                    <label for="imageInput" class="btn" style="width: 100%; cursor: pointer;">
-                        📁 Choose Image
-                    </label>
-                    <input type="file" id="imageInput" accept="image/*">
-                </div>
-                <div class="info-badge" id="imageInfo">Using default image</div>
-            </div>
+<header class="rail">
+  <span class="wordmark">mozo</span>
+  <span class="version" id="version"></span>
+  <span class="spacer"></span>
+  <span class="census" id="census"></span>
+</header>
 
-            <!-- Model Selection Section -->
-            <div class="panel">
-                <h2>🤖 Model Selection</h2>
-                <div class="form-group">
-                    <label for="familySelect">Model Family</label>
-                    <select id="familySelect">
-                        <option value="">Loading models...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="variantSelect">Model Variant</label>
-                    <select id="variantSelect">
-                        <option value="">Select a family first</option>
-                    </select>
-                </div>
-                <button id="predictBtn" class="btn" style="width: 100%;">
-                    ▶️ Run Prediction
-                </button>
-            </div>
+<div class="frame">
+
+  <!-- Instrument panel: choose a model, give it what it needs. -->
+  <section class="column instrument">
+    <div class="scroll">
+
+      <div class="field">
+        <label for="family">Family</label>
+        <div class="select-wrap"><select id="family"></select></div>
+      </div>
+
+      <div class="field">
+        <label for="variant">Variant</label>
+        <div class="select-wrap"><select id="variant"></select></div>
+      </div>
+
+      <div class="about">
+        <div class="task" id="task"></div>
+        <div class="description" id="description"></div>
+      </div>
+
+      <div class="field group" id="group-threshold">
+        <label for="threshold">Confidence floor</label>
+        <input type="number" id="threshold" step="0.05" min="0" max="1" placeholder="family default">
+      </div>
+
+      <div class="field group" id="group-labels">
+        <label for="labels">Class names</label>
+        <input type="text" id="labels" placeholder="comma separated, optional">
+      </div>
+
+      <div class="field group" id="group-text">
+        <label for="text-entry">Concepts to find</label>
+        <input type="text" id="text-entry" placeholder="type one, press enter">
+        <div class="chips" id="text-chips"></div>
+      </div>
+
+      <div class="field group" id="group-prompt">
+        <span class="legend">Prompt</span>
+        <div class="toggle" id="prompt-mode">
+          <button type="button" data-mode="include" aria-pressed="true">Include</button>
+          <button type="button" data-mode="exclude" aria-pressed="false">Exclude</button>
+          <button type="button" data-mode="box" aria-pressed="false">Box</button>
         </div>
+        <div class="chips" id="prompt-chips"></div>
+      </div>
 
-        <!-- Results Section -->
-        <div id="results" style="display: none;">
-            <h2>📊 Results</h2>
-            <div id="resultsContent"></div>
+      <div class="field group" id="group-name">
+        <label for="name">Call it</label>
+        <input type="text" id="name" placeholder="leave empty for class_name: null">
+      </div>
+
+      <div class="field group" id="group-multimask">
+        <div class="toggle" id="multimask">
+          <button type="button" data-multimask="true" aria-pressed="true">Three masks</button>
+          <button type="button" data-multimask="false" aria-pressed="false">One mask</button>
         </div>
+      </div>
+
     </div>
 
-    <script>
-        // Served by GET /static/example.jpg — keep in sync with the <img> preview above.
-        const DEFAULT_IMAGE = '/static/example.jpg';
-        let availableModels = {};
-        let currentImage = null;
-        let defaultImageBlob = null;  // cached so the default image is fetched once
+    <div class="foot">
+      <div class="row">
+        <button type="button" id="choose">Open image</button>
+        <button type="button" id="use-example">Example</button>
+      </div>
+      <div class="source" id="source"></div>
+      <button type="button" class="run" id="run">Run</button>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+  </section>
 
-        // Fetch available models on page load
-        async function loadModels() {
-            try {
-                const response = await fetch('/models');
-                availableModels = await response.json();
+  <!-- Stage: the image, and only what the response says is on it. -->
+  <section class="column">
+    <div class="stage-body" id="stage-body">
+      <canvas id="canvas"></canvas>
+      <div class="dropzone" id="dropzone">Drop an image</div>
+    </div>
+    <div class="stage-foot"><span id="tally"></span></div>
+  </section>
 
-                const familySelect = document.getElementById('familySelect');
-                familySelect.innerHTML = '<option value="">Select a model family</option>';
+  <!-- Readout: the same records, as a list and as what the server actually sent. -->
+  <section class="column readout">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-list" aria-selected="true" aria-controls="pane-list">Detections</button>
+      <button type="button" role="tab" id="tab-json" aria-selected="false" aria-controls="pane-json">Response</button>
+    </div>
+    <div class="scroll">
+      <div class="pane on" id="pane-list" role="tabpanel"></div>
+      <div class="pane" id="pane-json" role="tabpanel"></div>
+    </div>
+  </section>
 
-                for (const [family, info] of Object.entries(availableModels)) {
-                    const option = document.createElement('option');
-                    option.value = family;
-                    option.textContent = `${family} (${info.task_type}) - ${info.variants.length} variants`;
-                    familySelect.appendChild(option);
-                }
-            } catch (error) {
-                console.error('Failed to load models:', error);
-                document.getElementById('familySelect').innerHTML =
-                    '<option value="">Error loading models</option>';
-            }
-        }
+</div>
 
-        // Handle family selection change
-        document.getElementById('familySelect').addEventListener('change', function() {
-            const family = this.value;
-            const variantSelect = document.getElementById('variantSelect');
+<script>
+"use strict";
 
-            if (!family) {
-                variantSelect.innerHTML = '<option value="">Select a family first</option>';
-                return;
-            }
+/* ---------------------------------------------------------------------------
+   The page draws nothing it did not receive.
 
-            const variants = availableModels[family].variants;
-            variantSelect.innerHTML = '<option value="">Select a variant</option>';
+   Every mark on the stage comes from a field of a pixelflow detection --
+   `bbox`, `segments`, `masks`, `class_name`, `text`, `confidence` -- and the
+   Response tab shows those same records as the server sent them. Where a model
+   said nothing, the page shows nothing rather than filling the gap: an
+   unnamed detection reads `class_name: null`, not a guess.
 
-            variants.forEach(variant => {
-                const option = document.createElement('option');
-                option.value = variant;
-                option.textContent = variant;
-                variantSelect.appendChild(option);
-            });
-        });
+   That is also why the renderer switches on which fields are present rather
+   than on task type. pixelflow already normalised eleven families to one
+   record shape; asking "does this have segments?" is both simpler than a
+   six-way branch and correct for a family that does not exist yet.
+--------------------------------------------------------------------------- */
 
-        // Handle image upload
-        document.getElementById('imageInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const img = document.getElementById('imagePreview');
-                    img.src = event.target.result;
-                    currentImage = file;
-                    document.getElementById('imageInfo').textContent = `Loaded: ${file.name}`;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+const PROMPTED = new Set(["open_vocabulary_detection", "concept_segmentation"]);
 
-        // Run prediction
-        document.getElementById('predictBtn').addEventListener('click', async function() {
-            const family = document.getElementById('familySelect').value;
-            const variant = document.getElementById('variantSelect').value;
+const state = {
+  catalogue: {},        // family -> {task_type, description, variants}
+  image: null,          // HTMLImageElement currently on the stage
+  file: null,           // File to POST, or null when the example is in use
+  detections: [],       // pixelflow records, verbatim
+  raw: "",              // the response body as text, untouched
+  depth: null,          // {image, unit, min, max} when a depth map came back
+  masks: new Map(),     // detection index -> tinted offscreen canvases
+  lit: -1,              // record under the pointer
+  pinned: -1,           // record clicked
+  texts: [],            // concept prompts
+  points: [],           // {x, y, include}
+  box: null,            // {x1, y1, x2, y2}
+  mode: "include",
+  multimask: true,
+  drawing: null,        // box being dragged
+  placement: null,      // image -> canvas transform
+  busy: false,
+};
 
-            if (!family || !variant) {
-                showError('Please select both model family and variant');
-                return;
-            }
+/* What the stage foot says about the run. Held apart from the element so the
+   line can drop a part that has nothing to say rather than print a separator
+   with a gap after it. */
+const tally = { dimensions: "", count: "", elapsed: "" };
 
-            // Get image (either uploaded or default, fetched once and cached)
-            let imageBlob = currentImage;
-            if (!imageBlob) {
-                if (!defaultImageBlob) {
-                    try {
-                        const response = await fetch(DEFAULT_IMAGE);
-                        defaultImageBlob = await response.blob();
-                    } catch (error) {
-                        showError('Failed to load default image');
-                        return;
-                    }
-                }
-                imageBlob = defaultImageBlob;
-            }
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas");
+const ctx = canvas.getContext("2d");
 
-            // Show loading
-            showLoading();
+function showTally() {
+  $("tally").textContent = [tally.dimensions, tally.count, tally.elapsed]
+    .filter(Boolean).join("   /   ");
+}
 
-            // Create form data
-            const formData = new FormData();
-            formData.append('file', imageBlob);
+/* --- Catalogue ----------------------------------------------------------- */
 
-            const url = `/predict/${family}/${variant}`;
+async function boot() {
+  try {
+    const [models, health] = await Promise.all([
+      fetch("/models").then((r) => r.json()),
+      fetch("/").then((r) => r.json()),
+    ]);
+    state.catalogue = models;
+    $("version").textContent = health.version;
+    const total = Object.values(models).reduce((n, e) => n + e.variants.length, 0);
+    const live = health.loaded_models.length;
+    $("census").textContent = `${total} models, ${live} resident`;
 
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    body: formData
-                });
+    const family = $("family");
+    for (const name of Object.keys(models)) {
+      family.append(new Option(name, name));
+    }
+    family.value = "rfdetr" in models ? "rfdetr" : Object.keys(models)[0];
+    onFamily();
+    useExample();
+  } catch (err) {
+    showStatus("failed", "Cannot reach the server", String(err));
+  }
+}
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Prediction failed');
-                }
+function onFamily() {
+  const entry = state.catalogue[$("family").value];
+  const variant = $("variant");
+  variant.textContent = "";
+  for (const name of entry.variants) variant.append(new Option(name, name));
 
-                // Check response type
-                const contentType = response.headers.get('content-type');
+  $("task").textContent = entry.task_type.replace(/_/g, " ");
+  $("description").textContent = entry.description;
 
-                if (contentType && contentType.includes('image')) {
-                    // Depth estimation - display image
-                    const blob = await response.blob();
-                    const imageUrl = URL.createObjectURL(blob);
-                    showImageResult(imageUrl, family, variant);
-                } else {
-                    // Detection - display JSON
-                    const data = await response.json();
-                    showJsonResult(data, family, variant);
-                }
+  const task = entry.task_type;
+  const promptable = task === "promptable_segmentation";
+  show("group-threshold", task === "object_detection" || PROMPTED.has(task));
+  show("group-labels", task === "object_detection");
+  show("group-text", PROMPTED.has(task));
+  show("group-prompt", promptable);
+  show("group-name", promptable);
+  show("group-multimask", promptable);
+  canvas.classList.toggle("picking", promptable);
 
-            } catch (error) {
-                showError(`Prediction failed: ${error.message}`);
-            }
-        });
+  if (!promptable) { state.points = []; state.box = null; drawPromptChips(); }
 
-        function showLoading() {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            results.style.display = 'block';
-            content.innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Running prediction...</p>
-                </div>
-            `;
-            results.scrollIntoView({ behavior: 'smooth' });
-        }
+  // What is on the stage belongs to the model that produced it. Leaving it up
+  // while the panel names a different one would credit these boxes to a family
+  // that never saw the image.
+  clearResult();
+  draw();
+}
 
-        function showError(message) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            results.style.display = 'block';
-            content.innerHTML = `
-                <div class="error">
-                    <strong>❌ Error:</strong> ${message}
-                </div>
-            `;
-            results.scrollIntoView({ behavior: 'smooth' });
-        }
+const show = (id, on) => $(id).classList.toggle("on", on);
+const task = () => state.catalogue[$("family").value]?.task_type;
 
-        function showImageResult(imageUrl, family, variant) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
-            content.innerHTML = `
-                <div class="success">
-                    <strong>✅ Success:</strong> Depth map generated using ${family}/${variant}
-                </div>
-                <img src="${imageUrl}" class="result-image" alt="Depth Map">
-            `;
-        }
+/* --- Image --------------------------------------------------------------- */
 
-        function showJsonResult(data, family, variant) {
-            const results = document.getElementById('results');
-            const content = document.getElementById('resultsContent');
+function setImage(source, name, file) {
+  const img = new Image();
+  img.onload = () => {
+    state.image = img;
+    state.file = file;
+    $("source").textContent = `${name}  ${img.naturalWidth}x${img.naturalHeight}`;
+    tally.dimensions = `${img.naturalWidth} x ${img.naturalHeight}`;
+    tally.count = tally.elapsed = "";
+    showTally();
+    clearResult();
+    draw();
+  };
+  img.onerror = () => showStatus("failed", "That file is not an image the browser can open", name);
+  img.src = source;
+}
 
-            let html = `
-                <div class="success">
-                    <strong>✅ Success:</strong> Prediction completed using ${family}/${variant}
-                </div>
-            `;
+function useExample() {
+  setImage("/static/example.jpg", "example.jpg", null);
+}
 
-            // Display predictions for object detection models
-            if (data.predictions && data.predictions.length > 0) {
-                html += `<h3 style="margin-top: 20px;">Detected Objects: ${data.predictions.length}</h3>`;
-                html += '<pre>' + JSON.stringify(data.predictions, null, 2) + '</pre>';
+function openFile(file) {
+  if (!file) return;
+  setImage(URL.createObjectURL(file), file.name, file);
+}
 
-                // Draw bounding boxes on image if applicable
-                if (data.predictions[0].box) {
-                    html += '<h3 style="margin-top: 20px;">Annotated Image:</h3>';
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const img = document.getElementById('imagePreview');
+/* --- Running ------------------------------------------------------------- */
 
-                    canvas.width = img.naturalWidth || img.width;
-                    canvas.height = img.naturalHeight || img.height;
+async function run() {
+  if (state.busy || !state.image) return;
 
-                    ctx.drawImage(img, 0, 0);
+  const family = $("family").value;
+  const variant = $("variant").value;
+  const current = task();
+  const params = new URLSearchParams();
 
-                    // Draw bounding boxes
-                    data.predictions.forEach((pred, idx) => {
-                        const box = pred.box;
-                        const color = `hsl(${(idx * 360) / data.predictions.length}, 70%, 50%)`;
+  const threshold = $("threshold").value.trim();
+  if (threshold !== "" && $("group-threshold").classList.contains("on")) {
+    params.set("threshold", threshold);
+  }
+  if (current === "object_detection") {
+    const labels = $("labels").value.trim();
+    if (labels) params.set("labels", labels);
+  }
+  if (PROMPTED.has(current)) {
+    if (!state.texts.length) {
+      showStatus("failed", "This model needs a concept",
+        `${family} looks for what you name. Type one above and press enter.`);
+      return;
+    }
+    for (const t of state.texts) params.append("text", t);
+  }
+  if (current === "promptable_segmentation") {
+    if (!state.points.length && !state.box) {
+      showStatus("failed", "This model needs a prompt",
+        "Click the image to place a point, or switch to Box and drag one.");
+      return;
+    }
+    for (const p of state.points) {
+      params.append("point", `${Math.round(p.x)},${Math.round(p.y)}`);
+      params.append("label", p.include ? "1" : "0");
+    }
+    if (state.box) {
+      const b = state.box;
+      params.set("box", [b.x1, b.y1, b.x2, b.y2].map(Math.round).join(","));
+    }
+    params.set("multimask", String(state.multimask));
+    const name = $("name").value.trim();
+    if (name) params.set("name", name);
+  }
 
-                        ctx.strokeStyle = color;
-                        ctx.lineWidth = 3;
-                        ctx.strokeRect(box.x1, box.y1, box.x2 - box.x1, box.y2 - box.y1);
+  const body = new FormData();
+  body.append("file", state.file || await exampleAsFile());
 
-                        // Draw label
-                        ctx.fillStyle = color;
-                        ctx.font = 'bold 16px Arial';
-                        const label = `${pred.class_name} (${(pred.confidence * 100).toFixed(1)}%)`;
-                        const textWidth = ctx.measureText(label).width;
-                        ctx.fillRect(box.x1, box.y1 - 25, textWidth + 10, 25);
-                        ctx.fillStyle = 'white';
-                        ctx.fillText(label, box.x1 + 5, box.y1 - 7);
-                    });
+  setBusy(true, family, variant);
+  const started = performance.now();
+  try {
+    const url = `/predict/${family}/${variant}?${params}`;
+    const response = await fetch(url, { method: "POST", body });
+    const took = Math.round(performance.now() - started);
 
-                    html += canvas.outerHTML;
-                }
-            } else {
-                html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-            }
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      showStatus("failed", `${response.status} ${response.statusText}`,
+        detail.detail || "The server returned no detail.");
+      tally.elapsed = `${took} ms`;
+      showTally();
+      return;
+    }
 
-            content.innerHTML = html;
-        }
+    if ((response.headers.get("content-type") || "").startsWith("image/")) {
+      await takeDepth(response);
+    } else {
+      takeDetections(await response.text());
+    }
+    tally.elapsed = `${took} ms`;
+    showTally();
+    refreshCensus();
+  } catch (err) {
+    showStatus("failed", "The request did not complete", String(err));
+  } finally {
+    setBusy(false);
+  }
+}
 
+function setBusy(busy, family, variant) {
+  state.busy = busy;
+  $("run").disabled = busy;
+  $("run").textContent = busy ? "Running" : "Run";
+  if (busy) {
+    showStatus("working", `${family} / ${variant}`,
+      "First run on a family downloads and loads its weights, which can take minutes.");
+    tally.elapsed = "";
+    showTally();
+  }
+}
 
-        // Initialize on page load
-        window.addEventListener('load', loadModels);
-    </script>
+async function exampleAsFile() {
+  const blob = await fetch("/static/example.jpg").then((r) => r.blob());
+  return new File([blob], "example.jpg", { type: blob.type });
+}
+
+/* --- Taking a response --------------------------------------------------- */
+
+function takeDetections(text) {
+  state.raw = text;
+  state.depth = null;
+  state.detections = JSON.parse(text);
+  state.masks.clear();
+  state.lit = state.pinned = -1;
+  tally.count = `${state.detections.length} detection${state.detections.length === 1 ? "" : "s"}`;
+  showTally();
+  renderList();
+  renderJSON();
+  decodeMasks();
+  draw();
+}
+
+async function takeDepth(response) {
+  const unit = response.headers.get("X-Depth-Unit");
+  const low = Number(response.headers.get("X-Depth-Min"));
+  const high = Number(response.headers.get("X-Depth-Max"));
+  const blob = await response.blob();
+  const image = new Image();
+  await new Promise((done, fail) => {
+    image.onload = done; image.onerror = fail;
+    image.src = URL.createObjectURL(blob);
+  });
+
+  state.depth = { image, unit, low, high, bytes: blob.size };
+  state.detections = [];
+  state.masks.clear();
+  state.raw = "";
+  tally.count = "depth map";
+  showTally();
+  renderDepth();
+  draw();
+}
+
+function clearResult() {
+  state.detections = [];
+  state.depth = null;
+  state.raw = "";
+  state.masks.clear();
+  state.lit = state.pinned = -1;
+  tally.count = tally.elapsed = "";
+  showTally();
+  showStatus("empty", "Nothing run yet", "Pick a model and press Run.");
+}
+
+async function refreshCensus() {
+  const health = await fetch("/").then((r) => r.json()).catch(() => null);
+  if (!health) return;
+  const total = Object.values(state.catalogue).reduce((n, e) => n + e.variants.length, 0);
+  $("census").textContent = `${total} models, ${health.loaded_models.length} resident`;
+}
+
+/* --- Masks ---------------------------------------------------------------
+   A pixelflow mask travels as a base64 PNG of a boolean raster, so it arrives
+   as an opaque black-and-white image rather than something with an alpha
+   channel. Turning it into an overlay means keying on luminance once, at
+   decode, and keeping the result: doing it per frame would repaint two million
+   pixels every time the pointer moves.
+-------------------------------------------------------------------------- */
+
+function decodeMasks() {
+  state.detections.forEach((det, i) => {
+    const raster = (det.masks || []).find((m) => m && m.format === "png");
+    if (!raster) return;
+    const image = new Image();
+    image.onload = () => {
+      state.masks.set(i, [stencil(image, PLAIN_INK), stencil(image, SELECT_INK)]);
+      draw();
+    };
+    image.src = `data:image/png;base64,${raster.data}`;
+  });
+}
+
+const PLAIN_INK = [255, 255, 255];
+const SELECT_INK = [224, 162, 83];
+
+function stencil(image, [r, g, b]) {
+  const off = document.createElement("canvas");
+  off.width = image.naturalWidth;
+  off.height = image.naturalHeight;
+  const octx = off.getContext("2d");
+  octx.drawImage(image, 0, 0);
+  const pixels = octx.getImageData(0, 0, off.width, off.height);
+  const data = pixels.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const on = data[i] > 127;
+    data[i] = r; data[i + 1] = g; data[i + 2] = b;
+    data[i + 3] = on ? 255 : 0;
+  }
+  octx.putImageData(pixels, 0, 0);
+  return off;
+}
+
+/* --- Drawing ------------------------------------------------------------- */
+
+function draw() {
+  const box = $("stage-body").getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(box.width * dpr));
+  canvas.height = Math.max(1, Math.round(box.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, box.width, box.height);
+
+  const source = state.depth ? state.depth.image : state.image;
+  if (!source) return;
+
+  const w = source.naturalWidth, h = source.naturalHeight;
+  const scale = Math.min(box.width / w, box.height / h);
+  const dw = w * scale, dh = h * scale;
+  const ox = (box.width - dw) / 2, oy = (box.height - dh) / 2;
+  state.placement = { scale, ox, oy, w, h };
+
+  ctx.drawImage(source, ox, oy, dw, dh);
+  if (state.depth) return;
+
+  const active = state.pinned >= 0 ? state.pinned : state.lit;
+
+  state.detections.forEach((det, i) => paintMask(det, i, i === active));
+  state.detections.forEach((det, i) => { if (i !== active) paintShape(det, i, false); });
+  if (active >= 0 && state.detections[active]) paintShape(state.detections[active], active, true);
+
+  paintPrompts();
+}
+
+const toCanvas = (x, y) => {
+  const p = state.placement;
+  return [p.ox + x * p.scale, p.oy + y * p.scale];
+};
+
+function paintMask(det, i, isActive) {
+  const pair = state.masks.get(i);
+  if (!pair) return;
+  const p = state.placement;
+  ctx.save();
+  ctx.globalAlpha = isActive ? 0.45 : 0.24;
+  ctx.drawImage(pair[isActive ? 1 : 0], p.ox, p.oy, p.w * p.scale, p.h * p.scale);
+  ctx.restore();
+}
+
+function paintShape(det, i, isActive) {
+  const ink = isActive ? "#e0a253" : "#ffffff";
+  const outline = outlineOf(det);
+  if (!outline) return;
+
+  // A dark casing under a light hairline. One ink has to stay legible over an
+  // arbitrary photograph, and a stroke alone disappears into anything pale.
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.lineWidth = 3;
+  tracePath(outline);
+  ctx.stroke();
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = isActive ? 1.5 : 1;
+  tracePath(outline);
+  ctx.stroke();
+
+  const caption = captionOf(det);
+  if (caption) {
+    const [x, y] = toCanvas(outline[0][0], outline[0][1]);
+    paintCaption(caption, x, y, ink);
+  }
+}
+
+/* `segments` is the outline the model actually produced -- EasyOCR's quad sits
+   at the angle the line was read at -- so it wins over the axis-aligned box
+   whenever a family supplies one. */
+function outlineOf(det) {
+  if (det.segments && det.segments.length >= 3) return det.segments;
+  if (det.bbox && det.bbox.length === 4) {
+    const [x1, y1, x2, y2] = det.bbox;
+    return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+  }
+  return null;
+}
+
+function tracePath(points) {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => {
+    const [cx, cy] = toCanvas(x, y);
+    i === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+  });
+  ctx.closePath();
+}
+
+function captionOf(det) {
+  const said = det.text != null ? det.text : det.class_name;
+  if (said == null) return det.confidence != null ? fixed(det.confidence) : "";
+  return det.confidence != null ? `${said}  ${fixed(det.confidence)}` : String(said);
+}
+
+const fixed = (n) => Number(n).toFixed(2);
+
+function paintCaption(label, x, y, ink) {
+  ctx.font = `11px ${getComputedStyle(document.body).fontFamily}`;
+  const width = ctx.measureText(label).width;
+  const top = y - 16 < 2 ? y + 2 : y - 16;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+  ctx.fillRect(x, top, width + 8, 14);
+  ctx.fillStyle = ink;
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x + 4, top + 7);
+}
+
+function paintPrompts() {
+  for (const p of state.points) {
+    const [x, y] = toCanvas(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = p.include ? "#ffffff" : "transparent";
+    if (p.include) ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+  }
+
+  const b = state.drawing || state.box;
+  if (!b) return;
+  const [x1, y1] = toCanvas(b.x1, b.y1);
+  const [x2, y2] = toCanvas(b.x2, b.y2);
+  ctx.setLineDash([4, 3]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+  ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#ffffff";
+  ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  ctx.setLineDash([]);
+}
+
+/* --- The linked record ---------------------------------------------------
+   A drawn shape, a row and a JSON object are three views of one detection, so
+   pointing at any of them lights the other two. That is the whole reason to
+   render the response per record instead of as one blob of text: when a box
+   lands somewhere surprising, its numbers are one glance away.
+-------------------------------------------------------------------------- */
+
+function light(i, pin) {
+  if (pin) state.pinned = state.pinned === i ? -1 : i;
+  else state.lit = i;
+  const active = state.pinned >= 0 ? state.pinned : state.lit;
+  for (const el of document.querySelectorAll("[data-record]")) {
+    el.classList.toggle("lit", Number(el.dataset.record) === active);
+  }
+  if (pin && active >= 0) {
+    const target = document.querySelector(`.pane.on [data-record="${active}"]`);
+    if (target) target.scrollIntoView({ block: "nearest" });
+  }
+  draw();
+}
+
+function hit(cx, cy) {
+  const p = state.placement;
+  if (!p) return -1;
+  const x = (cx - p.ox) / p.scale, y = (cy - p.oy) / p.scale;
+  let found = -1, smallest = Infinity;
+  state.detections.forEach((det, i) => {
+    const outline = outlineOf(det);
+    if (!outline || !inside(outline, x, y)) return;
+    const area = spanOf(outline);
+    if (area < smallest) { smallest = area; found = i; }
+  });
+  return found;
+}
+
+function inside(points, x, y) {
+  let within = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i], [xj, yj] = points[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) within = !within;
+  }
+  return within;
+}
+
+function spanOf(points) {
+  const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+  return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+}
+
+/* --- Readout ------------------------------------------------------------- */
+
+function renderList() {
+  const pane = $("pane-list");
+  if (!state.detections.length) {
+    pane.innerHTML = "";
+    showStatus("empty", "No detections",
+      "The model ran and found nothing above its confidence floor. Lower it, or try another image.");
+    return;
+  }
+  pane.textContent = "";
+  state.detections.forEach((det, i) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "record";
+    row.dataset.record = i;
+
+    const said = det.text != null ? det.text : det.class_name;
+    const bbox = det.bbox
+      ? det.bbox.map((n) => Math.round(n)).join("  ")
+      : "no bbox";
+
+    const badges = [];
+    if (det.segments) badges.push("segments");
+    if (det.masks && det.masks.length) badges.push(`${det.masks.length} mask${det.masks.length === 1 ? "" : "s"}`);
+
+    row.innerHTML = `
+      <div class="headline">
+        <span class="index">${String(i).padStart(2, "0")}</span>
+        <span class="name ${said == null ? "unnamed" : ""}"></span>
+        <span class="score">${det.confidence != null ? fixed(det.confidence) : ""}</span>
+      </div>
+      <div class="where">${bbox}${badges.map((b) => ` <span class="badge">${b}</span>`).join("")}</div>`;
+    row.querySelector(".name").textContent = said == null ? "class_name: null" : said;
+
+    row.addEventListener("mouseenter", () => light(i, false));
+    row.addEventListener("mouseleave", () => light(-1, false));
+    row.addEventListener("click", () => light(i, true));
+    pane.append(row);
+  });
+}
+
+function renderJSON() {
+  const pane = $("pane-json");
+  pane.textContent = "";
+  if (!state.raw) return;
+
+  const note = document.createElement("div");
+  note.className = "json-note";
+  note.innerHTML = `<span>${byteSize(state.raw)}, pixelflow verbatim</span>`;
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(state.raw);
+    copy.textContent = "Copied";
+    setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+  });
+  note.append(copy);
+  pane.append(note);
+
+  state.detections.forEach((det, i) => {
+    const block = document.createElement("div");
+    block.className = "json-block";
+    block.dataset.record = i;
+    const pre = document.createElement("pre");
+    pre.innerHTML = highlight(det);
+    block.append(pre);
+    block.addEventListener("mouseenter", () => light(i, false));
+    block.addEventListener("mouseleave", () => light(-1, false));
+    block.addEventListener("click", () => light(i, true));
+    pane.append(block);
+  });
+}
+
+/* Every key of every record, nulls included -- `masks: null` next to a filled
+   `segments` is exactly the difference worth seeing. The one thing not shown
+   in full is a base64 mask payload, which runs to tens of thousands of
+   characters; its true length stands in its place, and Copy yields the
+   untouched response. */
+function highlight(det) {
+  const text = JSON.stringify(det, (key, value) => {
+    if (key === "data" && typeof value === "string" && value.length > 96) {
+      return `«${value.length.toLocaleString()} base64 chars»`;
+    }
+    return value;
+  }, 2);
+
+  return text
+    .replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))
+    .replace(/"([^"]+)":/g, '<span class="k">"$1"</span>:')
+    .replace(/\bnull\b/g, '<span class="nul">null</span>')
+    .replace(/"«([^»]+)»"/g, '<span class="elided">«$1»</span>');
+}
+
+function renderDepth() {
+  const d = state.depth;
+  const metric = d.unit === "metres";
+  $("pane-list").innerHTML = `
+    <div class="status">
+      <div class="headline">Depth map</div>
+      ${metric
+        ? "Values are metres, recovered from the 16-bit PNG with the range below."
+        : "Values are inverse depth on a scale of this image's own, where larger is nearer. The unit is not metres and the server will not call it one."}
+      <dl>
+        <dt>unit</dt><dd>${d.unit}</dd>
+        <dt>min</dt><dd>${d.low}</dd>
+        <dt>max</dt><dd>${d.high}</dd>
+        <dt>png</dt><dd>${byteSize(d.bytes)}, 16-bit</dd>
+      </dl>
+    </div>`;
+  $("pane-json").innerHTML = `
+    <div class="status">
+      <div class="headline">Not JSON</div>
+      This family answers with a 16-bit PNG, not detections. What a client needs
+      to read it back travels in the headers.
+      <dl>
+        <dt>X-Depth-Unit</dt><dd>${d.unit}</dd>
+        <dt>X-Depth-Min</dt><dd>${d.low}</dd>
+        <dt>X-Depth-Max</dt><dd>${d.high}</dd>
+      </dl>
+    </div>`;
+}
+
+/* Built as nodes rather than markup: `detail` carries whatever the server put
+   in an error, and that string is not the page's to interpret. */
+function showStatus(kind, headline, detail) {
+  for (const id of ["pane-list", "pane-json"]) {
+    const box = document.createElement("div");
+    box.className = `status ${kind}`;
+    const title = document.createElement("div");
+    title.className = "headline";
+    title.textContent = headline;
+    box.append(title, document.createTextNode(detail));
+    $(id).replaceChildren(box);
+  }
+}
+
+function byteSize(value) {
+  const n = typeof value === "number" ? value : new Blob([value]).size;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} kB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/* --- Prompt chips -------------------------------------------------------- */
+
+function drawTextChips() {
+  const host = $("text-chips");
+  host.textContent = "";
+  state.texts.forEach((word, i) => host.append(chip(word, () => {
+    state.texts.splice(i, 1); drawTextChips();
+  })));
+}
+
+function drawPromptChips() {
+  const host = $("prompt-chips");
+  host.textContent = "";
+  state.points.forEach((p, i) => host.append(chip(
+    `${p.include ? "+" : "−"} ${Math.round(p.x)},${Math.round(p.y)}`,
+    () => { state.points.splice(i, 1); drawPromptChips(); draw(); })));
+  if (state.box) {
+    const b = state.box;
+    host.append(chip(`box ${[b.x1, b.y1, b.x2, b.y2].map(Math.round).join(",")}`,
+      () => { state.box = null; drawPromptChips(); draw(); }));
+  }
+}
+
+function chip(label, remove) {
+  const el = document.createElement("span");
+  el.className = "chip";
+  const text = document.createElement("span");
+  text.textContent = label;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "×";
+  button.setAttribute("aria-label", `Remove ${label}`);
+  button.addEventListener("click", remove);
+  el.append(text, button);
+  return el;
+}
+
+/* --- Wiring -------------------------------------------------------------- */
+
+$("family").addEventListener("change", onFamily);
+$("variant").addEventListener("change", () => { clearResult(); draw(); });
+$("run").addEventListener("click", run);
+$("choose").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => openFile(e.target.files[0]));
+$("use-example").addEventListener("click", useExample);
+
+$("text-entry").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const word = e.target.value.trim();
+  if (!word || state.texts.includes(word)) return;
+  state.texts.push(word);
+  e.target.value = "";
+  drawTextChips();
+});
+
+$("prompt-mode").addEventListener("click", (e) => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  state.mode = button.dataset.mode;
+  for (const b of $("prompt-mode").children) {
+    b.setAttribute("aria-pressed", String(b === button));
+  }
+});
+
+$("multimask").addEventListener("click", (e) => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  state.multimask = button.dataset.multimask === "true";
+  for (const b of $("multimask").children) {
+    b.setAttribute("aria-pressed", String(b === button));
+  }
+});
+
+for (const id of ["tab-list", "tab-json"]) {
+  $(id).addEventListener("click", () => {
+    const list = id === "tab-list";
+    $("tab-list").setAttribute("aria-selected", String(list));
+    $("tab-json").setAttribute("aria-selected", String(!list));
+    $("pane-list").classList.toggle("on", list);
+    $("pane-json").classList.toggle("on", !list);
+  });
+}
+
+/* Canvas: hover lights a record; in promptable families a click places a
+   point and a drag draws a box. */
+
+canvas.addEventListener("mousemove", (e) => {
+  const box = canvas.getBoundingClientRect();
+  const x = e.clientX - box.left, y = e.clientY - box.top;
+  if (state.drawing) {
+    const p = state.placement;
+    state.drawing.x2 = clamp((x - p.ox) / p.scale, 0, p.w);
+    state.drawing.y2 = clamp((y - p.oy) / p.scale, 0, p.h);
+    draw();
+    return;
+  }
+  if (state.pinned >= 0) return;
+  const found = hit(x, y);
+  if (found !== state.lit) light(found, false);
+});
+
+canvas.addEventListener("mouseleave", () => { if (state.pinned < 0) light(-1, false); });
+
+canvas.addEventListener("mousedown", (e) => {
+  if (task() !== "promptable_segmentation" || state.mode !== "box" || !state.placement) return;
+  const box = canvas.getBoundingClientRect();
+  const p = state.placement;
+  const x = clamp((e.clientX - box.left - p.ox) / p.scale, 0, p.w);
+  const y = clamp((e.clientY - box.top - p.oy) / p.scale, 0, p.h);
+  state.drawing = { x1: x, y1: y, x2: x, y2: y };
+});
+
+window.addEventListener("mouseup", () => {
+  if (!state.drawing) return;
+  const d = state.drawing;
+  state.drawing = null;
+  if (Math.abs(d.x2 - d.x1) > 4 && Math.abs(d.y2 - d.y1) > 4) {
+    state.box = {
+      x1: Math.min(d.x1, d.x2), y1: Math.min(d.y1, d.y2),
+      x2: Math.max(d.x1, d.x2), y2: Math.max(d.y1, d.y2),
+    };
+    drawPromptChips();
+  }
+  draw();
+});
+
+canvas.addEventListener("click", (e) => {
+  const box = canvas.getBoundingClientRect();
+  const x = e.clientX - box.left, y = e.clientY - box.top;
+
+  if (task() === "promptable_segmentation" && state.mode !== "box" && state.placement) {
+    const p = state.placement;
+    const ix = (x - p.ox) / p.scale, iy = (y - p.oy) / p.scale;
+    if (ix >= 0 && iy >= 0 && ix <= p.w && iy <= p.h) {
+      state.points.push({ x: ix, y: iy, include: state.mode === "include" });
+      drawPromptChips();
+      draw();
+      return;
+    }
+  }
+  light(hit(x, y), true);
+});
+
+const clamp = (n, low, high) => Math.min(high, Math.max(low, n));
+
+/* Drag and drop, anywhere on the stage. */
+
+const stage = $("stage-body");
+stage.addEventListener("dragover", (e) => { e.preventDefault(); $("dropzone").classList.add("on"); });
+stage.addEventListener("dragleave", () => $("dropzone").classList.remove("on"));
+stage.addEventListener("drop", (e) => {
+  e.preventDefault();
+  $("dropzone").classList.remove("on");
+  openFile(e.dataTransfer.files[0]);
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") light(-1, true);
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) run();
+});
+
+new ResizeObserver(() => draw()).observe($("stage-body"));
+
+boot();
+</script>
 </body>
 </html>
