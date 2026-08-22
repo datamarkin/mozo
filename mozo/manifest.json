@@ -361,6 +361,54 @@
         }
       }
     },
+    "grounding_dino/base": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "grounding_dino/base/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "grounding_dino/base/2026-08-23/NOTICE",
+              "sha256": "d75743fac6770287dece675537c40708203bb2fd6e2ccf407fbb3fe074ce41bd",
+              "size": 1316
+            },
+            "torch-fp32": {
+              "path": "grounding_dino/base/2026-08-23/torch-fp32.pth",
+              "sha256": "46270f7a822e6906b655b729c90613e48929d0f2bb8b9b76fd10a856f3ac6ab7",
+              "size": 938057991
+            }
+          }
+        }
+      }
+    },
+    "grounding_dino/tiny": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "grounding_dino/tiny/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "grounding_dino/tiny/2026-08-23/NOTICE",
+              "sha256": "6104089c6bf8be28275225bd02bfdf67abb3aa74c4f901b6f0aa81e19f9e06fa",
+              "size": 1281
+            },
+            "torch-fp32": {
+              "path": "grounding_dino/tiny/2026-08-23/torch-fp32.pth",
+              "sha256": "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799",
+              "size": 693997677
+            }
+          }
+        }
+      }
+    },
     "owlv2/base": {
       "latest": "2026-08-21",
       "revisions": {
