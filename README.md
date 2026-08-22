@@ -553,4 +553,5 @@ mozo start
 
 ## License
 
-MIT License
+Mozo's own code is **Apache-2.0**. 
+The weights have their own licenses.
