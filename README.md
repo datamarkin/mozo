@@ -150,12 +150,12 @@ costs anything at run time: EasyOCR runs within 1% of the published package on t
 ### Object detection
 
 | Family | Variants | Weights | Runtimes | Output |
-|---|---|---|---|---|
-| `rfdetr` | `nano` `small` `medium` `large`, and `seg-` of each | Apache-2.0 | torch, onnx, coreml | boxes, masks, class names |
-| `yolov8` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
-| `yolov11` | same five | **AGPL-3.0** | torch, onnx | boxes, class names |
-| `yolov12` | same five | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
-| `yolov26` | same five | **AGPL-3.0** | torch, onnx | boxes, class names |
+|---|--|---|---|---|
+| `rfdetr` | `nano`<br>`small`<br>`medium`<br>`large`<br>`seg-` | Apache-2.0 | torch, onnx, coreml | boxes, masks, class names |
+| `yolov8` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
+| `yolov11` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx | boxes, class names |
+| `yolov12` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
+| `yolov26` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx | boxes, class names |
 
 ### Text-prompted
 
@@ -163,8 +163,8 @@ Name a thing in words. No class list, no fine-tuning, no vocabulary agreed in ad
 
 | Family | Variants | Weights | Prompt | Output |
 |---|---|---|---|---|
-| `grounding_dino` | `tiny` `base` | Apache-2.0 | descriptions, ≤256 tokens total | boxes, no NMS |
-| `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens | boxes, no NMS |
+| `grounding_dino` | `tiny`<br>`base` | Apache-2.0 | descriptions, ≤256 tokens total | boxes, no NMS |
+| `owlv2` | `base`<br>`base-ensemble`<br>`large`<br>`large-ensemble` | Apache-2.0 | phrases, ≤16 tokens | boxes, no NMS |
 | `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens | masks, boxes |
 
 ### Zero-shot classification and embeddings
@@ -175,8 +175,8 @@ afterwards — through a vector database of your own.
 
 | Family | Variants | Weights | Prompt | Output |
 |---|---|---|---|---|
-| `clip` | `base` `base-16` `large` `large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
-| `siglip2` | `base-224` `so400m-384` `giant-384`, and twelve more | Apache-2.0 | phrases, ≤64 tokens each | a probability per phrase, or 768/1152/1536-d vectors |
+| `clip` | `base`<br>`base-16`<br>`large`<br>`large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
+| `siglip2` | `base-224`<br>`so400m-384`<br>`giant-384`<br>and twelve more | Apache-2.0 | phrases, ≤64 tokens each | a probability per phrase, or 768/1152/1536-d vectors |
 
 Scores are **cosine similarities, not probabilities**: not softmaxed, they do not sum to one, and
 they may be negative. Nothing is filtered out — every phrase comes back scored, because a
@@ -192,14 +192,14 @@ Point at something, get back the thing you pointed at.
 
 | Family | Variants | Weights | Prompt | Output |
 |---|---|---|---|---|
-| `sam2` | `tiny` `small` `base_plus` `large` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
+| `sam2` | `tiny`<br>`small`<br>`base_plus`<br>`large` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
 | `edgetam` | `edgetam` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
 
 ### Text recognition
 
 | Family | Variants (scripts) | Weights | Output |
 |---|---|---|---|
-| `easyocr` | `english` `latin` `chinese-simplified` `japanese` `korean` | Apache-2.0 | `text` + quad + confidence, no `class_name` |
+| `easyocr` | `english`<br>`latin`<br>`chinese-simplified`<br>`japanese`<br>`korean` | Apache-2.0 | `text` + quad + confidence, no `class_name` |
 
 A variant is a script, not a language: `latin` alone covers 41 languages.
 
@@ -208,8 +208,8 @@ A variant is a script, not a language: `latin` alone covers 41 languages.
 | Family | Variants | Weights | Unit | Output |
 |---|---|---|---|---|
 | `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless | `HxW` float32 |
-| | `base` `large` | **CC-BY-NC-4.0** | relative, unitless | `HxW` float32 |
-| | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** | `HxW` float32 |
+| | `base`<br>`large` | **CC-BY-NC-4.0** | relative, unitless | `HxW` float32 |
+| | `indoor-` and<br>`outdoor-`,<br>three sizes each | Apache-2.0 | **metres** | `HxW` float32 |
 
 Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
 distance. `model.unit` says which, and is `None` rather than a guess.
