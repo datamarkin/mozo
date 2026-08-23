@@ -19,16 +19,17 @@ products and were trained and released for research purposes.
 
 ON THE WEIGHTS
 --------------
-All fifteen published checkpoints are Apache-2.0, stated on each model card and
-served ungated. Unlike CLIP, nothing here is inferred from silence.
+All fifteen of Google's published checkpoints are Apache-2.0, stated on each
+model card and served ungated -- including the ten mozo does not carry. Unlike
+CLIP, nothing here is inferred from silence.
 
 THE VOCABULARY
 --------------
 assets/gemma_bpe.json.gz is derived from tokenizer.json as published in
 google/siglip2-base-patch16-224 -- 256,000 pieces, 580,604 merge rules and 249
 added tokens, re-encoded so that merges are pairs of ids rather than pairs of
-strings. One vocabulary serves all fifteen variants; tokenizer.model is
-byte-identical across them (sha256 61a7b147390c64585d6c3543dd6fc636906c9af3865a5
+strings. One vocabulary serves every variant; tokenizer.model is
+byte-identical across all fifteen Google publishes (sha256 61a7b147390c64585d6c3543dd6fc636906c9af3865a5
 548f27f31aee1d4c8e2, 4,241,003 bytes).
 
 It is Gemma's vocabulary. Gemma's own weights are published under the Gemma Terms

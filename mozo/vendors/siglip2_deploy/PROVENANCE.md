@@ -26,7 +26,7 @@ proves it on every run with `torch.equal` and no tolerance.
 claimed here.** It is worth being precise, because the obvious citation is wrong:
 `models/siglip2/convert_siglip2_to_hf.py` does verify at `atol=1e-3, rtol=1e-3` — but its
 `MODEL_NAME_TO_CHECKPOINT_PATH` contains only the two `-naflex` checkpoints, which this package
-does not carry. The fifteen fixed-resolution models are converted by
+does not carry. The fixed-resolution models are converted by
 `models/siglip/convert_siglip_to_hf.py`, whose verification block holds expected outputs for eight
 SigLIP **1** model names and none for any SigLIP 2. So upstream publishes no JAX-to-PyTorch
 agreement, at any tolerance, for a single checkpoint mozo ships.
@@ -48,7 +48,7 @@ moving package needs an anchor, and the gate prints these versions on every run.
 | `modeling_siglip.py` | the encoder block, the eager attention, the patch embedding, the attention-pooling head, the text tower's forward and pooling |
 | `image_processing_siglip.py` and `image_processing_backends.py` | the resize-and-normalise, rewritten in `image.py` |
 | `tokenization_siglip2.py` | the normalisation, and the choice of tokenizer class |
-| `configuration_siglip.py` and the fifteen `config.json` | the geometry, written out as frozen dataclasses in `config.py` |
+| `configuration_siglip.py` and each variant's `config.json` | the geometry, written out as frozen dataclasses in `config.py` |
 | `google/siglip2-base-patch16-224/tokenizer.json` | the vocabulary, re-encoded into `assets/gemma_bpe.json.gz` |
 
 The checkpoint is consumed as Google publishes it, modulo one repack: `tools/fetch/siglip2.py`
@@ -56,10 +56,16 @@ reads the safetensors and writes plain tensors. No tensor is altered, renamed, c
 
 ## What was deliberately left behind
 
-**The two `-naflex` variants.** Variable resolution through `Siglip2Model` — patch-attention masks,
-spatial shapes, a different image tower. A second tower, not a second configuration. They are 20%
-of SigLIP 2's downloads and their absence is a decision, not an oversight. Nothing here is in the
-way of adding them.
+**Ten of the fifteen fixed-resolution variants.** mozo carries the five most-used, which is 89% of
+all SigLIP 2 downloads: `base-224`, `base-256`, `so400m-384`, `so400m16-256` and `giant-384`. The
+other ten need no code — a `Spec` row and a checkpoint each — and they are absent because nobody
+was asking for them, not because anything here cannot run them. The five still exercise every
+distinct geometry: head dimensions of 64, 72 and 96, a patch grid that floors, asymmetric towers,
+and an MLP that is not four times the width.
+
+**The two `-naflex` variants.** A different matter entirely: variable resolution through
+`Siglip2Model` — patch-attention masks, spatial shapes, a different image tower. A second tower,
+not a second configuration. They are 20% of SigLIP 2's downloads and adding them is real work.
 
 **Training.** The sigmoid loss, the captioning decoder, the self-distillation and masked-prediction
 heads, and the temperature's gradient.
@@ -143,7 +149,8 @@ rather than a change.
 
 ### 5. mozo requires RGB where the reference does not convert
 
-`do_convert_rgb` is `null` in all fifteen published configs and the reference reads it as false, so
+`do_convert_rgb` is `null` in all fifteen of Google's published configs and the reference reads
+it as false, so
 the reference does not convert a greyscale or RGBA input. mozo's `load_image` guarantees RGB before
 the vendor sees anything, so the two agree on every input mozo can produce; `preprocess` requires
 what it is handed to be RGB `uint8` and says so rather than guessing.
@@ -173,7 +180,8 @@ seven were confirmed by perturbing the constant and watching the gate fail at th
   the text tower attends the padding, and the pooling above is coherent only because of it.
 - **The head dimension is not 64.** CLIP fixes it and divides; here `so400m` is 72 and `giant-opt`
   is 96. Nor is the MLP `4 × width`: `so400m` is 1152 → 4304, and `giant-opt`'s *text* tower is
-  so400m's rather than its own vision tower's. Seven of the fifteen break one rule or the other.
+  so400m's rather than its own vision tower's. Three of the five carried here break one rule or
+  the other.
 - **`so400m-384` does not divide evenly.** 384 over a 14-pixel patch is 27 patches and a remainder
   of six pixels, which the convolution strides past and the model never sees. Upstream computes it
   the same way; `resolution % patch == 0` looks like an invariant and is not.

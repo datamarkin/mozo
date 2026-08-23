@@ -82,8 +82,9 @@ class Siglip2Predictor:
         (1, 768)
     """
 
-    #: The fifteen fixed-resolution variants. Google also publishes two ``-naflex`` ones, which run
-    #: at variable resolution through a different image tower; see ``PROVENANCE.md``.
+    #: The five carried here, out of the fifteen fixed-resolution variants Google publishes. The
+    #: vendor's ``config.py`` says which five and why; ``PROVENANCE.md`` covers the two ``-naflex``
+    #: ones, which would need a different image tower.
     VARIANTS = list(VARIANTS)
 
     #: Which runtimes this adapter can execute. Only torch: the vendor builds two torch towers from
