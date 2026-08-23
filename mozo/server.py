@@ -10,12 +10,14 @@ or GPU work, so FastAPI runs each in its threadpool instead of stalling the even
 
 from __future__ import annotations
 
+import logging
 import os
 
 # Set before torch is imported -- adapters load lazily, so this is always in time. Some ops have
 # no MPS kernel, and without the fallback they raise instead of running on the CPU.
 os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
 
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
@@ -40,6 +42,86 @@ app = FastAPI(
 app.state.model_manager = ModelManager()
 
 _STATIC = Path(__file__).parent / "static"
+
+_log = logging.getLogger(__name__)
+
+
+# --- What this deployment offers ---
+
+@lru_cache(maxsize=1)
+def _deployed() -> dict[str, tuple[str, ...]]:
+    """Which models this server hands out, from ``MOZO_ENABLE``. Unset means all of them.
+
+    The catalogue is what mozo publishes; this is what one server offers. They differ because the
+    weights are separate works carrying their own licences -- the README's licence section has the
+    split -- and serving the non-permissive ones over a network places obligations on the operator
+    that the rest do not. Deployment is automatic, so the choice has to be expressible without
+    editing an installed package: an environment variable, alongside ``MOZO_CACHE`` and the rest.
+
+    An allow-list rather than a deny-list, because the two fail in opposite directions across an
+    upgrade. A deny-list naming today's AGPL families serves whatever is added tomorrow, silently;
+    an allow-list serves nothing it was not told to, and the absence is visible. The failure you
+    cannot see is the worse one.
+
+    Returns:
+        Family -> the variants it offers, in registry order rather than the variable's, so the
+        catalogue does not reshuffle with how the line was typed. An empty tuple means what it
+        means in the registry: a family that accepts any variant name.
+
+    Note:
+        Server-side only. :func:`mozo.get_model` is untouched -- this says what is *deployed*,
+        and importing a library is not a deployment.
+
+    Note:
+        Cached, so the variable is read once per process. That is also what keeps the warning
+        below to one line in the log rather than one per request; a server that has to be
+        restarted to pick up a new value is the same restart every other one of these needs.
+
+    Examples:
+        ``MOZO_ENABLE=clip`` offers that family whole; ``clip/base`` offers the one variant;
+        ``clip,siglip2/base-224`` mixes both. Naming a family and one of its variants is a
+        union, so the family wins. Whitespace and empty items are ignored.
+    """
+    spec = os.environ.get("MOZO_ENABLE", "").strip()
+    if not spec:
+        return {family: tuple(entry["variants"]) for family, entry in MODEL_REGISTRY.items()}
+
+    wanted: dict[str, set[str]] = {}
+    unknown: list[str] = []
+    for token in (item.strip() for item in spec.split(",")):
+        if not token:
+            continue
+        family, _, variant = token.partition("/")
+        # Asked of the registry rather than checked here, so what counts as a real name is
+        # decided in one place. It also carries the empty-variant-list rule for free.
+        try:
+            entry = get_model_info(family, variant or None)
+        except ValueError:
+            unknown.append(token)
+            continue
+        # A bare family selects everything it publishes, which is what makes naming both it and
+        # one of its variants a union instead of a contradiction.
+        wanted.setdefault(family, set()).update([variant] if variant else entry["variants"])
+
+    deployed = {
+        family: tuple(v for v in entry["variants"] if v in wanted[family])
+        for family, entry in MODEL_REGISTRY.items() if family in wanted
+    }
+
+    # Warned rather than raised. Under an allow-list an unrecognised name can only ever subtract:
+    # ``MOZO_ENABLE=siglip`` yields a server missing SigLIP, never one serving something that was
+    # not sanctioned. A typo cannot produce the exposure this exists to prevent, so it does not
+    # warrant refusing to start.
+    #
+    # One line rather than two, and it always ends with what was actually deployed. A typo
+    # produces both complaints at once -- the name is unusable *and* something is now missing --
+    # and reading them as separate failures is how an operator concludes they have two problems.
+    if unknown or not deployed:
+        ignored = f"ignoring {', '.join(unknown)}, which mozo does not publish; " if unknown else ""
+        offering = f"offering {', '.join(deployed)}" if deployed else "offering no models at all"
+        _log.warning("MOZO_ENABLE: %s%s.", ignored, offering)
+    return deployed
+
 
 
 

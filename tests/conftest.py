@@ -50,6 +50,58 @@ def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> N
         pytest.skip(f"{family}/{variant} does not publish {runtime}")
 
 
+def _forget_deployment() -> None:
+    """Drop ``mozo.server``'s memo of ``MOZO_ENABLE``, if the module has been imported.
+
+    Read through :data:`sys.modules` rather than by importing, so a test that never touches the
+    server does not pay for FastAPI and OpenCV to reset something it is not using.
+    """
+    server = sys.modules.get("mozo.server")
+    if server is not None:
+        server._deployed.cache_clear()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_ambient_narrowing():
+    """Hide any ``MOZO_ENABLE`` the developer's shell exports, for the whole session.
+
+    It narrows what the server offers, so a value left in an environment would shrink ``/models``
+    and fail assertions nowhere near the cause. Session-scoped rather than per-test because that
+    is the only scope early enough: pytest builds higher-scoped fixtures first, and
+    ``test_server_responses`` runs a real prediction from a module-scoped one, which a
+    function-scoped guard would not have cleared the environment in time for.
+    """
+    with pytest.MonkeyPatch.context() as ambient:
+        ambient.delenv("MOZO_ENABLE", raising=False)
+        yield
+
+
+@pytest.fixture(autouse=True)
+def whole_catalogue():
+    """Stop one test's ``MOZO_ENABLE`` from reaching the next.
+
+    The server reads the variable once per process and memoises it, so a test that sets one would
+    otherwise leave the memo behind for everything that ran afterwards. A finalizer rather than a
+    setup step, because it runs after a failing test as well as a passing one -- which is the case
+    that would otherwise poison the rest of the session.
+    """
+    yield
+    _forget_deployment()
+
+
+@pytest.fixture
+def deploy(monkeypatch):
+    """Narrow the server to a ``MOZO_ENABLE`` spec, and hand back what it then offers."""
+    def narrow(spec: str) -> dict[str, tuple[str, ...]]:
+        from mozo.server import _deployed
+
+        monkeypatch.setenv("MOZO_ENABLE", spec)
+        _forget_deployment()
+        return _deployed()
+
+    return narrow
+
+
 #: One step of PixelFlow's coordinate rounding, which is the most a boundary can move an edge by
 #: after two faithful runtimes have both been through it.
 #:
