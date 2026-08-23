@@ -368,6 +368,7 @@ download, and its licence and a NOTICE naming the exact upstream release are pub
 
 | Variable | Meaning |
 |---|---|
+| `MOZO_ENABLE` | Which models this server offers, comma-separated. A family (`clip`) or one variant (`clip/base`); mix freely. Unset offers everything. An allow-list, so an upgrade that adds a family does not start serving it unasked. A name that matches nothing is logged and ignored, never fatal — it can only subtract. |
 | `MOZO_CACHE` | Where downloads live. Default `~/.cache/mozo`. |
 | `MOZO_BASE_URL` | Serve artifacts from a mirror instead of the manifest's. A `file://` URL pointing at a `weights/` tree works, which is how an air-gapped host can be fed from removable media. |
 | `MOZO_OFFLINE` | Set to `1` to refuse downloads. A missing file raises an error naming the exact path, URL and hash, so it can be placed by hand. |
@@ -390,8 +391,9 @@ things about it are yours to arrange:
   3.4 GB, not one. Prefer one worker unless you have measured otherwise.
 - **There is no authentication and no rate limiting**, and the default bind is `0.0.0.0`. Put it
   behind something before it faces a network you do not control.
-- **Nothing is evicted**, so a process asked for every family will eventually hold every family.
-  Decide what an instance serves rather than letting callers decide for it.
+- **Nothing is evicted**, so a process asked for every family will eventually hold every
+  family. Decide what an instance serves rather than letting callers decide for it —
+  `MOZO_ENABLE` is how, and it is also how the licence question below is answered.
 
 ## What mozo does not do
 
@@ -447,4 +449,19 @@ naming the exact upstream release are published beside every checkpoint.
 **YOLO weights are AGPL-3.0**, or covered by a commercial licence from Ultralytics.
 And serving predictions from them over a network places  AGPL-3.0 section 13 obligations on you.
 
-Complying with either is the operator's responsibility.
+Complying with either is the operator's responsibility. `MOZO_ENABLE` is how an instance declines
+to take it on — a server that never offers a model never fetches or serves its weights:
+
+```bash
+MOZO_ENABLE=clip,easyocr,edgetam,grounding_dino,owlv2,rfdetr,sam2,siglip2,\
+depth_anything_v2/small,depth_anything_v2/indoor-small,depth_anything_v2/indoor-base,\
+depth_anything_v2/indoor-large,depth_anything_v2/outdoor-small,\
+depth_anything_v2/outdoor-base,depth_anything_v2/outdoor-large
+```
+
+That is the 40 Apache-2.0 and MIT variants, and it stays 40 through an upgrade that adds
+families — which a list of what to *exclude* would not. Depth Anything is named variant by variant
+because it is the one family whose licence is not uniform: seven of its nine are Apache-2.0 and
+two are CC-BY-NC-4.0.
+
+Nothing here relicenses anything. It only decides what one deployment hands out.
