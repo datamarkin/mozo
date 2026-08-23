@@ -601,15 +601,13 @@ canvas.picking { cursor: crosshair; }
    unnamed detection reads `class_name: null`, not a guess.
 
    That is also why the renderer switches on which fields are present rather
-   than on task type. pixelflow already normalised eleven families to one
+   than on task type. pixelflow already normalised thirteen families to one
    record shape; asking "does this have segments?" is both simpler than a
    six-way branch and correct for a family that does not exist yet.
 --------------------------------------------------------------------------- */
 
-const PROMPTED = new Set(["open_vocabulary_detection", "concept_segmentation"]);
-
 const state = {
-  catalogue: {},        // family -> {task_type, description, variants}
+  catalogue: {},        // family -> {task_type, description, variants, prompted, encodes}
   image: null,          // HTMLImageElement currently on the stage
   file: null,           // File to POST, or null when the example is in use
   detections: [],       // pixelflow records, verbatim
@@ -679,9 +677,9 @@ function onFamily() {
 
   const task = entry.task_type;
   const promptable = task === "promptable_segmentation";
-  show("group-threshold", task === "object_detection" || PROMPTED.has(task));
+  show("group-threshold", task === "object_detection" || entry.prompted);
   show("group-labels", task === "object_detection");
-  show("group-text", PROMPTED.has(task));
+  show("group-text", entry.prompted);
   show("group-prompt", promptable);
   show("group-name", promptable);
   show("group-multimask", promptable);
@@ -698,6 +696,9 @@ function onFamily() {
 
 const show = (id, on) => $(id).classList.toggle("on", on);
 const task = () => state.catalogue[$("family").value]?.task_type;
+// Served by /models rather than listed here: which tasks want ?text= is the
+// registry's to say, and a copy kept in step by hand is a copy that drifts.
+const prompted = () => state.catalogue[$("family").value]?.prompted;
 
 /* --- Image --------------------------------------------------------------- */
 
@@ -744,7 +745,7 @@ async function run() {
     const labels = $("labels").value.trim();
     if (labels) params.set("labels", labels);
   }
-  if (PROMPTED.has(current)) {
+  if (prompted()) {
     if (!state.texts.length) {
       showStatus("failed", "This model needs a concept",
         `${family} looks for what you name. Type one above and press enter.`);
