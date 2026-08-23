@@ -1,0 +1,304 @@
+# Publish mozo to PyPI when a version tag is pushed.
+#
+# Pushing v<version> is the whole release gesture. There is deliberately no manual trigger: the
+# tag is what every guard below checks against, so a run without one could publish anything.
+#
+# Credentials are PyPI Trusted Publishing (OIDC) -- there is no API token anywhere in this repo
+# or in its secrets. PyPI is configured to trust this repository, this filename, and the `pypi`
+# environment named on the publish job; renaming any of the three breaks the handshake.
+name: Publish
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+# Read-only by default. The two jobs that need more say so themselves, and only for themselves.
+permissions:
+  contents: read
+
+# A tag is published once. Two runs of the same one racing each other can only end with one of
+# them failing at the upload, so let the newer one win outright.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Read the version the way setuptools does -- statically, off the syntax tree. Importing
+      # mozo would drag torch in for a string this job can get without it.
+      - name: Read the declared version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(python - <<'PY'
+          import ast
+          import pathlib
+          import sys
+
+          source = pathlib.Path("mozo/__init__.py").read_text()
+          for node in ast.parse(source).body:
+              targets = getattr(node, "targets", [])
+              if isinstance(node, ast.Assign) and any(
+                  getattr(t, "id", "") == "__version__" for t in targets
+              ):
+                  print(node.value.value)
+                  break
+          else:
+              sys.exit("no literal __version__ assignment in mozo/__init__.py")
+          PY
+          )
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "mozo.__version__ is $version"
+
+      # The tag and the package must agree. Without this, tagging v0.6.0 while __init__.py still
+      # says 0.5.0 publishes 0.5.0 -- or fails at the upload, having already looked like a release.
+      - name: Check the tag matches the declared version
+        env:
+          DECLARED: ${{ steps.version.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "${TAG#v}" != "$DECLARED" ]; then
+            echo "::error::Tag $TAG does not match mozo.__version__ ($DECLARED). Bump mozo/__init__.py, or delete the tag and retag as v$DECLARED."
+            exit 1
+          fi
+          echo "$TAG matches mozo.__version__."
+
+      # PyPI never accepts a second upload of a version, not even an identical one. Finding that
+      # out here costs seconds; finding it out at the upload step costs the whole build first.
+      - name: Check the version is not already on PyPI
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["VERSION"]
+          try:
+              with urllib.request.urlopen("https://pypi.org/pypi/mozo/json", timeout=30) as response:
+                  releases = json.load(response)["releases"]
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  print("mozo is not on PyPI yet; this tag would be the first release.")
+                  sys.exit(0)
+              raise
+          if version in releases:
+              sys.exit(
+                  f"::error::mozo {version} is already on PyPI, and PyPI does not accept a "
+                  f"re-upload of a version. Bump mozo/__init__.py and tag the new version."
+              )
+          print(f"mozo {version} is not taken.")
+          PY
+
+      - name: Build the wheel and the sdist
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      # Does the metadata render on PyPI, and would the readme be rejected? --strict fails on the
+      # warnings, because a warning here becomes a broken project page that cannot be re-uploaded.
+      - name: Check the metadata
+        run: python -m twine check --strict dist/*
+
+      # Does every run-time file the package reads actually ship? See tools/check_dist.py.
+      - name: Check the payload
+        run: python tools/check_dist.py dist --expect-version "${{ steps.version.outputs.version }}"
+
+      - name: List what was built
+        run: ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The ends of the supported range. requires-python claims 3.9, which nothing here has
+        # ever verified; add it once torch resolves on it.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Torch first, from the CPU index. The default PyPI wheel drags a few gigabytes of CUDA
+      # runtime onto a runner that has no GPU to use it with.
+      #
+      # Every extra, including coreml -- which is macOS-only to *use*, but publishes manylinux
+      # wheels and installs here. Three tests in tests/test_runtimes.py assert what ``auto``
+      # picks, and what it picks depends on which runtimes are importable; with a runtime absent
+      # they fail rather than skip.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e ".[test,onnx,coreml]" pytest
+
+      # No weights, and no network to fetch them with: MOZO_OFFLINE turns a download into an
+      # error rather than a ten-minute wait, and a cache directory that does not exist yet keeps
+      # the run honest about what it is actually testing.
+      #
+      # tests/families and the two weight-backed response suites need real checkpoints -- gigabytes
+      # of them -- so they are not a release gate. They run against the local weights tree instead.
+      - name: Test
+        env:
+          MOZO_OFFLINE: "1"
+          MOZO_CACHE: ${{ runner.temp }}/mozo-cache
+        run: |
+          python -m pytest tests/ -q \
+            --ignore=tests/families \
+            --deselect tests/test_server_responses.py::TestDepthResponse \
+            --deselect tests/test_server_responses.py::TestDetectionResponse
+
+  install:
+    name: Install the built ${{ matrix.dist }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dist: [wheel, sdist]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # From an empty directory, so the import resolves to the installed package and not to a
+      # mozo/ source tree sitting in the working directory. That distinction is the entire test:
+      # the source tree always has its data files, and the question is whether the artifact does.
+      - name: Install and import
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.dist }}" = "wheel" ]; then
+            target=$(ls dist/*.whl)
+          else
+            target=$(ls dist/*.tar.gz)
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "$target"
+          mkdir -p "${{ runner.temp }}/elsewhere"
+          cd "${{ runner.temp }}/elsewhere"
+          python - <<'PY'
+          import importlib.resources
+
+          import mozo
+
+          print("imported mozo", mozo.__version__)
+
+          # The two files the package reads off its own installed tree. A wheel that imports but
+          # cannot find these is a wheel that fails on the first request instead of the first line.
+          for package, name in [("mozo", "manifest.json"), ("mozo.static", "test_ui.html")]:
+              resource = importlib.resources.files(package) / name
+              assert resource.is_file(), f"{package}/{name} is missing from the installed package"
+              print("found", package, name, resource.stat().st_size, "bytes")
+
+          print(len(mozo.MODEL_REGISTRY), "families in the registry")
+          PY
+          mozo --help
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, test, install]
+    runs-on: ubuntu-latest
+    # Named on the PyPI trusted publisher. The handshake fails without it, and the environment is
+    # also where a protection rule -- a required reviewer, a tag restriction -- would be attached.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mozo
+    permissions:
+      # Mints the OIDC token PyPI exchanges for an upload credential. Nothing else needs it, and
+      # this is the only job that has it.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    name: Cut the GitHub release
+    # publish for the ordering, build for its version output.
+    needs: [publish, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # RELEASE_NOTES.md is cumulative, newest first, one `# Mozo vX.Y.Z: Title` heading per
+      # version. Take this version's section; fall back to generated notes if it has none.
+      - name: Extract this version's notes
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["VERSION"]
+          notes = pathlib.Path("RELEASE_NOTES.md")
+          section = ""
+          if notes.exists():
+              match = re.search(
+                  rf"^# Mozo v{re.escape(version)}\b.*?(?=^# Mozo v|\Z)",
+                  notes.read_text(),
+                  re.MULTILINE | re.DOTALL,
+              )
+              section = match.group(0).strip() if match else ""
+              # Sections are separated by a horizontal rule; it is a separator, not content.
+              section = re.sub(r"\n+-{3,}$", "", section).strip()
+          pathlib.Path("release-notes.md").write_text(section)
+          print(f"{len(section)} characters of notes for {version}")
+          PY
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -s release-notes.md ]; then
+            notes=(--notes-file release-notes.md)
+          else
+            echo "::warning::RELEASE_NOTES.md has no section for $TAG; generating notes from commits."
+            notes=(--generate-notes)
+          fi
+          gh release create "$TAG" dist/* --verify-tag --title "$TAG" "${notes[@]}"
