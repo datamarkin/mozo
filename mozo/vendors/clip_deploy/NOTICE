@@ -1,0 +1,35 @@
+clip_deploy
+Copyright (c) 2021 OpenAI
+
+This product includes software developed by OpenAI, published as CLIP
+(https://github.com/openai/CLIP) and described in "Learning Transferable Visual
+Models From Natural Language Supervision" (Radford, Kim, Hallacy, Ramesh, Goh,
+Agarwal, Sastry, Askell, Mishkin, Clark, Krueger, Sutskever; ICML 2021,
+arXiv:2103.00020).
+
+The modules here are extracted from that repository, which is licensed under the
+MIT License; see the LICENSE file in this directory, which is byte-identical to
+the one published there.
+
+ON THE WEIGHTS
+--------------
+The published checkpoints are MIT. The repository ships one LICENSE and no
+separate weights licence, so the checkpoints are covered by it -- an inference
+from silence, and recorded as one here rather than presented as a statement the
+authors made. Nothing on openaipublic.azureedge.net, where the checkpoints are
+served, states terms of its own.
+
+THE VOCABULARY
+--------------
+assets/bpe_simple_vocab_16e6.txt.gz is OpenAI's byte-pair vocabulary, published
+with CLIP and unmodified (sha256 924691ac288e54409236115652ad4aa250f48203de50a9e
+4722a6ecd48d6804a, 1,356,917 bytes). It is byte-identical to the copies carried
+by mozo.vendors.owlv2_deploy and mozo.vendors.sam3_deploy: a vendored package may
+not import another, so this is a third copy of one file rather than a shared
+asset.
+
+NOT INCLUDED
+------------
+The five ResNet image towers (RN50, RN101, RN50x4, RN50x16, RN50x64), the
+contrastive training loss, the TorchScript execution path, and the tokenizer's
+silent truncation. See PROVENANCE.md for the full list and for why.
