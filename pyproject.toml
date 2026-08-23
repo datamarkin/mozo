@@ -80,32 +80,18 @@ version = { attr = "mozo.__version__" }
 # return errors without them (they were missing from the 0.4.0 wheel).
 [tool.setuptools.package-data]
 mozo = ["static/*", "manifest.json"]
-# Vendored architectures carry data files their code reads at build time
+
+# Every vendored extraction is redistributed under its own terms, so its licence, its NOTICE and
+# its provenance travel in the wheel with it -- the same rule the weights follow. Any asset its
+# code reads at import or construction time ships too: a tokenizer that needs a network round trip
+# before it can encode a prompt is not a tokenizer that works offline.
+#
+# One rule over every package rather than one line per family, and that is the whole point. This
+# was a hand-written list of eight entries and it had gone stale for five of the fourteen families
+# -- siglip2 and all four YOLOs shipped their code with none of their terms, which is precisely
+# the failure two of the entries were added late to fix. A list that must be extended by hand for
+# each new family will be forgotten again; a rule that applies to all of them cannot be.
+"*" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*"]
+
+# Data a package's code reads that is not covered by the convention above.
 "mozo.vendors.rfdetr_deploy.models.backbone" = ["dinov2_configs/*.json"]
-# The vendored code is redistributed under its own terms, so its licence and provenance travel
-# in the wheel with it -- the same rule the weights follow.
-"mozo.vendors.rfdetr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
-"mozo.vendors.depth_anything_v2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
-# SAM 3's tokenizer reads CLIP's byte-pair vocabulary at construction. It is OpenAI's file
-# (MIT), byte-identical to the one openai/CLIP publishes, so it ships in the wheel rather than
-# being downloaded -- a prompt should not need a network round trip to tokenize.
-"mozo.vendors.sam3_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
-# OWLv2 tokenizes prompts through the same CLIP vocabulary, and carries its own copy of it:
-# a vendored package may not import another, and a shared asset would be that by another name.
-"mozo.vendors.owlv2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
-# Grounding DINO tokenizes prompts with BERT's WordPiece rather than CLIP's byte-pair encoder,
-# so it carries its own vocabulary -- Google's `bert-base-uncased` vocab.txt, 30,522 entries,
-# Apache-2.0. Upstream downloads it through `transformers` on first use; shipping it is what
-# makes tokenizing a prompt need no network and no `transformers` install.
-"mozo.vendors.grounding_dino_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
-# CLIP carries the same byte-pair vocabulary SAM 3 and OWLv2 do, for the same reason: a
-# vendored package may not import another, so each keeps its own copy of OpenAI's file.
-"mozo.vendors.clip_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
-# EasyOCR reads its alphabet from a text file per variant. The Chinese one is 6,718
-# characters; a literal that size is not something anyone can read past, and the alphabet is
-# part of the model definition rather than of the weights, so it ships here.
-"mozo.vendors.easyocr_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.txt"]
-# Shipped late: both of these carried their attribution only in the repository, so an
-# install had the code without the terms it is redistributed under.
-"mozo.vendors.sam2_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
-"mozo.vendors.edgetam_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md"]
