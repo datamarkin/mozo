@@ -31,6 +31,7 @@ __all__ = [
     "companions",
     "framework_of",
     "manifest",
+    "published",
     "part_of",
     "parts",
     "resolve",
@@ -296,6 +297,22 @@ def revision_of(family: str, variant: str, *, revision: str | None = None) -> st
     """
     name, _ = _lookup(family, variant, revision)
     return name
+
+
+def published(family: str, variant: str, *, revision: str | None = None) -> list[str]:
+    """The artifact keys *variant* publishes, or ``[]`` if it publishes nothing at all.
+
+    The membership question :func:`artifacts` answers by raising. Lives here because this module
+    owns the manifest's layout -- the same reason :func:`companions` does -- and because three
+    callers were each spelling it out: the server's catalogue, the test fixtures, and a bench tool.
+
+    This is "is it published", not "are the bytes here". Obtaining them can still fail, which is
+    why a caller that goes on to build a predictor catches :class:`WeightsError` too.
+    """
+    try:
+        return artifacts(family, variant, revision=revision)
+    except NotPublished:
+        return []
 
 
 def artifacts(family: str, variant: str, *, revision: str | None = None) -> list[str]:
