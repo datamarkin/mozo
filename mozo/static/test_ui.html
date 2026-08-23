@@ -519,11 +519,6 @@ canvas.picking { cursor: crosshair; }
         <input type="number" id="threshold" step="0.05" min="0" max="1" placeholder="family default">
       </div>
 
-      <div class="field group" id="group-labels">
-        <label for="labels">Class names</label>
-        <input type="text" id="labels" placeholder="comma separated, optional">
-      </div>
-
       <div class="field group" id="group-text">
         <label for="text-entry">Concepts to find</label>
         <input type="text" id="text-entry" placeholder="type one, press enter">
@@ -677,8 +672,10 @@ function onFamily() {
 
   const task = entry.task_type;
   const promptable = task === "promptable_segmentation";
-  show("group-threshold", task === "object_detection" || entry.prompted);
-  show("group-labels", task === "object_detection");
+  // A floor is the point for a detector, and wrong for a classifier: dropping a phrase below
+  // it drops a class, and a classifier that drops a class has not classified.
+  show("group-threshold",
+       (task === "object_detection" || entry.prompted) && task !== "zero_shot_classification");
   show("group-text", entry.prompted);
   show("group-prompt", promptable);
   show("group-name", promptable);
@@ -740,10 +737,6 @@ async function run() {
   const threshold = $("threshold").value.trim();
   if (threshold !== "" && $("group-threshold").classList.contains("on")) {
     params.set("threshold", threshold);
-  }
-  if (current === "object_detection") {
-    const labels = $("labels").value.trim();
-    if (labels) params.set("labels", labels);
   }
   if (prompted()) {
     if (!state.texts.length) {
