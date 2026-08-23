@@ -19,7 +19,7 @@ os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import cv2
 import numpy as np
@@ -123,6 +123,60 @@ def _deployed() -> dict[str, tuple[str, ...]]:
     return deployed
 
 
+def _undeployed(name: str, exists: bool, available: list[str]) -> HTTPException:
+    """The 404 for a model this server does not serve, worded for whose problem it is.
+
+    Args:
+        name: What was asked for, as ``family`` or ``family/variant``.
+        exists: Whether mozo publishes it at all. A name that does not exist is a typo in the
+            request; one that does is a decision in ``MOZO_ENABLE``, and the two want different
+            fixes. Saying which saves an operator hunting for a mistake they did not make.
+        available: What this server does serve, at the level *name* was refused on.
+
+    Returns:
+        The exception to raise.
+
+    Note:
+        *available* comes from the deployment, never from the registry. The registry's own
+        messages list the whole catalogue, which on a server narrowed for licence reasons would
+        answer every typo with a menu of the models it was configured to decline -- closing the
+        catalogue at ``/models`` and reopening it here.
+    """
+    reason = ("is not deployed on this server; MOZO_ENABLE selects what is"
+              if exists else "is not a model mozo publishes")
+    return HTTPException(status_code=404, detail=f"'{name}' {reason}. Served here: {available}.")
+
+
+def _catalogue_entry(family: str, variant: str) -> dict[str, Any]:
+    """One model's registry entry, refused as 404 unless this deployment offers it.
+
+    Both running endpoints begin here, and it is deliberately the first thing either does: the
+    answer needs no adapter import, no torch, no weights and no image decode, so an unknown or
+    undeployed name costs nothing.
+
+    Answered against the deployment rather than through
+    :func:`~mozo.registry.get_model_info`, because a name this server does not offer is refused
+    either way and only one of the two can say so without naming what it declined to serve.
+
+    Args:
+        family: Model family, e.g. ``"rfdetr"``.
+        variant: The variant asked for.
+
+    Returns:
+        The family's entry from :data:`~mozo.registry.MODEL_REGISTRY`.
+
+    Raises:
+        HTTPException: 404 -- see :func:`_undeployed`.
+    """
+    deployed = _deployed()
+    offered = deployed.get(family)
+    if offered is None:
+        raise _undeployed(family, family in MODEL_REGISTRY, sorted(deployed))
+    # An empty tuple is the registry's "any variant", not "no variants" -- see _deployed.
+    if offered and variant not in offered:
+        raise _undeployed(f"{family}/{variant}",
+                          variant in MODEL_REGISTRY[family]["variants"], list(offered))
+    return MODEL_REGISTRY[family]
 
 
 @app.get("/", summary="Health check")
@@ -288,15 +342,11 @@ def predict(
     Returns:
         Detections as JSON, or a depth map as a 16-bit PNG -- see :func:`_depth_response`.
     """
-    # Whether a model exists is answerable from the registry alone -- no adapter import, no
-    # torch, no weights, no image decode. Answering it first makes an unknown name free, and
-    # keeps it from being confused with a model that exists and failed to load. The registry
-    # raises with the available names, so its message is the answer rather than a second copy
-    # of one.
-    try:
-        task = get_model_info(family, variant)["task_type"]
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    # Whether a model exists, and whether this deployment offers it, are both answerable from the
+    # registry alone -- no adapter import, no torch, no weights, no image decode. Answering them
+    # first makes an unknown name free, and keeps it from being confused with a model that exists
+    # and failed to load.
+    task = _catalogue_entry(family, variant)["task_type"]
 
     # Settled here rather than beside the call: nothing about it needs the image or the model,
     # and asking first is what keeps a forgotten parameter from costing a decode and a
@@ -419,19 +469,20 @@ def encode(
         vector is only comparable against others from the same weights, so a stored index is tied
         to them. Recording which is what makes an index re-embeddable later.
     """
-    # Answered from the registry, so an unknown or non-embedding family costs no image decode and
-    # no download. /predict can afford its 501 at the bottom because every registered task has an
-    # arm there; here the reverse holds, and a late refusal would download a checkpoint to say no.
-    try:
-        get_model_info(family, variant)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    # Answered from the registry, so an unknown, undeployed or non-embedding family costs no image
+    # decode and no download. /predict can afford its 501 at the bottom because every registered
+    # task has an arm there; here the reverse holds, and a late refusal would download a
+    # checkpoint to say no.
+    _catalogue_entry(family, variant)
 
     kinds = ENCODES.get(family)
     if kinds is None:
+        # Named from the deployment, for the same reason _undeployed is: a server narrowed on
+        # licence grounds should not answer a wrong turn by listing what it declined to serve.
+        embedding = sorted(f for f in _deployed() if f in ENCODES)
         raise HTTPException(
             status_code=501,
-            detail=f"{family} does not produce embeddings. Families that do: {sorted(ENCODES)}.")
+            detail=f"{family} does not produce embeddings. Served here that do: {embedding}.")
 
     # FastAPI can require a parameter but not "exactly one of these two", so this is the one check
     # the route has to make itself.
@@ -475,22 +526,26 @@ def encode(
 
 # --- Discovery ---
 
-@app.get("/models", summary="List every model")
+@app.get("/models", summary="List the models this server offers")
 def list_models():
-    """Every family and its variants.
+    """Every family and variant this server offers.
 
-    Answered from the registry, so it costs no imports and no weights. This is the whole
-    catalogue: a per-family or per-variant endpoint would only be this response, filtered.
+    Answered from the registry, so it costs no imports and no weights. Everything mozo publishes
+    unless ``MOZO_ENABLE`` narrows it -- see :func:`_deployed`. It is what is *deployed*, not what
+    exists, because the alternative is a catalogue advertising models whose every call 404s; the
+    browser page reads this endpoint and cannot import the registry, so this is also what stops it
+    offering a button that cannot work.
 
     Residency is not mixed in. It belongs to ``/models/loaded``, and reporting it here would
     mean taking a model id apart to recover the variant -- which puts the id format in a second
     module, where it can drift from the one that composes it.
     """
+    deployed = _deployed()
     return {
         family: {
             "task_type": entry["task_type"],
             "description": entry["description"],
-            "variants": entry["variants"],
+            "variants": list(deployed[family]),
             # The two capability flags a caller cannot infer from the task name alone. Served
             # rather than restated: the browser page needs both and cannot import the registry,
             # and a copy it keeps in step by hand is a copy that drifts.
@@ -499,7 +554,8 @@ def list_models():
             # way to discover the second route without calling it and reading a 501 back.
             "encodes": sorted(ENCODES.get(family, ())),
         }
-        for family, entry in MODEL_REGISTRY.items()
+        # Registry order, so narrowing removes entries without reshuffling the rest.
+        for family, entry in MODEL_REGISTRY.items() if family in deployed
     }
 
 
