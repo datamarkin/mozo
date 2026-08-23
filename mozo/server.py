@@ -409,9 +409,12 @@ def list_models():
             "task_type": entry["task_type"],
             "description": entry["description"],
             "variants": entry["variants"],
+            # The two capability flags a caller cannot infer from the task name alone. Served
+            # rather than restated: the browser page needs both and cannot import the registry,
+            # and a copy it keeps in step by hand is a copy that drifts.
+            "prompted": entry["task_type"] in PROMPTED,
             # What /encode will accept, if anything. Empty for almost every family, and the only
             # way to discover the second route without calling it and reading a 501 back.
-            # Served rather than restated: a caller cannot infer it from the task name.
             "encodes": sorted(ENCODES.get(family, ())),
         }
         for family, entry in MODEL_REGISTRY.items()
