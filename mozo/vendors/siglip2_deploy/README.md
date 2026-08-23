@@ -23,7 +23,8 @@ encoder.encode_text(["a forklift", "a person"])          # (2, 768), L2-normalis
 ```
 
 Five variants — `base-224`, `base-256`, `so400m-384`, `so400m16-256`, `giant-384` — the most-used
-five of the fifteen fixed-resolution models Google publishes, and 89% of all SigLIP 2 downloads.
+five of the fifteen fixed-resolution models Google publishes, and 89% of the downloads across
+those fifteen. See `PROVENANCE.md` for what the other ten are and why they are absent.
 Multilingual: the text tower carries Gemma's 256,000-piece vocabulary.
 
 Each tower builds on first use. An ingest job that only calls `encode_image` never allocates the
