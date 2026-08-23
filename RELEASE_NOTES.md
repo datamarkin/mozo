@@ -1,3 +1,119 @@
+# Mozo v0.7.0: Decide What You Serve
+
+## What's New in v0.7.0
+
+A server no longer has to offer everything mozo publishes. `MOZO_ENABLE` narrows a deployment to
+the models you choose, which matters because the weights are separate works with their own terms:
+of the 63 published variants, 20 are AGPL-3.0, 2 are CC-BY-NC-4.0 and 1 carries Meta's SAM
+License, and serving those over a network places obligations on you that serving the other 40
+does not.
+
+SigLIP 2 also stops advertising models it had no bytes for.
+
+### 🔒 `MOZO_ENABLE`
+
+One environment variable, alongside `MOZO_CACHE` and the rest. Name a family or a single variant,
+comma-separated, mix the two freely:
+
+```bash
+MOZO_ENABLE=clip,siglip2/base-224 mozo start
+```
+
+Unset offers everything, so nothing changes for anyone who does not set it.
+
+**An allow-list, not a deny-list.** The two fail in opposite directions across an upgrade. A
+deny-list naming today's AGPL families serves whatever lands tomorrow, silently and without
+asking; an allow-list serves nothing it was not told to, and the absence is visible. The failure
+you cannot see is the worse one.
+
+**A name that matches nothing warns rather than refusing to start.** That is safe only because it
+is an allow-list: an unrecognised token can only ever subtract, so `MOZO_ENABLE=siglip` yields a
+server missing SigLIP and never one serving something unsanctioned. A typo cannot produce the
+exposure this exists to prevent, so it does not warrant killing the process. One log line, and it
+always ends with what was actually deployed.
+
+**A refusal never names a model the server declined to offer.** The registry's own messages list
+every family and variant it knows, so forwarding them would close the catalogue at `/models` and
+reopen it at every typo — answering a wrong turn with a menu of exactly what you configured it to
+decline. Both refusals are composed from the deployment instead, and `/encode`'s 501 no longer
+lists every embedding family either. What is kept is the distinction between a name that does not
+exist and one this server does not deploy: they want different fixes, and one message covering
+both sends an operator hunting for a typo they did not make.
+
+**The refusal costs nothing.** It is the first thing `/predict` and `/encode` do — before the
+image decode, before the download — so a model excluded on licence grounds is never fetched, and
+its weights never reach the disk.
+
+**Server-side only.** `mozo.get_model()` is untouched. This says what is *deployed*, and
+importing a library is not a deployment.
+
+For a permissively licensed demo, the README now carries the line that offers the 40 Apache-2.0
+and MIT variants and nothing else. Depth Anything is named variant by variant because it is the
+one family whose licence is not uniform — seven of its nine are Apache-2.0 and two are
+CC-BY-NC-4.0 — which is why the variable takes `family/variant` at all.
+
+### 🔢 SigLIP 2 Carries Five Variants
+
+Google publishes fifteen fixed-resolution SigLIP 2 models. mozo registered all fifteen and
+shipped weights for three, so twelve of them answered a request with a 500 — a catalogue
+advertising models it had no bytes for.
+
+Now five are registered and five are published: `base-224`, `base-256`, `so400m-384`,
+`so400m16-256` and `giant-384`, which together took 89% of the downloads across those fifteen.
+The other ten are real models and this is not a judgement about them; each needs a `Spec` row, a
+registry entry and a checkpoint, and no new code at all.
+
+### 📊 Model Count
+
+**Total Models:** 63 variants across 14 model families
+**Growth:** +2 variants (SigLIP 2 3 → 5), no new families
+
+Of the 63, **36 are Apache-2.0**, 20 are AGPL-3.0 (every YOLO variant), 4 are MIT (CLIP), 2 are
+CC-BY-NC-4.0 (Depth Anything `base` and `large`), and 1 carries Meta's SAM License.
+
+### ✅ Verification
+
+**SigLIP 2: 160 comparisons across all five variants, every one bit-identical.** `torch.equal` at
+every stage — pixels, token ids, image features, text features, logits, sigmoid — with the CPU,
+eager attention, the reference's re-allocated parameters and `Siglip2Tokenizer` all pinned,
+because without those four it means nothing.
+
+**The deployment guard is shown to be falsifiable, not assumed.** Six perturbations, each failing
+at its own site and nowhere else: `/models` not filtering, the route guard not checking, an
+unknown name becoming fatal, the union becoming last-one-wins, the order coming from the variable
+rather than the registry, and a refusal listing the whole catalogue again.
+
+**The README's permissive deployment line is held to the published licence files.** An operator
+pastes it to decline obligations, so a variant slipping through is not a documentation bug. It is
+derived from the manifest rather than a written-out list of names: the licence of every variant
+is the sha256 of the LICENSE published beside its weights, and those hashes partition all 63 into
+exactly the seven groups the breakdown above describes. Keyed on content and not on names
+deliberately — a list of names only notices a non-permissive *family* being added, and mozo's
+exposure is per variant, as Depth Anything already proves.
+
+### 🔧 Infrastructure
+
+**A family can no longer register a variant the manifest does not publish.** That is what put
+twelve unreachable SigLIP 2 models in the catalogue, and the symptom was a 500 rather than a red
+test. Both directions are now guarded, along with the counts each family's own description states
+about itself.
+
+**CI runs on Python 3.10 and 3.12**, as a reusable workflow the publish pipeline calls rather than
+a second copy of the same steps.
+
+**The test page says which problem it is when a deployment offers nothing.** An empty catalogue is
+a state the server can legitimately reach, and the page walked into it — `Object.keys(models)[0]`
+undefined, the throw landing in `boot`'s catch as "Cannot reach the server". The one
+misconfiguration the design consciously chose to survive was the one the page misdiagnosed.
+
+### 📖 Documentation
+
+The README's model catalogue is restructured into per-family tables — every variant, what it
+returns, and what its weights are licensed under — and the licence section now says what to do
+about the terms rather than only stating them.
+
+---
+
 # Mozo v0.6.0: Neither Box Nor Map
 
 ## What's New in v0.6.0
