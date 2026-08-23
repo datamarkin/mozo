@@ -113,13 +113,18 @@ class TestCatalogue:
     """
 
     def test_every_family_carries_what_the_page_reads(self, client):
-        from mozo.registry import MODEL_REGISTRY
+        from mozo.registry import ENCODES, MODEL_REGISTRY, PROMPTED
 
         body = client.get("/models").json()
         assert set(body) == set(MODEL_REGISTRY)
         for family, info in body.items():
             assert info["task_type"] and info["description"]
             assert isinstance(info["variants"], list) and info["variants"]
+            # Empty for most families; the catalogue still has to carry the key, because a
+            # caller reading `if info["encodes"]` should not have to know which.
+            assert info["encodes"] == sorted(ENCODES.get(family, ()))
+            # The page switches its text box on this instead of keeping its own task list.
+            assert info["prompted"] == (info["task_type"] in PROMPTED)
 
     def test_the_catalogue_matches_the_registry(self, client):
         """It is a projection of the registry, so it must not drift from one."""
@@ -169,3 +174,25 @@ def test_every_registered_task_type_has_a_dispatch_arm():
         f"registered but not served: {sorted(registered - served)}. Add an arm to "
         f"mozo.server.predict, or the endpoint answers 501 for it."
     )
+
+
+def test_every_encoding_family_can_encode_what_it_advertises():
+    """``ENCODES`` is read before anything loads, which is the point of it -- but that also means
+    nothing checks it against the adapter until a caller has already paid for the download. A
+    family promising ``"image"`` whose adapter has no ``encode_image`` answers 500 after fetching
+    gigabytes, which is the one refusal that costs something.
+
+    The adapter class is imported, not instantiated: the method has to exist, not run.
+    """
+    import importlib
+
+    from mozo.registry import ENCODES, MODEL_REGISTRY
+
+    for family, kinds in ENCODES.items():
+        entry = MODEL_REGISTRY[family]
+        adapter = getattr(importlib.import_module(entry["module"]), entry["adapter_class"])
+        for kind in kinds:
+            assert callable(getattr(adapter, f"encode_{kind}", None)), (
+                f"ENCODES says {family} embeds {kind}, but "
+                f"{entry['adapter_class']}.encode_{kind} does not exist"
+            )
