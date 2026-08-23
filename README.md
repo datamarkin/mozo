@@ -7,10 +7,10 @@
 
 ### 61 computer vision models. One `pip install`. No dependency hell.
 
-Normally each of these models arrives with its own package — `ultralytics`, `transformers`,
-`easyocr`, `sam2`, `rfdetr` — and each pins torch, numpy and OpenCV to something slightly
-different. Put a few in one environment and something breaks. The usual escape is a container
-per model, and paying for that forever.
+Normally each of these models arrives with its own package, and each package brings its own
+dependencies — torch, numpy and OpenCV, every one pinned to something slightly different. Put a
+few in one environment and something breaks. The usual escape is a container per model, and
+paying for that forever.
 
 Mozo ships none of them. Every model's inference path is vendored into mozo itself and verified
 **bit-identical** to the original implementation — so one environment runs all 61, and gives
@@ -76,7 +76,7 @@ never allocates the text half.
 | `sam2` | `tiny` `small` `base_plus` `large` | Apache-2.0 | points, box, or both |
 | `edgetam` | `edgetam` | Apache-2.0 | points, box, or both |
 
-Returns one mask or three, each with an IoU estimate.
+Returns detections, one row per mask.
 
 ### Text recognition
 
@@ -86,7 +86,7 @@ Returns one mask or three, each with an IoU estimate.
 
 A variant is a script, not a language: `latin` alone covers 41 languages.
 
-Returns reads: `text`, a quadrilateral and a confidence.
+Returns detections, one row per line.
 
 ### Depth
 
@@ -96,7 +96,7 @@ Returns reads: `text`, a quadrilateral and a confidence.
 | | `base` `large` | **CC-BY-NC-4.0** | relative, unitless |
 | | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** |
 
-Returns an `HxW` float32 map; only the unit differs.
+Returns an `HxW` float32 map.
 
 Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
 distance. `model.unit` says which, and is `None` rather than a guess.
