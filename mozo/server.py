@@ -28,7 +28,7 @@ from . import __version__
 from .image import load_image
 from .manager import ModelManager
 from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
-from .weights import NotPublished, WeightsError, artifacts
+from .weights import NotPublished, published
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -411,14 +411,6 @@ def encode(
 
 # --- Discovery ---
 
-def _published(family: str, variant: str) -> bool:
-    """Whether mozo ships weights for *variant*, answered from the bundled manifest."""
-    try:
-        artifacts(family, variant)
-    except WeightsError:
-        return False
-    return True
-
 @app.get("/models", summary="List every model")
 def list_models():
     """Every family and its variants.
@@ -440,7 +432,7 @@ def list_models():
             # runs against a checkpoint you supply -- and a catalogue that does not say so sends
             # every caller to a 404 to find out. Read off the manifest that ships in the wheel, so
             # this still costs no network and no weights.
-            "published": [v for v in entry["variants"] if _published(family, v)],
+            "published": [v for v in entry["variants"] if published(family, v)],
             # The two capability flags a caller cannot infer from the task name alone. Served
             # rather than restated: the browser page needs both and cannot import the registry,
             # and a copy it keeps in step by hand is a copy that drifts.

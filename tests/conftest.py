@@ -32,16 +32,17 @@ TEXT_FIXTURES = ROOT / "tests" / "fixtures" / "text"
 def published(family: str, variant: str) -> list[str]:
     """The artifact keys *variant* publishes, or ``[]`` if it publishes nothing at all.
 
-    Answered from the manifest, which ships in the wheel -- so no network and no cache. This is
-    "is it published", not "are the bytes here": obtaining the bytes can still fail, which is
-    why fixtures that build a predictor also catch :class:`WeightsError`.
-    """
-    from mozo.weights import WeightsError, artifacts
+    A thin alias for :func:`mozo.weights.published`, kept so the fixtures read in one vocabulary.
+    The predicate itself lives in ``mozo`` because that is where the manifest's layout is known,
+    and because the server needs the same answer -- a second copy here would be a second thing to
+    keep true.
 
-    try:
-        return artifacts(family, variant)
-    except WeightsError:
-        return []
+    This is "is it published", not "are the bytes here": obtaining them can still fail, which is
+    why fixtures that build a predictor also catch :class:`~mozo.weights.WeightsError`.
+    """
+    from mozo.weights import published as _published
+
+    return _published(family, variant)
 
 
 def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> None:
