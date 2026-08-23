@@ -26,6 +26,84 @@ anything.
 
 Serve  from one install, in one process, behind one API.
 
+## Model Catalog
+
+### Object detection
+
+| Family | Variants | Weights licence | Runtimes |
+|---|---|---|---|
+| `rfdetr` | `nano` `small` `medium` `large` `seg-` of each | Apache-2.0 | torch, onnx, coreml |
+| `yolov8` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml |
+| `yolov11` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx |
+| `yolov12` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml |
+| `yolov26` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx |
+
+Returns detections.
+
+### Text-prompted
+
+| Family | Variants | Weights licence | Prompt |
+|---|---|---|---|
+| `grounding_dino` | `tiny` `base` | Apache-2.0 | descriptions, ≤256 tokens total |
+| `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens |
+| `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens |
+
+Returns detections.
+
+### Zero-shot classification and embeddings
+
+Name your classes in words and each is scored against the image. The same model will also hand
+back the vectors it works from, which is what makes a corpus embedded once searchable by words
+afterwards — through a vector database of your own.
+
+| Family | Variants | Weights licence | Prompt | Output |
+|---|---|---|---|---|
+| `clip` | `base` `base-16` `large` `large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
+| `siglip2` | `base-224` `so400m-384` `giant-384` and twelve more | Apache-2.0 | phrases, ≤64 tokens each | a probability per phrase, or 768/1152/1536-d vectors |
+
+Scores are **cosine similarities, not probabilities**: not softmaxed, they do not sum to one, and
+they may be negative. Nothing is filtered out — every phrase comes back scored, because a
+classifier that drops a class has not classified.
+
+The only family with a second route. `POST /encode/clip/base` returns the embeddings instead of an
+answer, for images or for phrases; the towers load independently, so a job that only encodes images
+never allocates the text half.
+
+### Promptable segmentation
+
+| Family | Variants | Weights licence | Prompt |
+|---|---|---|---|
+| `sam2` | `tiny` `small` `base_plus` `large` | Apache-2.0 | points, box, or both |
+| `edgetam` | `edgetam` | Apache-2.0 | points, box, or both |
+
+Returns one mask or three, each with an IoU estimate.
+
+### Text recognition
+
+| Family | Variants (scripts) | Weights licence |
+|---|---|---|
+| `easyocr` | `english` `latin` `chinese-simplified` `japanese` `korean` | Apache-2.0 |
+
+A variant is a script, not a language: `latin` alone covers 41 languages.
+
+Returns reads: `text`, a quadrilateral and a confidence.
+
+### Depth
+
+| Family | Variants | Weights licence | Unit |
+|---|---|---|---|
+| `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless |
+| | `base` `large` | **CC-BY-NC-4.0** | relative, unitless |
+| | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** |
+
+Returns an `HxW` float32 map; only the unit differs.
+
+Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
+distance. `model.unit` says which, and is `None` rather than a guess.
+
+How each family behaves and why — OWLv2 suppressing nothing, the encoder cache, EasyOCR's line
+ordering, prompt semantics — is in [docs/models.md](docs/models.md).
+
 ## Install
 
 ```bash
@@ -144,78 +222,6 @@ and recorded in
 
 Because the extraction *is* the implementation rather than a wrapper around one, none of this
 costs anything at run time: EasyOCR runs within 1% of the published package on the same weights.
-
-## Models
-
-### Object detection
-
-| Family | Variants | Weights | Runtimes | Output |
-|---|--|---|---|---|
-| `rfdetr` | `nano`<br>`small`<br>`medium`<br>`large`<br>`seg-` | Apache-2.0 | torch, onnx, coreml | boxes, masks, class names |
-| `yolov8` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
-| `yolov11` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx | boxes, class names |
-| `yolov12` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx, coreml | boxes, class names |
-| `yolov26` | `nano`<br>`small`<br>`medium`<br>`large`<br>`xlarge` | **AGPL-3.0** | torch, onnx | boxes, class names |
-
-### Text-prompted
-
-Name a thing in words. No class list, no fine-tuning, no vocabulary agreed in advance.
-
-| Family | Variants | Weights | Prompt | Output |
-|---|---|---|---|---|
-| `grounding_dino` | `tiny`<br>`base` | Apache-2.0 | descriptions, ≤256 tokens total | boxes, no NMS |
-| `owlv2` | `base`<br>`base-ensemble`<br>`large`<br>`large-ensemble` | Apache-2.0 | phrases, ≤16 tokens | boxes, no NMS |
-| `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens | masks, boxes |
-
-### Zero-shot classification and embeddings
-
-Name your classes in words and each is scored against the image. The same model will also hand
-back the vectors it works from, which is what makes a corpus embedded once searchable by words
-afterwards — through a vector database of your own.
-
-| Family | Variants | Weights | Prompt | Output |
-|---|---|---|---|---|
-| `clip` | `base`<br>`base-16`<br>`large`<br>`large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
-| `siglip2` | `base-224`<br>`so400m-384`<br>`giant-384`<br>and twelve more | Apache-2.0 | phrases, ≤64 tokens each | a probability per phrase, or 768/1152/1536-d vectors |
-
-Scores are **cosine similarities, not probabilities**: not softmaxed, they do not sum to one, and
-they may be negative. Nothing is filtered out — every phrase comes back scored, because a
-classifier that drops a class has not classified.
-
-The only family with a second route. `POST /encode/clip/base` returns the embeddings instead of an
-answer, for images or for phrases; the towers load independently, so a job that only encodes images
-never allocates the text half.
-
-### Promptable segmentation
-
-Point at something, get back the thing you pointed at.
-
-| Family | Variants | Weights | Prompt | Output |
-|---|---|---|---|---|
-| `sam2` | `tiny`<br>`small`<br>`base_plus`<br>`large` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
-| `edgetam` | `edgetam` | Apache-2.0 | points, box, or both | 1 or 3 masks + IoU, `class_name: null` |
-
-### Text recognition
-
-| Family | Variants (scripts) | Weights | Output |
-|---|---|---|---|
-| `easyocr` | `english`<br>`latin`<br>`chinese-simplified`<br>`japanese`<br>`korean` | Apache-2.0 | `text` + quad + confidence, no `class_name` |
-
-A variant is a script, not a language: `latin` alone covers 41 languages.
-
-### Depth
-
-| Family | Variants | Weights | Unit | Output |
-|---|---|---|---|---|
-| `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless | `HxW` float32 |
-| | `base`<br>`large` | **CC-BY-NC-4.0** | relative, unitless | `HxW` float32 |
-| | `indoor-` and<br>`outdoor-`,<br>three sizes each | Apache-2.0 | **metres** | `HxW` float32 |
-
-Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
-distance. `model.unit` says which, and is `None` rather than a guess.
-
-How each family behaves and why — OWLv2 suppressing nothing, the encoder cache, EasyOCR's line
-ordering, prompt semantics — is in [docs/models.md](docs/models.md).
 
 ## HTTP API
 
