@@ -189,8 +189,8 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
             'any classes in words and it scores an image against them, with no training and no '
             'labelled data. 5 variants across three sizes (base/so400m/giant). Unlike CLIP it '
             'was trained pair by pair with a sigmoid loss, so each score is a probability for '
-            'that one image-and-phrase on its own: adding a phrase '
-            'moves no other score, the set does not sum to one, and every phrase can be near zero '
+            'that one image-and-phrase on its own: adding a phrase moves no other score, the set '
+            'does not sum to one, and every phrase can be near zero '
             'when none of them fits. Multilingual. It also hands back the vectors, for a vector '
             'database of your own. Code and weights are both Apache-2.0.'
         ),

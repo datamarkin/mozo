@@ -61,9 +61,8 @@ def preprocess(image: np.ndarray, resolution: int) -> torch.Tensor:
     Note:
         The reference would not convert a non-RGB input: ``do_convert_rgb`` is ``null`` in all
         fifteen of Google's published configs and it is read as false. mozo converts upstream of
-        here, so the two agree on every input mozo can produce, and this function requires
-        what it is
-        given to already be RGB.
+        here, so the two agree on every input mozo can produce, and this function requires what
+        it is given to already be RGB.
     """
     if image.ndim != 3 or image.shape[2] != 3:
         raise ValueError(f"expected an HxWx3 RGB image, got shape {image.shape}")

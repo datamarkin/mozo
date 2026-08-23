@@ -105,8 +105,8 @@ def blobs(repo: str) -> dict[str, str]:
 def shard_names(repo: str, available: dict[str, str]) -> list[str]:
     """Which safetensors files make up *repo*, in the order its index names them.
 
-    One file for most variants; for ``giant-384``, whatever
-    ``model.safetensors.index.json`` lists. Read from the index rather than guessed from the
+    One file for most variants; for ``giant-384``, whatever ``model.safetensors.index.json``
+    lists. Read from the index rather than guessed from the
     ``-of-`` suffix, so a repository that re-shards does not silently lose a tensor.
     """
     if "model.safetensors" in available:
