@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from . import __version__
 from .image import load_image
 from .manager import ModelManager
-from .registry import MODEL_REGISTRY, PROMPTED, get_model_info
+from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -302,6 +302,95 @@ def predict(
         status_code=501, detail=f"{family} performs {task!r}, which this endpoint cannot encode.")
 
 
+# --- Encoding ---
+
+@app.post("/encode/{family}/{variant}", summary="Embed an image or a phrase")
+def encode(
+    family: str,
+    variant: str,
+    file: Optional[List[UploadFile]] = File(
+        None, description="Image file(s) to embed. Repeat for a batch."),
+    text: Optional[List[str]] = Query(
+        None, description="Phrase(s) to embed. Repeat for a batch: ?text=a+cat&text=a+dog."),
+):
+    """Return the vectors a model works from, rather than an answer.
+
+    Some models represent an image and a phrase in one shared space, so that a dot product between
+    two vectors says how well they match. That is what makes a corpus embedded once searchable by
+    words afterwards -- but only through a vector database, which is the caller's. mozo produces
+    the vectors and stops there.
+
+    Send **either** images or phrases, not both: they are two different towers and one call runs
+    one of them.
+
+    Args:
+        family: A family that embeds. ``GET /models`` reports which, and what each accepts.
+        variant: Variant within it.
+        file: Image(s). Repeat the part for a batch.
+        text: Phrase(s). Repeat the parameter for a batch.
+
+    Returns:
+        ``{"model", "revision", "dim", "embeddings"}``. The vectors are L2-normalised, so a dot
+        product between any two is a cosine similarity.
+
+        ``model`` and ``revision`` name the weights that produced them, and are not decoration: a
+        vector is only comparable against others from the same weights, so a stored index is tied
+        to them. Recording which is what makes an index re-embeddable later.
+    """
+    # Answered from the registry, so an unknown or non-embedding family costs no image decode and
+    # no download. /predict can afford its 501 at the bottom because every registered task has an
+    # arm there; here the reverse holds, and a late refusal would download a checkpoint to say no.
+    try:
+        get_model_info(family, variant)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    kinds = ENCODES.get(family)
+    if kinds is None:
+        raise HTTPException(
+            status_code=501,
+            detail=f"{family} does not produce embeddings. Families that do: {sorted(ENCODES)}.")
+
+    # FastAPI can require a parameter but not "exactly one of these two", so this is the one check
+    # the route has to make itself.
+    if bool(file) == bool(text):
+        raise HTTPException(
+            status_code=400,
+            detail=f"send either images or ?text=, not both and not neither. "
+                   f"{family} accepts: {sorted(kinds)}.")
+
+    wanted = "image" if file else "text"
+    if wanted not in kinds:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{family} does not embed {wanted}; it accepts {sorted(kinds)}.")
+
+    try:
+        model = app.state.model_manager.get_model(family, variant)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
+
+    # ``encode_<kind>`` is the convention ENCODES is written in and the one the adapter test
+    # asserts against, so the route reads it rather than keeping a second copy as two branches.
+    payload = [load_image(part.file.read()) for part in file] if wanted == "image" else list(text)
+    try:
+        vectors = getattr(model, f"encode_{wanted}")(payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Encoding failed: {e}")
+
+    return JSONResponse(content={
+        "model": f"{family}/{variant}",
+        # Read off the model rather than re-derived from the manifest. The two cannot disagree
+        # today, because this route always loads the newest; they would the moment it takes a
+        # ?revision=, and a vector stamped with the wrong revision is undetectable afterwards.
+        "revision": model.revision,
+        "dim": int(vectors.shape[1]),
+        "embeddings": vectors.tolist(),
+    })
+
+
 # --- Discovery ---
 
 @app.get("/models", summary="List every model")
@@ -320,6 +409,10 @@ def list_models():
             "task_type": entry["task_type"],
             "description": entry["description"],
             "variants": entry["variants"],
+            # What /encode will accept, if anything. Empty for almost every family, and the only
+            # way to discover the second route without calling it and reading a 501 back.
+            # Served rather than restated: a caller cannot infer it from the task name.
+            "encodes": sorted(ENCODES.get(family, ())),
         }
         for family, entry in MODEL_REGISTRY.items()
     }
