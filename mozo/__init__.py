@@ -1,6 +1,6 @@
 """mozo -- computer vision models that run from a pip install.
 
-Fifty-four published variants across twelve families, served over HTTP or called from Python. No
+Fifty-eight published variants across thirteen families, served over HTTP or called from Python. No
 Docker, no cluster, no configuration: weights are fetched and verified on first use and cached
 under ``~/.cache/mozo``.
 

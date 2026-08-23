@@ -26,13 +26,26 @@ from mozo.weights import manifest
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: Numbers written out in words in the package docstring. Only as far as mozo could plausibly
-#: grow before someone rewrites the sentence anyway.
-WORDS = {
-    2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine",
-    10: "ten", 11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen", 15: "fifteen",
-    16: "sixteen", 17: "seventeen", 18: "eighteen", 19: "nineteen", 20: "twenty",
-}
+#: The irregular part of writing a number out. Everything from twenty up is composed from these.
+_UNITS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+          "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+          "eighteen", "nineteen")
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def spell(number: int) -> str:
+    """Write *number* out in words, the way prose does.
+
+    Derived rather than tabulated because the alternative -- a dict of the counts mozo happens to
+    have today -- is the same hand-maintained number this file exists to stop drifting, one level
+    up. It covers 0-99, which outlasts any catalogue anyone will read in one sitting.
+    """
+    if not 0 <= number < 100:
+        raise ValueError(f"{number} is past where a docstring should be spelling numbers out")
+    if number < 20:
+        return _UNITS[number]
+    tens, unit = divmod(number, 10)
+    return _TENS[tens] + (f"-{_UNITS[unit]}" if unit else "")
 
 
 def published_variants() -> int:
@@ -51,12 +64,12 @@ def test_the_package_docstring_states_the_published_counts():
     text = mozo.__doc__
     variants, families = published_variants(), published_families()
 
-    assert WORDS.get(families), f"{families} families: add it to WORDS and rewrite the sentence"
-    assert f"{variants} published variants" in text.replace(
-        "Fifty-four", "54"
-    ), f"the package docstring does not say {variants} published variants:\n{text[:200]}"
-    assert f"{WORDS[families]} families" in text, (
-        f"the package docstring does not say {WORDS[families]} families"
+    assert f"{spell(variants).capitalize()} published variants" in text, (
+        f"the package docstring does not open with {spell(variants)} published variants:"
+        f"\n{text[:200]}"
+    )
+    assert f"{spell(families)} families" in text, (
+        f"the package docstring does not say {spell(families)} families"
     )
 
 
@@ -127,7 +140,6 @@ def test_the_readme_states_how_many_families_ship_a_verification_gate():
     readme = (ROOT / "README.md").read_text()
 
     assert gates <= set(MODEL_REGISTRY), f"gates for unknown families: {gates - set(MODEL_REGISTRY)}"
-    assert WORDS.get(len(gates)) and WORDS.get(families)
-    assert f"{WORDS[len(gates)].capitalize()} of the {WORDS[families]} families ship one" in readme, (
+    assert f"{spell(len(gates)).capitalize()} of the {spell(families)} families ship one" in readme, (
         f"{len(gates)} of {families} families have a gate; the README says otherwise"
     )

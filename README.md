@@ -4,7 +4,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/mozo)](https://pypi.org/project/mozo/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-### 54 computer vision models. One `pip install`. No dependency hell.
+### 58 computer vision models. One `pip install`. No dependency hell.
 
 Normally each of these models arrives with its own package — `ultralytics`, `transformers`,
 `easyocr`, `sam2`, `rfdetr` — and each pins torch, numpy and OpenCV to something slightly
@@ -12,7 +12,7 @@ different. Put a few in one environment and something breaks. The usual escape i
 per model, and paying for that forever.
 
 Mozo ships none of them. Every model's inference path is vendored into mozo itself and verified
-**bit-identical** to the original implementation — so one environment runs all 54, and gives
+**bit-identical** to the original implementation — so one environment runs all 58, and gives
 you the original's exact numbers rather than something close.
 
 ```bash
@@ -76,7 +76,7 @@ Trimmed for reading. The real response carries every PixelFlow field on every de
 The catalogue is answerable without loading anything:
 
 ```bash
-curl http://localhost:8000/models          # all 54, no torch import, no weights
+curl http://localhost:8000/models          # all 58, no torch import, no weights
 curl http://localhost:8000/models/loaded   # what is resident right now
 ```
 
@@ -125,7 +125,7 @@ mozo start        # then open http://localhost:8000/test-ui
 
 ![The mozo test UI](docs/test-ui.png)
 
-Pick any of the 54, run it on your own image, and see the response two ways at once: drawn on
+Pick any of the 58, run it on your own image, and see the response two ways at once: drawn on
 the image, and as the raw PixelFlow record. Hovering a box lights its row and its JSON, so when
 something lands somewhere surprising its numbers are one click away.
 
@@ -137,7 +137,7 @@ tolerance.** Exact equality, because a tolerance hides precisely the drift a che
 
 The gates in `tools/verify/` compare every intermediate stage against the original implementation,
 not just the final answer: 1,275 comparisons for EasyOCR, 226 for OWLv2, 138 for Grounding DINO,
-every one identical. Ten of the twelve families ship one; all twelve have their parity measured
+every one identical. Eleven of the thirteen families ship one; all thirteen have their parity measured
 and recorded in
 `mozo/vendors/<family>_deploy/PROVENANCE.md`, with the upstream commit it was built from.
 
@@ -165,6 +165,24 @@ Name a thing in words. No class list, no fine-tuning, no vocabulary agreed in ad
 | `grounding_dino` | `tiny` `base` | Apache-2.0 | descriptions, ≤256 tokens total | boxes, no NMS |
 | `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens | boxes, no NMS |
 | `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens | masks, boxes |
+
+### Zero-shot classification and embeddings
+
+Name your classes in words and each is scored against the image. The same model will also hand
+back the vectors it works from, which is what makes a corpus embedded once searchable by words
+afterwards — through a vector database of your own.
+
+| Family | Variants | Weights | Prompt | Output |
+|---|---|---|---|---|
+| `clip` | `base` `base-16` `large` `large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
+
+Scores are **cosine similarities, not probabilities**: not softmaxed, they do not sum to one, and
+they may be negative. Nothing is filtered out — every phrase comes back scored, because a
+classifier that drops a class has not classified.
+
+The only family with a second route. `POST /encode/clip/base` returns the embeddings instead of an
+answer, for images or for phrases; the towers load independently, so a job that only encodes images
+never allocates the text half.
 
 ### Promptable segmentation
 
@@ -247,6 +265,22 @@ curl -X POST "http://localhost:8000/predict/depth_anything_v2/indoor-small" \
 
 16-bit rather than 8, because six of the nine variants predict metres and quantising those to 256
 levels would discard the measurement.
+
+CLIP is the one family with a second route. `/predict` classifies; `/encode` returns the vectors
+instead of an answer, for images or for phrases but not both in one call:
+
+```bash
+# Score an image against phrases you make up
+curl -X POST "http://localhost:8000/predict/clip/base?text=a%20forklift&text=a%20person" \
+  -F "file=@aisle.jpg"
+
+# The vectors themselves, to put in a vector database of your own
+curl -X POST "http://localhost:8000/encode/clip/base" -F "file=@aisle.jpg"
+curl -X POST "http://localhost:8000/encode/clip/base?text=a%20forklift&text=a%20person"
+```
+
+The response carries `model` and `revision` alongside the embeddings, and those are not decoration:
+a vector is only comparable against others from the same weights, so a stored index is tied to them.
 
 The other endpoints: `GET /` for health and residency, `GET /models` for the catalogue,
 `GET /models/loaded` for what is in memory, `GET /test-ui` for the browser page, and `GET /docs`
@@ -358,7 +392,7 @@ things about it are yours to arrange:
 - **No batching.** One image per forward, which is what keeps results bit-identical.
 - **No model conversion.** ONNX and CoreML artifacts are published where a family exports
   cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
-- **It is not a model hub.** The catalogue is a curated 54, chosen because each one could be
+- **It is not a model hub.** The catalogue is a curated 58, chosen because each one could be
   extracted and verified. Growth is deliberate and slow.
 
 ## Extending
@@ -396,9 +430,10 @@ pytest
 
 Mozo's own code is **Apache-2.0**, and so is every vendored extraction under `mozo/vendors/`.
 
-The weights are separate works travelling with it. Of the 54 published variants, **31 are
-Apache-2.0**, 20 are **AGPL-3.0** (every YOLO variant), 2 are **CC-BY-NC-4.0** (Depth Anything
-`base` and `large`), and 1 carries Meta's **SAM License** (SAM 3). The full licence and a NOTICE
+The weights are separate works travelling with it. Of the 58 published variants, **31 are
+Apache-2.0**, 20 are **AGPL-3.0** (every YOLO variant), 4 are **MIT** (CLIP), 2 are
+**CC-BY-NC-4.0** (Depth Anything `base` and `large`), and 1 carries Meta's **SAM License**
+(SAM 3). The full licence and a NOTICE
 naming the exact upstream release are published beside every checkpoint.
 
 **YOLO weights are AGPL-3.0**, or covered by a commercial licence from Ultralytics.
