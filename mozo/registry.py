@@ -187,19 +187,14 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         'description': (
             'SigLIP 2 by Google — zero-shot classification, and the embeddings behind it. Name '
             'any classes in words and it scores an image against them, with no training and no '
-            'labelled data. 15 variants across four sizes (base/large/so400m/giant) and five '
-            'resolutions. Unlike CLIP it was trained pair by pair with a sigmoid loss, so each '
-            'score is a probability for that one image-and-phrase on its own: adding a phrase '
+            'labelled data. 5 variants across three sizes (base/so400m/giant). Unlike CLIP it '
+            'was trained pair by pair with a sigmoid loss, so each score is a probability for '
+            'that one image-and-phrase on its own: adding a phrase '
             'moves no other score, the set does not sum to one, and every phrase can be near zero '
             'when none of them fits. Multilingual. It also hands back the vectors, for a vector '
             'database of your own. Code and weights are both Apache-2.0.'
         ),
-        'variants': [
-            'base-224', 'base-256', 'base-384', 'base-512', 'base32-256',
-            'large-256', 'large-384', 'large-512',
-            'so400m-224', 'so400m-384', 'so400m16-256', 'so400m16-384', 'so400m16-512',
-            'giant-256', 'giant-384',
-        ],
+        'variants': ['base-224', 'base-256', 'so400m-384', 'so400m16-256', 'giant-384'],
     },
 
     'yolov8': {

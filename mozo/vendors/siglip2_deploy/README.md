@@ -22,8 +22,9 @@ encoder.encode_image(load_image("aisle.jpg"))            # (1, 768), L2-normalis
 encoder.encode_text(["a forklift", "a person"])          # (2, 768), L2-normalised
 ```
 
-Fifteen fixed-resolution variants across four sizes — `base`, `large`, `so400m`, `giant-opt` — at
-224 to 512 pixels. Multilingual: the text tower carries Gemma's 256,000-piece vocabulary.
+Five variants — `base-224`, `base-256`, `so400m-384`, `so400m16-256`, `giant-384` — the most-used
+five of the fifteen fixed-resolution models Google publishes, and 89% of all SigLIP 2 downloads.
+Multilingual: the text tower carries Gemma's 256,000-piece vocabulary.
 
 Each tower builds on first use. An ingest job that only calls `encode_image` never allocates the
 text tower, which here is most of the checkpoint — the vocabulary alone is 786 MB of a `base`

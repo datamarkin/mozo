@@ -13,17 +13,17 @@ from is a fact about publishing, not about inference.
 from ``/api/models/<repo>?blobs=true`` at fetch time, so a mismatch means the bytes changed under
 us rather than that someone transcribed a digest wrongly.
 
-**Safetensors only, so mozo repacks.** Not one of the fifteen repositories publishes a
+**Safetensors only, so mozo repacks.** Not one of Google's SigLIP 2 repositories publishes a
 ``pytorch_model.bin`` -- OWLv2's trick of placing Google's ``.bin`` unchanged is simply not
 available here. This reads the safetensors and writes an ordinary ``.pth``, which is the same
 repack ``tools/fetch/clip.py`` does for a TorchScript archive and for the same reason: the version
 risk is taken here, once, on a machine we control. ``safetensors`` is a dependency of *this script*
 and not of mozo; nothing in ``mozo/`` imports it.
 
-**Two variants are sharded.** ``giant-256`` and ``giant-384`` ship as two safetensors files plus an
-index; the other thirteen are one file. The index is read when present and the shards are merged,
-so what mozo publishes has the same shape for all fifteen. That is a packaging detail of Google's,
-not a difference between the models.
+**The giant checkpoint is sharded.** ``giant-384`` ships as two safetensors files plus an index;
+the rest are one file. The index is read when present and the shards are merged, so what mozo
+publishes has the same shape for every variant. That is a packaging detail of Google's, not a
+difference between the models.
 
 **Two ``-naflex`` checkpoints are not carried.** They run at variable resolution through a
 different image tower -- ``Siglip2Model`` rather than ``SiglipModel`` -- which ``siglip2_deploy``
@@ -62,7 +62,8 @@ REVISION = "2026-08-23"
 LICENCE_SOURCE = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 
 #: Where the tokenizer asset lands, and which repository it is derived from. One vocabulary serves
-#: all fifteen -- verified identical by sha256 -- so it is taken from the smallest.
+#: every variant -- verified identical by sha256 across all fifteen Google publishes -- so it is
+#: taken from the smallest.
 VOCAB_ASSET = ROOT / "mozo" / "vendors" / "siglip2_deploy" / "assets" / "gemma_bpe.json.gz"
 VOCAB_SOURCE = "google/siglip2-base-patch16-224"
 
@@ -104,7 +105,7 @@ def blobs(repo: str) -> dict[str, str]:
 def shard_names(repo: str, available: dict[str, str]) -> list[str]:
     """Which safetensors files make up *repo*, in the order its index names them.
 
-    One file for thirteen variants; for the two ``giant`` ones, whatever
+    One file for most variants; for ``giant-384``, whatever
     ``model.safetensors.index.json`` lists. Read from the index rather than guessed from the
     ``-of-`` suffix, so a repository that re-shards does not silently lose a tensor.
     """

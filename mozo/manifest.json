@@ -1102,6 +1102,30 @@
         }
       }
     },
+    "siglip2/base-256": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "siglip2/base-256/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "siglip2/base-256/2026-08-23/NOTICE",
+              "sha256": "45adcb13286106b3abd60806eb1f3dd369e091b0215427426671b2bf1d888ec9",
+              "size": 1774
+            },
+            "torch-fp32": {
+              "path": "siglip2/base-256/2026-08-23/torch-fp32.pth",
+              "sha256": "abd115da89ceacdf4aca2208416c466186a2122058c9828282a9c90cec528bfc",
+              "size": 1501070057
+            }
+          }
+        }
+      }
+    },
     "siglip2/giant-384": {
       "latest": "2026-08-23",
       "revisions": {
@@ -1145,6 +1169,30 @@
               "path": "siglip2/so400m-384/2026-08-23/torch-fp32.pth",
               "sha256": "956531d95b8f2a9a16636efa0d721faa6a23215a139bc74e0fb557fb11a781fd",
               "size": 4544326429
+            }
+          }
+        }
+      }
+    },
+    "siglip2/so400m16-256": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "siglip2/so400m16-256/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "siglip2/so400m16-256/2026-08-23/NOTICE",
+              "sha256": "0cc35449445ca6ae2ab88a78b359a0f900812003d755fabcc2298393d7e99a76",
+              "size": 1780
+            },
+            "torch-fp32": {
+              "path": "siglip2/so400m16-256/2026-08-23/torch-fp32.pth",
+              "sha256": "d7818dd2b366eff3c34c77559dacb867e50cd3d285b8319dd3c08e1e6bd78afd",
+              "size": 4542976261
             }
           }
         }

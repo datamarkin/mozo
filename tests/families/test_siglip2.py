@@ -131,12 +131,12 @@ def test_the_variants_geometry_is_written_down_not_inferred():
 
 
 def test_head_dimension_is_not_a_constant():
-    """CLIP fixes it at 64 and divides. Deriving heads that way here is wrong for ten variants."""
+    """CLIP fixes it at 64 and divides. Deriving heads that way here is wrong for three of five."""
     assert {s.vision_width // s.vision_heads for s in SPECS.values()} == {64, 72, 96}
 
 
 def test_the_mlp_is_not_four_times_the_width():
-    """``so400m`` is 1152 -> 4304. A derived MLP width is wrong for seven of the fifteen."""
+    """``so400m`` is 1152 -> 4304. A derived MLP width is wrong for two of the five."""
     odd = [s.variant for s in SPECS.values() if s.vision_mlp != 4 * s.vision_width]
     assert sorted(odd) == sorted(s.variant for s in SPECS.values() if s.vision_width == 1152)
 
