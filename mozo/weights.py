@@ -33,6 +33,7 @@ __all__ = [
     "part_of",
     "parts",
     "resolve",
+    "revision_of",
     "runtime_of",
 ]
 
@@ -261,6 +262,25 @@ def _obtain(artifact: dict[str, Any], revision_dir: Path) -> Path:
     print(f"[mozo] downloading {target.name} ({artifact['size'] / 1e6:.1f} MB)", flush=True)
     _fetch(url, target, size=artifact["size"], sha256=artifact["sha256"])
     return target
+
+
+def revision_of(family: str, variant: str, *, revision: str | None = None) -> str:
+    """Return the revision name a call would resolve to, without downloading anything.
+
+    ``latest`` is a pointer, so "which weights is this" has an answer only once it is followed.
+    Callers that record where a result came from -- an embedding written to a vector index, say,
+    which is only comparable against others from the same weights -- need that answer without
+    paying for the bytes.
+
+    Raises:
+        WeightsError: If the model or revision is not published.
+
+    Examples:
+        >>> revision_of("rfdetr", "small")          # doctest: +SKIP
+        '2026-08-18'
+    """
+    name, _ = _lookup(family, variant, revision)
+    return name
 
 
 def artifacts(family: str, variant: str, *, revision: str | None = None) -> list[str]:
