@@ -87,6 +87,24 @@ def as_pixelflow_reports(boxes, scores, class_ids):
             np.array([row["confidence"] for row in rows], dtype=np.float64))
 
 
+def as_pixelflow_classifications(scores, labels):
+    """The same door, for the families that answer with a score per label instead of a box.
+
+    ``pf.from_scores`` rounds confidences exactly as ``from_arrays`` does, and for exactly the same
+    reason a raw vendor score cannot be compared to a mozo one without going through it. Written
+    as a second helper rather than a branch in the first because the two take different arrays and
+    return different things; what they share is refusing to restate PixelFlow's precision.
+
+    Returns the whole rows rather than the confidences alone, so ``top_k``'s ordering and its
+    label-to-id mapping come from PixelFlow too. Handing back scores only would leave every caller
+    re-deriving the rank with its own ``sorted(..., key=-score)``, which is the same private copy
+    of a PixelFlow rule that this helper exists to prevent -- one level along.
+    """
+    import pixelflow as pf
+
+    return pf.from_scores(scores, labels=list(labels)).top_k(len(labels)).to_dict()
+
+
 @pytest.fixture(scope="session")
 def image():
     """The fixture photograph, decoded to mozo's contract (RGB)."""
