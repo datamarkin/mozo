@@ -649,6 +649,18 @@ async function boot() {
     const live = health.loaded_models.length;
     $("census").textContent = `${total} models, ${live} resident`;
 
+    /* A deployment can legitimately offer nothing: MOZO_ENABLE narrows what a server serves, and
+       a name in it that matches no model is warned about rather than fatal. Without this the
+       empty catalogue falls through to onFamily(), throws on an undefined entry, and lands in the
+       catch below reporting "Cannot reach the server" -- sending the operator after networking
+       when the answer is one environment variable away. */
+    if (Object.keys(models).length === 0) {
+      showStatus("failed", "This server offers no models",
+        "MOZO_ENABLE decides what a deployment serves, and it selected nothing. Check it where " +
+        "the server runs, or unset it to offer the whole catalogue.");
+      return;
+    }
+
     const family = $("family");
     for (const name of Object.keys(models)) {
       family.append(new Option(name, name));
