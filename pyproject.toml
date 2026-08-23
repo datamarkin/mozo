@@ -98,6 +98,9 @@ mozo = ["static/*", "manifest.json"]
 # Apache-2.0. Upstream downloads it through `transformers` on first use; shipping it is what
 # makes tokenizing a prompt need no network and no `transformers` install.
 "mozo.vendors.grounding_dino_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
+# CLIP carries the same byte-pair vocabulary SAM 3 and OWLv2 do, for the same reason: a
+# vendored package may not import another, so each keeps its own copy of OpenAI's file.
+"mozo.vendors.clip_deploy" = ["LICENSE", "NOTICE", "PROVENANCE.md", "assets/*.gz"]
 # EasyOCR reads its alphabet from a text file per variant. The Chinese one is 6,718
 # characters; a literal that size is not something anyone can read past, and the alphabet is
 # part of the model definition rather than of the weights, so it ships here.

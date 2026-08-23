@@ -1,6 +1,102 @@
 {
   "base_url": "https://dtmfiles.com/mozo/v1",
   "models": {
+    "clip/base": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "clip/base/2026-08-23/LICENSE",
+              "sha256": "987e63b32f6c89ff5160e429458a872ff048e6860b590a3912e938f9da8f14db",
+              "size": 1064
+            },
+            "NOTICE": {
+              "path": "clip/base/2026-08-23/NOTICE",
+              "sha256": "798334a734dfb40656408177d8c5cca2b35de9f385c8fc68b4ad596885749599",
+              "size": 1232
+            },
+            "torch-fp32": {
+              "path": "clip/base/2026-08-23/torch-fp32.pth",
+              "sha256": "4324b92403f6b35f0c56aab63299b75b234ccf4b44a2fb8a6eaac3e408e1252e",
+              "size": 605207298
+            }
+          }
+        }
+      }
+    },
+    "clip/base-16": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "clip/base-16/2026-08-23/LICENSE",
+              "sha256": "987e63b32f6c89ff5160e429458a872ff048e6860b590a3912e938f9da8f14db",
+              "size": 1064
+            },
+            "NOTICE": {
+              "path": "clip/base-16/2026-08-23/NOTICE",
+              "sha256": "b368a980ff71f7045e85c86c86a950a353ba2e7d222e9a89bb3194d8dda98cca",
+              "size": 1235
+            },
+            "torch-fp32": {
+              "path": "clip/base-16/2026-08-23/torch-fp32.pth",
+              "sha256": "ab7ac8a455aae9db1078f3bf0df59cc07c9807a86d9969cacb154481d65fe2ed",
+              "size": 598580994
+            }
+          }
+        }
+      }
+    },
+    "clip/large": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "clip/large/2026-08-23/LICENSE",
+              "sha256": "987e63b32f6c89ff5160e429458a872ff048e6860b590a3912e938f9da8f14db",
+              "size": 1064
+            },
+            "NOTICE": {
+              "path": "clip/large/2026-08-23/NOTICE",
+              "sha256": "ce3f7d8cf212fb78919fb58549979d18e775aaacdddb5a34079aab3bb281c38d",
+              "size": 1233
+            },
+            "torch-fp32": {
+              "path": "clip/large/2026-08-23/torch-fp32.pth",
+              "sha256": "b4b5bde8adc03ea4c8010c844dcc4a6bb0b62e7999d2e62b068d489a586ca864",
+              "size": 1710611090
+            }
+          }
+        }
+      }
+    },
+    "clip/large-336": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "clip/large-336/2026-08-23/LICENSE",
+              "sha256": "987e63b32f6c89ff5160e429458a872ff048e6860b590a3912e938f9da8f14db",
+              "size": 1064
+            },
+            "NOTICE": {
+              "path": "clip/large-336/2026-08-23/NOTICE",
+              "sha256": "68705085e02a1052862db31dc637e3892fb4a34bfc39b496a9cd6057574dc0d9",
+              "size": 1249
+            },
+            "torch-fp32": {
+              "path": "clip/large-336/2026-08-23/torch-fp32.pth",
+              "sha256": "2023af7109f939298c626756b37da5dc78b6dd85a80a9e85c636b12f33ac2ba3",
+              "size": 1711921810
+            }
+          }
+        }
+      }
+    },
     "depth_anything_v2/base": {
       "latest": "2026-08-19",
       "revisions": {
