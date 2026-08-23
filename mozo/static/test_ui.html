@@ -602,7 +602,7 @@ canvas.picking { cursor: crosshair; }
 --------------------------------------------------------------------------- */
 
 const state = {
-  catalogue: {},        // family -> {task_type, description, variants, prompted, encodes}
+  catalogue: {},        // family -> {task_type, description, variants, published, prompted, encodes}
   image: null,          // HTMLImageElement currently on the stage
   file: null,           // File to POST, or null when the example is in use
   detections: [],       // pixelflow records, verbatim
@@ -665,7 +665,17 @@ function onFamily() {
   const entry = state.catalogue[$("family").value];
   const variant = $("variant");
   variant.textContent = "";
-  for (const name of entry.variants) variant.append(new Option(name, name));
+  // A family may register a variant mozo publishes no weights for. Offering it as a live choice
+  // is offering a 404: it is shown, so the catalogue stays honest about what exists, but it
+  // cannot be picked. The select then lands on the first enabled option by itself -- that is the
+  // platform's own reset behaviour, and re-implementing it here would be a second answer to it.
+  const published = new Set(entry.published);
+  for (const name of entry.variants) {
+    const shipped = published.has(name);
+    const option = new Option(shipped ? name : `${name} — no weights published`, name);
+    option.disabled = !shipped;
+    variant.append(option);
+  }
 
   $("task").textContent = entry.task_type.replace(/_/g, " ");
   $("description").textContent = entry.description;
