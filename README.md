@@ -1,5 +1,6 @@
 # Mozo
 
+[![CI](https://img.shields.io/github/actions/workflow/status/datamarkin/mozo/ci.yml?branch=main&label=CI)](https://github.com/datamarkin/mozo/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/mozo)](https://pypi.org/project/mozo/)
 [![Python](https://img.shields.io/pypi/pyversions/mozo)](https://pypi.org/project/mozo/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)

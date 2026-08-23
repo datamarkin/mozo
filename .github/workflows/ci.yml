@@ -1,0 +1,67 @@
+# Run the test suite on every push to main and every pull request.
+#
+# This is also the single definition of that job: publish.yml calls this workflow rather than
+# keeping a second copy of it, so what gates a release is exactly what gates a commit. A copy
+# kept in step by hand is a copy that drifts.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets .github/workflows/publish.yml reuse this job as a release gate.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The ends of the supported range. requires-python claims 3.9, which nothing here has
+        # ever verified; add it once torch resolves on it.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Torch first, from the CPU index. The default PyPI wheel drags a few gigabytes of CUDA
+      # runtime onto a runner that has no GPU to use it with.
+      #
+      # Every extra, including coreml -- which is macOS-only to *use*, but publishes manylinux
+      # wheels and installs here. Three tests in tests/test_runtimes.py assert what ``auto``
+      # picks, and what it picks depends on which runtimes are importable; with a runtime absent
+      # they fail rather than skip.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e ".[test,onnx,coreml]" pytest
+
+      # No weights, and no network to fetch them with: MOZO_OFFLINE turns a download into an
+      # error rather than a ten-minute wait, and a cache directory that does not exist yet keeps
+      # the run honest about what it is actually testing.
+      #
+      # tests/families and the two weight-backed response suites need real checkpoints -- gigabytes
+      # of them -- so they are not a gate. They run against the local weights tree instead.
+      - name: Test
+        env:
+          MOZO_OFFLINE: "1"
+          MOZO_CACHE: ${{ runner.temp }}/mozo-cache
+        run: |
+          python -m pytest tests/ -q \
+            --ignore=tests/families \
+            --deselect tests/test_server_responses.py::TestDepthResponse \
+            --deselect tests/test_server_responses.py::TestDetectionResponse
