@@ -191,3 +191,70 @@ def test_the_readme_states_how_many_families_ship_a_verification_gate():
     assert f"{spell(len(gates)).capitalize()} of the {spell(families)} families ship one" in readme, (
         f"{len(gates)} of {families} families have a gate; the README says otherwise"
     )
+
+
+#: The sha256 of every LICENSE file mozo publishes that is not permissive, and what it is.
+#:
+#: The manifest records a licence as the hash of the file published beside the weights, never as a
+#: name, so which licence a hash *is* has to be written down once. This is that once. Everything
+#: downstream is derived: a new YOLO size, a second non-commercial depth variant or another
+#: SAM-licensed checkpoint ships the same LICENSE bytes and is recognised without an edit here.
+#:
+#: Keyed on content rather than on family and variant names deliberately. A hand-written list of
+#: names only notices a non-permissive *family* being added; mozo's actual exposure is per
+#: variant, and Depth Anything already proves the two differ -- seven of its nine are Apache-2.0
+#: and two are not.
+NON_PERMISSIVE = {
+    "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0": "AGPL-3.0",
+    "41003d4a74749c0220e33dd415042164b5a1093ed401f36277234f772d22d3d0": "CC-BY-NC-4.0",
+    "4dea99bfaa016e21bc860d73f344236bd1e5c4977d1a9a8fd32f822b500ae1be": "Meta SAM License",
+}
+
+
+def non_permissive() -> dict[tuple[str, str], str]:
+    """Every published variant whose weights are not permissively licensed, from the manifest."""
+    found = {}
+    for model_id, entry in manifest()["models"].items():
+        licence = entry["revisions"][entry["latest"]]["artifacts"].get("LICENSE")
+        assert licence, f"{model_id} publishes no LICENSE, so its terms cannot be checked"
+        if licence["sha256"] in NON_PERMISSIVE:
+            family, variant = model_id.split("/", 1)
+            found[(family, variant)] = NON_PERMISSIVE[licence["sha256"]]
+    return found
+
+
+def test_the_readme_s_permissive_deployment_offers_what_it_claims(deploy):
+    """The README shows a ``MOZO_ENABLE`` line for serving only the permissively licensed weights,
+    and says how many that is. It is the one example whose being wrong is not a documentation bug.
+
+    An operator pastes it to avoid taking on AGPL section 13 obligations, so a variant that slips
+    through is served under a licence they were reading this section specifically to decline. And
+    it is exactly the kind of list that rots: adding a sixth YOLO size would leave the line still
+    looking right while quietly offering it.
+
+    Three independent things are checked, because each can be wrong on its own -- the count the
+    prose states, that nothing non-permissive is offered, and that nothing permissive was dropped
+    by accident along the way.
+    """
+    readme = (ROOT / "README.md").read_text()
+    example = re.search(r"```bash\nMOZO_ENABLE=(.*?)\n```", readme, re.S)
+    assert example, "the README no longer shows a MOZO_ENABLE example -- update this test"
+    stated = re.search(r"That is the (\d+) Apache-2\.0 and MIT variants", readme)
+    assert stated, "the README no longer states what that line offers -- update this test"
+
+    deployment = deploy(example.group(1).replace("\\\n", ""))
+    offered = {(family, v) for family, variants in deployment.items() for v in variants}
+
+    assert len(offered) == int(stated.group(1)), (
+        f"the README's MOZO_ENABLE line offers {len(offered)} variants, and says {stated.group(1)}"
+    )
+
+    restricted = non_permissive()
+    leaked = {model: restricted[model] for model in offered & set(restricted)}
+    assert not leaked, f"the README's MOZO_ENABLE line offers non-permissive weights: {leaked}"
+
+    everything = {(family, v) for family, entry in MODEL_REGISTRY.items()
+                  for v in entry["variants"]}
+    assert everything - offered == set(restricted), (
+        f"it also leaves out {sorted(everything - offered - set(restricted))}, which are permissive"
+    )
