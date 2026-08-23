@@ -114,12 +114,19 @@ class TestCatalogue:
 
     def test_every_family_carries_what_the_page_reads(self, client):
         from mozo.registry import ENCODES, MODEL_REGISTRY, PROMPTED
+        from mozo.weights import published
 
         body = client.get("/models").json()
         assert set(body) == set(MODEL_REGISTRY)
         for family, info in body.items():
             assert info["task_type"] and info["description"]
             assert isinstance(info["variants"], list) and info["variants"]
+            # Which of those can actually run. The page builds its dropdown from this and marks
+            # the rest unselectable, so a missing key breaks the picker outright -- and a key
+            # naming a variant the family does not have would offer a 404 as a live choice.
+            assert isinstance(info["published"], list)
+            assert set(info["published"]) <= set(info["variants"])
+            assert info["published"] == [v for v in info["variants"] if published(family, v)]
             # Empty for most families; the catalogue still has to carry the key, because a
             # caller reading `if info["encodes"]` should not have to know which.
             assert info["encodes"] == sorted(ENCODES.get(family, ()))
