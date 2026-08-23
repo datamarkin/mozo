@@ -386,16 +386,16 @@ CLIP score is only meaningful against the other scores you asked for. SigLIP was
 pair with a sigmoid loss: does this caption go with this image, yes or no. So its score means
 something on its own.
 
-- `base-224` / `base-256` / `base-384` / `base-512` — ViT-B/16, 768-d
-- `base32-256` — ViT-B/32, 768-d. Coarser patches, and the *largest* base file, because a patch-32
-  projection is four times a patch-16 one
-- `large-256` / `large-384` / `large-512` — ViT-L/16, 1024-d
-- `so400m-224` / `so400m-384` — the shape-optimised 400M tower at patch 14, 1152-d
-- `so400m16-256` / `so400m16-384` / `so400m16-512` — the same tower at patch 16
-- `giant-256` / `giant-384` — a 1536-d image tower paired with the so400m *text* tower
+- `base-224` / `base-256` — ViT-B/16, 768-d. The small, fast end
+- `so400m-384` — the shape-optimised 400M tower at patch 14, 1152-d. The quality point
+- `so400m16-256` — the same tower at patch 16 and a smaller input, so roughly a third the cost
+- `giant-384` — a 1536-d image tower paired with the so400m *text* tower. The strongest, and the
+  most downloaded of all of them
 
-All fifteen are Apache-2.0, code and weights, ungated. The two `-naflex` variable-resolution
-variants use a different image tower and are not carried; see the vendor's `PROVENANCE.md`.
+Apache-2.0, code and weights, ungated. Google publishes fifteen fixed-resolution variants and mozo
+carries these five, which are 89% of all SigLIP 2 downloads; the other ten need a manifest entry
+and a checkpoint, not new code. The two `-naflex` variable-resolution variants are different — they
+use a different image tower — and are not carried; see the vendor's `PROVENANCE.md`.
 
 Multilingual by default: the text tower carries Gemma's 256,000-piece vocabulary rather than an
 English byte-pair one, so there is no separate multilingual variant to choose.
