@@ -15,7 +15,7 @@ To add a family: add an entry below, and give its adapter the same ``VARIANTS``.
 
 from __future__ import annotations
 
-__all__ = ["MODEL_REGISTRY", "PROMPTED", "get_model_info"]
+__all__ = ["ENCODES", "MODEL_REGISTRY", "PROMPTED", "get_model_info"]
 
 from typing import Any
 
@@ -24,11 +24,42 @@ from typing import Any
 #: missing prompt has to be refused. Named here rather than in the server because it is a
 #: statement about the task vocabulary, and this is the module that owns those strings; the
 #: endpoint and the tests both read it from here rather than keeping copies in step.
-PROMPTED = frozenset({"concept_segmentation", "open_vocabulary_detection"})
+PROMPTED = frozenset({
+    "concept_segmentation", "open_vocabulary_detection", "zero_shot_classification"})
+
+#: What each family can encode, and from what. A family absent from here does not encode at all.
+#:
+#: Read before anything is loaded, for the same reason PROMPTED is: ``/encode``'s refusal has to
+#: come before the image decode and the multi-gigabyte download, not after. ``/predict`` can afford
+#: a late 501 because a test proves every registered task has a branch there, so it never fires;
+#: on ``/encode`` the reverse holds, and one family in thirteen has one.
+#:
+#: A dict rather than a set because the kinds differ: CLIP takes both, a re-identification embedder
+#: would take images only, and ``/models`` should be able to say which without loading anything.
+#: The task type cannot carry this -- two families can classify while only one of them embeds.
+ENCODES: dict[str, frozenset[str]] = {
+    "clip": frozenset({"image", "text"}),
+}
 
 #: Family -> where its adapter lives, what it does, and which variants it publishes.
 #: An empty ``variants`` list means the family accepts any variant name.
 MODEL_REGISTRY: dict[str, dict[str, Any]] = {
+    'clip': {
+        'adapter_class': 'ClipPredictor',
+        'module': 'mozo.adapters.clip',
+        'task_type': 'zero_shot_classification',
+        'description': (
+            'CLIP by OpenAI — zero-shot classification, and the embeddings behind it. Name any '
+            'classes in words and it scores an image against them, with no training and no '
+            'labelled data. 4 variants (base/base-16/large/large-336), all Vision Transformers. '
+            'It also hands back the vectors: an image and a phrase embed into one shared space, '
+            'so a corpus embedded once can be searched by words afterwards through a vector '
+            'database of your own. Scores are cosine similarities, not probabilities. Code and '
+            'weights are both MIT.'
+        ),
+        'variants': ['base', 'base-16', 'large', 'large-336'],
+    },
+
     'depth_anything_v2': {
         'adapter_class': 'DepthAnythingV2Predictor',
         'module': 'mozo.adapters.depth_anything_v2',
