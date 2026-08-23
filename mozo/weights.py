@@ -24,14 +24,12 @@ Environment:
 from __future__ import annotations
 
 __all__ = [
-    "NotPublished",
     "WeightsError",
     "artifacts",
     "cache_dir",
     "companions",
     "framework_of",
     "manifest",
-    "published",
     "part_of",
     "parts",
     "resolve",
@@ -69,20 +67,6 @@ _manifest: dict[str, Any] | None = None
 
 class WeightsError(RuntimeError):
     """Raised when a model cannot be resolved, downloaded, or verified."""
-
-
-class NotPublished(WeightsError):
-    """Raised when the catalogue does not offer what was asked for.
-
-    A narrower thing than its parent, and the distinction is the caller's to act on. This one is a
-    permanent fact about what mozo publishes -- no such model, no such revision, no such runtime --
-    so retrying cannot help and the answer belongs to whoever asked. Everything else its parent
-    covers is about *obtaining* bytes that are published: a download that failed, a mirror that
-    served the wrong ones, a cache miss under ``MOZO_OFFLINE``. Those are the server's problem and
-    a retry may well fix them.
-
-    ``mozo.server`` maps this to 404 and its parent to 500 on exactly that line.
-    """
 
 
 #: Framework prefixes that name an execution path. A revision also publishes data artifacts --
@@ -161,7 +145,7 @@ def _lookup(family: str, variant: str, revision: str | None) -> tuple[str, dict[
     model_id = f"{family}/{variant}"
     model = manifest()["models"].get(model_id)
     if model is None:
-        raise NotPublished(
+        raise WeightsError(
             f"mozo publishes no weights for {model_id!r}. Either its licence does not permit "
             f"redistribution, or it runs only against checkpoints you supply -- pass the "
             f"checkpoint path to the adapter instead."
@@ -171,7 +155,7 @@ def _lookup(family: str, variant: str, revision: str | None) -> tuple[str, dict[
     entry = model["revisions"].get(name)
     if entry is None:
         available = ", ".join(sorted(model["revisions"]))
-        raise NotPublished(f"{model_id}: no revision {name!r}. Published revisions: {available}")
+        raise WeightsError(f"{model_id}: no revision {name!r}. Published revisions: {available}")
     return name, entry
 
 
@@ -200,13 +184,13 @@ def _artifact(
         # contradict the list the caller was just given to choose from.
         composed = _composing(entry, key)
         if composed:
-            raise NotPublished(
+            raise WeightsError(
                 f"{model_id} publishes {key!r} as {len(composed)} files, not one: "
                 f"{', '.join(composed)}. Ask for one of those by name, or use "
                 f"mozo.weights.parts() with {key!r} to get them all."
             )
         available = ", ".join(sorted(k for k in entry["artifacts"] if k not in _ACCOMPANYING))
-        raise NotPublished(
+        raise WeightsError(
             f"{model_id} revision {revision} does not publish {key!r}. Available: {available}"
         )
     return artifact
@@ -299,22 +283,6 @@ def revision_of(family: str, variant: str, *, revision: str | None = None) -> st
     return name
 
 
-def published(family: str, variant: str, *, revision: str | None = None) -> list[str]:
-    """The artifact keys *variant* publishes, or ``[]`` if it publishes nothing at all.
-
-    The membership question :func:`artifacts` answers by raising. Lives here because this module
-    owns the manifest's layout -- the same reason :func:`companions` does -- and because three
-    callers were each spelling it out: the server's catalogue, the test fixtures, and a bench tool.
-
-    This is "is it published", not "are the bytes here". Obtaining them can still fail, which is
-    why a caller that goes on to build a predictor catches :class:`WeightsError` too.
-    """
-    try:
-        return artifacts(family, variant, revision=revision)
-    except NotPublished:
-        return []
-
-
 def artifacts(family: str, variant: str, *, revision: str | None = None) -> list[str]:
     """Return the artifact keys a revision publishes, e.g. ``["onnx-fp32", "torch-fp32"]``.
 
@@ -404,7 +372,7 @@ def parts(
     # contradict the list a caller was given to choose from.
     available = runnable(sorted(entry["artifacts"]))
     if runtime not in available:
-        raise NotPublished(
+        raise WeightsError(
             f"{family}/{variant} publishes no {runtime!r}. "
             f"Available runtimes: {', '.join(available) or 'none'}"
         )
