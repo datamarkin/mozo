@@ -1078,6 +1078,78 @@
         }
       }
     },
+    "siglip2/base-224": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "siglip2/base-224/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "siglip2/base-224/2026-08-23/NOTICE",
+              "sha256": "159548672362411de8fe564bbdbcaaa8896d967419f20ca3a401830ad24b4438",
+              "size": 1774
+            },
+            "torch-fp32": {
+              "path": "siglip2/base-224/2026-08-23/torch-fp32.pth",
+              "sha256": "0b5b5161a0034df3e15ee1eef1f1265e02a7c714d75c672cdf8f7dc8e6791a8f",
+              "size": 1500885737
+            }
+          }
+        }
+      }
+    },
+    "siglip2/giant-384": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "siglip2/giant-384/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "siglip2/giant-384/2026-08-23/NOTICE",
+              "sha256": "d1ed6c8b30cef013a78fcfeb83c84bbb81e57b5faac2a58b3bb2ae4813f71df1",
+              "size": 1912
+            },
+            "torch-fp32": {
+              "path": "siglip2/giant-384/2026-08-23/torch-fp32.pth",
+              "sha256": "132300b12c34b329d816798b31fc57f4de2963fc194da3ef90b4b5942fc8dbb0",
+              "size": 7487907557
+            }
+          }
+        }
+      }
+    },
+    "siglip2/so400m-384": {
+      "latest": "2026-08-23",
+      "revisions": {
+        "2026-08-23": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "siglip2/so400m-384/2026-08-23/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "siglip2/so400m-384/2026-08-23/NOTICE",
+              "sha256": "3f2a46b07be130d13fac39b67a893960d1dd304339b007364e1d68c21717de0b",
+              "size": 1778
+            },
+            "torch-fp32": {
+              "path": "siglip2/so400m-384/2026-08-23/torch-fp32.pth",
+              "sha256": "956531d95b8f2a9a16636efa0d721faa6a23215a139bc74e0fb557fb11a781fd",
+              "size": 4544326429
+            }
+          }
+        }
+      }
+    },
     "yolov11/large": {
       "latest": "2026-08-19",
       "revisions": {
