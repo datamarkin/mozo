@@ -56,8 +56,11 @@ reads the safetensors and writes plain tensors. No tensor is altered, renamed, c
 
 ## What was deliberately left behind
 
-**Ten of the fifteen fixed-resolution variants.** mozo carries the five most-used, which is 89% of
-all SigLIP 2 downloads: `base-224`, `base-256`, `so400m-384`, `so400m16-256` and `giant-384`. The
+**Ten of the fifteen fixed-resolution variants.** mozo carries the five most-used — `base-224`,
+`base-256`, `so400m-384`, `so400m16-256` and `giant-384` — which took 89% of the downloads across
+those fifteen when this was measured (August 2026, Hugging Face). That denominator matters: the
+20% quoted for naflex below is a share of SigLIP 2 as a whole, so the two do not add up and are
+not meant to. The
 other ten need no code — a `Spec` row and a checkpoint each — and they are absent because nobody
 was asking for them, not because anything here cannot run them. The five still exercise every
 distinct geometry: head dimensions of 64, 72 and 96, a patch grid that floors, asymmetric towers,
@@ -149,9 +152,8 @@ rather than a change.
 
 ### 5. mozo requires RGB where the reference does not convert
 
-`do_convert_rgb` is `null` in all fifteen of Google's published configs and the reference reads
-it as false, so
-the reference does not convert a greyscale or RGBA input. mozo's `load_image` guarantees RGB before
+`do_convert_rgb` is `null` in all fifteen of Google's published configs and the reference reads it
+as false, so the reference does not convert a greyscale or RGBA input. mozo's `load_image` guarantees RGB before
 the vendor sees anything, so the two agree on every input mozo can produce; `preprocess` requires
 what it is handed to be RGB `uint8` and says so rather than guessing.
 

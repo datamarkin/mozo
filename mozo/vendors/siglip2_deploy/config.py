@@ -97,7 +97,9 @@ class Spec:
 
 
 #: What mozo carries: the five most-used of the fifteen fixed-resolution variants Google
-#: publishes, which is 89% of all SigLIP 2 downloads. The other ten are real models and mozo simply
+#: publishes, which is 89% of the downloads across those fifteen (August 2026, Hugging Face). Note
+#: the denominator: naflex is a further 20% of SigLIP 2 as a whole, and the two figures are shares
+#: of different things. The other ten are real models and mozo simply
 #: does not ship them -- they are one entry each plus a checkpoint, and no new code. The two
 #: ``-naflex`` ones are a different matter: they run at variable resolution through a different
 #: image tower and would need one. See ``PROVENANCE.md``.

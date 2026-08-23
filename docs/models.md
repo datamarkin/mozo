@@ -393,7 +393,8 @@ something on its own.
   most downloaded of all of them
 
 Apache-2.0, code and weights, ungated. Google publishes fifteen fixed-resolution variants and mozo
-carries these five, which are 89% of all SigLIP 2 downloads; the other ten need a manifest entry
+carries these five, which took 89% of the downloads across those fifteen; the other ten need a
+manifest entry
 and a checkpoint, not new code. The two `-naflex` variable-resolution variants are different — they
 use a different image tower — and are not carried; see the vendor's `PROVENANCE.md`.
 
