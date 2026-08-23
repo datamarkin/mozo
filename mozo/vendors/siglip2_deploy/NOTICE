@@ -1,0 +1,46 @@
+siglip2_deploy
+Copyright 2025 The Google Research Authors
+Copyright 2024 The HuggingFace Inc. team
+
+This product includes software developed by Google Research, published as SigLIP
+2 (https://github.com/google-research/big_vision) and described in "SigLIP 2:
+Multilingual Vision-Language Encoders with Improved Semantic Understanding,
+Localization, and Dense Features" (Tschannen, Gritsenko, Wang, Naeem,
+Alabdulmohsin, Parthasarathy, Evans, Beyer, Xia, Mustafa, Henaff, Harmsen,
+Steiner, Zhai; 2025, arXiv:2502.14786).
+
+The modules here are extracted from transformers/models/siglip, which is
+licensed under the Apache License 2.0; see the LICENSE file in this directory.
+Google's own release is JAX/Flax, and the PyTorch implementation is the one whose
+numbers the published PyTorch checkpoints reproduce. See PROVENANCE.md.
+
+The authors state of their SigLIP releases: these models are not official Google
+products and were trained and released for research purposes.
+
+ON THE WEIGHTS
+--------------
+All fifteen published checkpoints are Apache-2.0, stated on each model card and
+served ungated. Unlike CLIP, nothing here is inferred from silence.
+
+THE VOCABULARY
+--------------
+assets/gemma_bpe.json.gz is derived from tokenizer.json as published in
+google/siglip2-base-patch16-224 -- 256,000 pieces, 580,604 merge rules and 249
+added tokens, re-encoded so that merges are pairs of ids rather than pairs of
+strings. One vocabulary serves all fifteen variants; tokenizer.model is
+byte-identical across them (sha256 61a7b147390c64585d6c3543dd6fc636906c9af3865a5
+548f27f31aee1d4c8e2, 4,241,003 bytes).
+
+It is Gemma's vocabulary. Gemma's own weights are published under the Gemma Terms
+of Use behind a gate, and google/gemma-2b, gemma-7b and gemma-2-9b-it are all
+gated. Google publishes this copy elsewhere: inside every google/siglip2-*
+repository, ungated, under Apache-2.0. That is an affirmative grant by the rights
+holder covering the artifact actually taken, not an inference from silence. It is
+written down here because it looks alarming until checked.
+
+NOT INCLUDED
+------------
+The two -naflex variable-resolution variants, the sigmoid training loss, the
+captioning decoder and self-distillation heads, position-embedding interpolation,
+and the tokenizer's silent truncation. See PROVENANCE.md for the full list and
+for why.
