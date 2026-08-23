@@ -32,11 +32,11 @@ Serve  from one install, in one process, behind one API.
 
 | Family | Variants | Weights licence | Runtimes |
 |---|---|---|---|
-| `rfdetr` | `nano` `small` `medium` `large` `seg-` of each | Apache-2.0 | torch, onnx, coreml |
-| `yolov8` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml |
-| `yolov11` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx |
-| `yolov12` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx, coreml |
-| `yolov26` | `nano` `small` `medium` `large` `xlarge` | **AGPL-3.0** | torch, onnx |
+| `rfdetr` | `nano` `small` `medium` `large` | Apache-2.0 | torch, onnx, coreml |
+| `yolov8` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx, coreml |
+| `yolov11` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx |
+| `yolov12` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx, coreml |
+| `yolov26` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx |
 
 Returns detections.
 
@@ -46,7 +46,7 @@ Returns detections.
 |---|---|---|---|
 | `grounding_dino` | `tiny` `base` | Apache-2.0 | descriptions, ≤256 tokens total |
 | `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens |
-| `sam3` | `sam3` | **SAM License** | phrases, ≤32 tokens |
+| `sam3` | `sam3` | SAM License | phrases, ≤32 tokens |
 
 Returns detections.
 
@@ -93,7 +93,7 @@ Returns detections, one row per line.
 | Family | Variants | Weights licence | Unit |
 |---|---|---|---|
 | `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless |
-| | `base` `large` | **CC-BY-NC-4.0** | relative, unitless |
+| | `base` `large` | CC-BY-NC-4.0 | relative, unitless |
 | | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** |
 
 Returns an `HxW` float32 map.
