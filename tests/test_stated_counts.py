@@ -130,6 +130,54 @@ def test_every_published_variant_is_one_the_registry_names():
         assert not known or variant in known, f"{model_id} is published but {family} lists {known}"
 
 
+def test_every_registered_variant_is_one_the_manifest_publishes():
+    """The other direction, and the one that reaches a user.
+
+    A variant the manifest does not carry is a name the catalogue offers and no request can
+    satisfy: ``/models`` lists it, the test page puts it in the dropdown, and picking it fails on
+    a download that was never going to find anything. SigLIP 2 shipped that way -- fifteen
+    registered against three published -- and the symptom was a 500 rather than a red test.
+
+    An empty ``variants`` list means the family accepts any name and publishes nothing of its own,
+    which ``registry.py`` documents; those are skipped rather than failed.
+    """
+    models = manifest()["models"]
+    for family, entry in MODEL_REGISTRY.items():
+        missing = [v for v in entry["variants"] if f"{family}/{v}" not in models]
+        assert not missing, f"{family} registers {missing} but the manifest publishes no weights"
+
+
+def test_each_family_counts_its_own_variants_correctly():
+    """Eight descriptions open by counting their variants, and ``/models`` serves that text.
+
+    The count is written by hand next to the list it counts, so it is the one number in the
+    catalogue that can contradict the entry carrying it.
+    """
+    for family, entry in MODEL_REGISTRY.items():
+        stated = re.search(r"(\d+) variants?\b", entry["description"])
+        if not stated or not entry["variants"]:
+            continue
+        assert int(stated.group(1)) == len(entry["variants"]), (
+            f"{family} says {stated.group(1)} variants and lists {len(entry['variants'])}"
+        )
+
+
+def test_the_licence_breakdown_accounts_for_every_variant():
+    """The README splits the published variants by licence. The parts must make the whole.
+
+    Not derived from the manifest, which records a LICENSE artifact's hash but not its name, so
+    the split stays hand-written. Summing it is what catches a stale one: the numbers were 31 and
+    then 34 and then 36 as families landed, and each time only one of the five moved.
+    """
+    readme = (ROOT / "README.md").read_text()
+    sentence = re.search(r"Of the \d+ published variants.*?SAM License", readme, re.S)
+    assert sentence, "the README no longer states a licence breakdown -- update this test"
+    parts = [int(n) for n in re.findall(r"\**(\d+) (?:are|carries)\b", sentence.group(0))]
+    assert sum(parts) == published_variants(), (
+        f"the licence breakdown sums to {sum(parts)}, manifest publishes {published_variants()}"
+    )
+
+
 def test_the_readme_states_how_many_families_ship_a_verification_gate():
     """`tools/verify/` is the claim the whole README rests on, so its arithmetic is checked."""
     gates = {
