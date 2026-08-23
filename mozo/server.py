@@ -28,7 +28,6 @@ from . import __version__
 from .image import load_image
 from .manager import ModelManager
 from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
-from .weights import NotPublished, published
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -261,19 +260,10 @@ def predict(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Could not read or decode the image file: {e}")
 
-    # Existence in the registry was settled above; publication was not. A registered variant
-    # mozo ships no weights for still cannot load, and that is the caller's answer rather than
-    # a genuine failure -- so it is separated out below.
+    # Existence was settled above, so anything raised here is a genuine failure to load a
+    # model that does exist.
     try:
         model = app.state.model_manager.get_model(family, variant)
-    except NotPublished as e:
-        # The catalogue does not offer it: no such variant, revision or runtime. A permanent fact
-        # rather than a failure of this request -- no retry helps -- so it is the caller's answer,
-        # the same 404 an unknown name gets, and not a 500 blaming the server for its own
-        # catalogue. Deliberately not its parent ``WeightsError``, which also covers a download
-        # that failed, a mirror serving the wrong bytes and an offline cache miss: those are the
-        # server's problem, a retry may fix them, and they keep the 500 below.
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
 
@@ -377,14 +367,6 @@ def encode(
 
     try:
         model = app.state.model_manager.get_model(family, variant)
-    except NotPublished as e:
-        # The catalogue does not offer it: no such variant, revision or runtime. A permanent fact
-        # rather than a failure of this request -- no retry helps -- so it is the caller's answer,
-        # the same 404 an unknown name gets, and not a 500 blaming the server for its own
-        # catalogue. Deliberately not its parent ``WeightsError``, which also covers a download
-        # that failed, a mirror serving the wrong bytes and an offline cache miss: those are the
-        # server's problem, a retry may fix them, and they keep the 500 below.
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model: {e}")
 
@@ -427,12 +409,6 @@ def list_models():
             "task_type": entry["task_type"],
             "description": entry["description"],
             "variants": entry["variants"],
-            # Which of those can actually run. A family may register a variant mozo publishes no
-            # weights for -- a licence that forbids redistribution, or an architecture that only
-            # runs against a checkpoint you supply -- and a catalogue that does not say so sends
-            # every caller to a 404 to find out. Read off the manifest that ships in the wheel, so
-            # this still costs no network and no weights.
-            "published": [v for v in entry["variants"] if published(family, v)],
             # The two capability flags a caller cannot infer from the task name alone. Served
             # rather than restated: the browser page needs both and cannot import the registry,
             # and a copy it keeps in step by hand is a copy that drifts.
