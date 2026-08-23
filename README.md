@@ -94,7 +94,7 @@ Returns detections, one row per line.
 |---|---|---|---|
 | `depth_anything_v2` | `small` | Apache-2.0 | relative, unitless |
 | | `base` `large` | CC-BY-NC-4.0 | relative, unitless |
-| | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | **metres** |
+| | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | metres |
 
 Returns an `HxW` float32 map.
 
