@@ -35,6 +35,7 @@ PACKAGE = Path(mozo.__file__).parent
 #: :class:`TestImportCost` holds rather than leaving to this comment.
 MAY_IMPORT_THE_WORKFLOW_RUNTIME = {
     "server.py": "mounts the workflow router",
+    "cli.py": "runs a workflow, inside the `run` command",
 }
 
 
@@ -164,10 +165,11 @@ class TestTheRuntimeReachesNothing:
 STAYS_CHEAP = """
 import sys
 import mozo
+import mozo.cli
 
 heavy = sorted(name for name in ("mozo.workflow", "pixelflow", "scipy", "torch")
                if name in sys.modules)
-assert not heavy, f"import mozo pulled in {heavy}"
+assert not heavy, f"importing mozo and its CLI pulled in {heavy}"
 
 print("OK")
 """
@@ -184,6 +186,8 @@ class TestImportCost:
         who wants ``get_model`` should never load PixelFlow, and ``mozo/__init__.py`` reaching
         ``server`` or ``workflow`` would make that unavoidable for everyone.
 
+        ``mozo.cli`` is checked too, because it is what ``mozo version`` loads. It reaches the
+        runtime only inside ``mozo run``, and this is what says so.
         """
         assert _run(STAYS_CHEAP) == "OK"
 
