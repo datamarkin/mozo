@@ -12,8 +12,10 @@ file directly and rebuilds the network from what that file records.
 | Validated against | reference tensors captured from the original implementation |
 | Harvested into mozo | 2026-08-19 |
 | Verified with | `torch` 2.11.0, Python 3.10, on CPU |
-| Upstream repository | _(record it here — this package arrived as a standalone tree)_ |
-| Upstream commit | _(record it here)_ |
+| Checkpoint source | `ultralytics/assets` release `v8.4.0`, digests read from GitHub — see `tools/fetch/_ultralytics.py` |
+| Corresponding source | https://github.com/ultralytics/ultralytics |
+| Checkpoint writer | `ultralytics` 8.2.100, recorded in the checkpoints (2024-09-25) |
+| Upstream commit | not pinned; the release the checkpoints came from is |
 
 It is a separate vendor from `yolov8_deploy` rather than a shared substrate with a second block
 table, even though roughly four fifths of the two is the same design written twice. That is a
@@ -62,6 +64,11 @@ this code does not change the checkpoint's terms.
 Against per-layer reference tensors captured from the original implementation, with `yolo11n.pt`
 on `bus.jpg` (1080×810) and `zidane.jpg` (720×1280), fused, at `conf=0.001`, `iou=0.7`,
 `max_det=300`. Every figure is a maximum absolute difference.
+
+**These numbers carry tolerances, and that is structural.** This package is not an extraction of
+upstream source: it is an independent implementation built from what the checkpoint records. Two
+implementations of the same arithmetic in a different operator order do not agree bit for bit, so
+what is measured is a maximum absolute difference against a stated bound rather than equality.
 
 | Check | Tolerance | bus.jpg | zidane.jpg |
 |---|---|---|---|

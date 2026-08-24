@@ -12,8 +12,10 @@ reads the checkpoint file directly and rebuilds the network from what that file 
 | Validated against | per-layer activations captured from the original implementation |
 | Harvested into mozo | 2026-08-19 |
 | Verified with | `torch` 2.11.0, Python 3.10, on CPU |
-| Upstream repository | _(record it here — this package arrived as a standalone tree)_ |
-| Upstream commit | _(record it here)_ |
+| Checkpoint source | `ultralytics/assets` release `v8.4.0`, digests read from GitHub — see `tools/fetch/_ultralytics.py` |
+| Corresponding source | https://github.com/ultralytics/ultralytics |
+| Checkpoint writer | **nothing** — these checkpoints carry only `model` and `ema` |
+| Upstream commit | not pinned; the release the checkpoints came from is |
 
 It is a separate vendor from its siblings rather than a shared substrate with a third block table.
 That is a deliberate call: a vendor is meant to be readable and replaceable on its own, and its
@@ -86,6 +88,11 @@ does not change the checkpoint's terms.
 
 Against per-layer activations captured from the original implementation, on `yolo12n.pt` at
 640×640, compared at `conf=0.001` and `iou=0.7`. Every number is a maximum absolute difference.
+
+**These numbers carry tolerances, and that is structural.** This package is not an extraction of
+upstream source: it is an independent implementation built from what the checkpoint records. Two
+implementations of the same arithmetic in a different operator order do not agree bit for bit, so
+what is measured is a maximum absolute difference against a stated bound rather than equality.
 
 | Check | bus.jpg | zidane.jpg | Tolerance |
 |---|---|---|---|

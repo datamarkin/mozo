@@ -13,8 +13,11 @@ file records.
 | Validated against | activations captured from the reference implementation |
 | Harvested into mozo | 2026-08-19 |
 | Verified with | `torch` 2.11.0, Python 3.10, on CPU |
-| Upstream repository | _(record it here — this package arrived as a standalone tree)_ |
-| Upstream commit | _(record it here)_ |
+| Checkpoint source | `ultralytics/assets` release `v8.4.0`, digests read from GitHub — see `tools/fetch/_ultralytics.py` |
+| Corresponding source | https://github.com/ultralytics/ultralytics |
+| Checkpoint writer | `ultralytics` 8.3.222, recorded in the checkpoints (2025-12-15 – 2026-01-07) |
+| Reference | `ultralytics` 8.4.0, matching the assets release — `tools/verify/yolov26_reference.py` |
+| Upstream commit | not pinned; the release the checkpoints came from is |
 
 It is a separate vendor from its siblings rather than a shared substrate. That is a deliberate
 call: a vendor is meant to be readable and replaceable on its own, and its numbers must stay
@@ -88,28 +91,62 @@ does not change the checkpoint's terms.
 
 ## Measured parity
 
-Against activations captured from the reference implementation for `yolo26n.pt`, on `bus.jpg`
-(1080×810) and `zidane.jpg` (720×1280). Every number is a maximum absolute difference.
+Reproducible, not remembered. `python tools/verify/yolov26_reference.py --variant <v>` runs both
+implementations and prints this table; `tools/verify/yolov26_reference.json` is what it last wrote.
+Every number is a maximum absolute difference, on `tests/fixtures/images/example.jpg` (1920×1281),
+CPU, fused, `ultralytics` 8.4.0 against `torch` 2.11.0.
 
-| Check | Tolerance | bus.jpg | zidane.jpg |
-|---|---|---|---|
-| Preprocessed input | 1e-6 | 0.0 | 0.0 |
-| All 23 recorded layer outputs | 2e-3 | 1.82e-04 | 9.14e-05 |
-| Head output, boxes (px) | 1e-2 | 8.54e-04 | 9.46e-04 |
-| Head output, scores | 1e-3 | 6.6e-07 | 1.3e-06 |
-| Detections, boxes (px) | 1e-2 | 3.66e-04 | 6.71e-04 |
-| Detections, scores | 1e-3 | 6.6e-07 | 1.3e-06 |
-| Exported ONNX, boxes (px) | 1e-2 | 3.36e-04 | 1.71e-03 |
-| Exported ONNX, scores | 1e-3 | 7.7e-07 | 1.2e-06 |
-| Detection count at `conf=0.001` | exact | 177 / 177 | 125 / 125 |
+**These numbers carry tolerances, and that is structural.** This package is not an extraction of
+upstream source: it is an independent implementation built from what the checkpoint records. Two
+implementations of the same arithmetic in a different operator order do not agree bit for bit, so
+what is measured is a maximum absolute difference against a stated bound rather than equality.
 
-Fusion is on for those numbers.
+| Check | Tolerance | nano | small | medium | large | xlarge |
+|---|---|---|---|---|---|---|
+| Preprocessed input | 1e-6 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| Worst of all 23 layer outputs | 2e-3 | 1.08e-04 | 1.95e-04 | 1.89e-04 | 8.35e-04 | 9.58e-04 |
+| Head boxes, px, above `conf` | 1e-2 | 7.78e-04 | 5.49e-04 | 2.75e-04 | 4.43e-04 | 1.53e-03 |
+| Head boxes, px, all 8,400 anchors | — | 2.61e-03 | 2.81e-03 | 4.27e-03 | 1.24e-02 | 2.69e-03 |
+| Head scores | 1e-3 | 8.49e-07 | 5.66e-06 | 3.99e-06 | 1.66e-05 | 1.37e-06 |
+| Detections, boxes (px) | 1e-2 | 7.78e-04 | 5.49e-04 | 2.75e-04 | 4.43e-04 | 1.53e-03 |
+| Detections, scores | 1e-3 | 8.49e-07 | 5.66e-06 | 3.99e-06 | 1.66e-05 | 1.37e-06 |
+| Detections, class ids | exact | equal | equal | equal | equal | equal |
+| Detections, count at `conf=0.001` | exact | equal | equal | equal | equal | equal |
 
-**What this table cannot show.** Both reference photographs letterbox to whole-pixel padding —
-80.0 and 140.0 — so they agree under either padding convention, and the half-pixel disagreement
-described below is invisible to every number in it. That is the fourth harvest in a row whose
-parity suite could not see it. `tests/test_vendor_agreement.py` and the family's recorded-detection
-fixture cover what the table cannot.
+155 comparisons across the five published variants, all within tolerance.
+
+**Why the head is measured twice.** Over the whole anchor grid, `large` reads 1.24e-02 px — above
+the 1e-2 the other rows are held to. That worst anchor is 6540, and its score is 0.000000: no
+caller can receive it, and neither implementation reads it, because both take a top-k before
+anything else. Over the 99 anchors that clear `conf=0.001` the same image reads 2.44e-04 px, and
+above 0.01 it reads 6.10e-05. So the whole grid is reported and the anchors a caller can reach are
+gated. Gating on the grid would hold the family to the float noise of its own dead anchors, which
+can fail with nothing wrong; gating quietly on the survivors alone would hide that the grid moves.
+
+**The padding case the old table could not see is now covered.** The two photographs this table was
+previously measured on both letterboxed to whole-pixel padding — 80.0 and 140.0 — so they agreed
+under either convention, and PROVENANCE recorded that as the fourth harvest in a row whose parity
+suite could not see the half-pixel disagreement. `example.jpg` letterboxes to a spare of 106.5,
+floor 106 and ceil 107, so the convention is load-bearing in every number above.
+
+**The gate has been made to fail, and it localises.** `--falsify all` perturbs one constant at a
+time and reports which stages move:
+
+| perturbation | moves | leaves alone |
+|---|---|---|
+| anchor offset 0.5 → 0.0 | the boxes | all 23 layers, every score |
+| all three strides collapsed to one | the boxes | all 23 layers, every score |
+| top-k budget halved | the detection count and its rows | all 23 layers, the head |
+| a constant added to every fused bias | 17 layers, then the head and detections | the preprocessing |
+| sigmoid before the top-k instead of after | nothing | everything — the control |
+
+The last row is the one that makes the other four mean something: a harness that fails at
+everything has not been shown to localise, so one perturbation that provably cannot change a
+number is run alongside the four that can.
+
+**What this still does not cover.** The ONNX graph. `tools/verify/yolov26.py` compares it against
+the torch path within one hundredth of a pixel, and that is a two-path comparison like every other
+everyday check; the reference script runs torch only.
 
 ## What mozo changed on harvesting
 
