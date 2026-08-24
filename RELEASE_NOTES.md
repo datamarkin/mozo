@@ -1,12 +1,15 @@
-# Mozo v0.7.0: Decide What You Serve
+# Mozo v0.7.1: Decide What You Serve
 
-## What's New in v0.7.0
+## What's New in v0.7.1
 
 A server no longer has to offer everything mozo publishes. `MOZO_ENABLE` narrows a deployment to
 the models you choose, which matters because the weights are separate works with their own terms:
 of the 63 published variants, 20 are AGPL-3.0, 2 are CC-BY-NC-4.0 and 1 carries Meta's SAM
 License, and serving those over a network places obligations on you that serving the other 40
 does not.
+
+> **PyPI goes 0.6.0 → 0.7.1.** 0.7.0 was written up and committed but never tagged or
+> released, so everything below ships here for the first time.
 
 ### 🔒 `MOZO_ENABLE`
 
