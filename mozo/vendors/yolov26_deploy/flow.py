@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import torch
+import torch.nn.functional as F
 
 
 def _chain(block, x):
@@ -89,6 +90,57 @@ def _concat(block, xs):
     return torch.cat(xs, block.rec("d"))
 
 
+def _proto(block, x):
+    """The mask prototype stack: a convolution, a *learned* upsample, then two more.
+
+    ``upsample`` is a ``ConvTranspose2d``, not an interpolation -- see ``build._convtranspose2d``.
+
+    A helper rather than a ``DATAFLOW`` row: no checkpoint this package serves records a bare
+    ``Proto``, and a table whose rule is "an error, never a guess" should not claim a class it has
+    never been handed. ``Proto26`` inherits these four children and calls this directly.
+    """
+    return block.cv3(block.cv2(block.upsample(block.cv1(x))))
+
+
+def _proto26(block, feats):
+    """YOLO26's prototypes, refined from all three levels rather than from the finest alone.
+
+    The two coarser maps are projected to the finest one's width by a 1x1 convolution, resized up
+    by nearest neighbour and summed. Base ``Proto`` takes a single tensor and this takes the list,
+    which is why building one where the checkpoint records the other drops the refinement, raises
+    nothing, and still produces plausible masks.
+
+    ``semseg`` is deliberately not evaluated. It is a training-time semantic-segmentation head --
+    upstream's own ``fuse()`` deletes it before inference and its ``forward`` returns it only while
+    training -- so it is built for the strict load and never run.
+    """
+    feat = feats[0]
+    for refine, level in zip(block.feat_refine, feats[1:]):
+        feat = feat + F.interpolate(refine(level), size=feat.shape[2:], mode="nearest")
+    return _proto(block, block.feat_fuse(feat))
+
+
+def _segment26(block, feats):
+    """Per anchor: box distances, class logits and mask coefficients. Plus the prototypes.
+
+    The same one-to-one branches ``_detect`` evaluates, with ``one2one_cv4`` alongside them, so the
+    channel order is ``[4 distances, nc classes, nm coefficients]`` -- which is the order
+    ``network._decode`` splits and the order upstream's own ``postprocess`` expects.
+
+    Returns the raw grid *and* the prototypes, because the coefficients are meaningless without
+    them and nothing downstream should have to reach back into the head to find them.
+    """
+    levels = block.rec("nl")
+    if len(feats) != levels:
+        raise ValueError(f"segmentation head recorded nl={levels} but received {len(feats)} feature maps")
+    outputs = [
+        torch.cat((box(feat).flatten(2), cls(feat).flatten(2), mask(feat).flatten(2)), 1)
+        for feat, box, cls, mask in
+        zip(feats, block.one2one_cv2, block.one2one_cv3, block.one2one_cv4)
+    ]
+    return torch.cat(outputs, 2), block.proto(feats)
+
+
 def _detect(block, feats):
     """Per level, box distances and class logits side by side; levels flattened and joined.
 
@@ -122,4 +174,6 @@ DATAFLOW: dict[str, Callable[[Any, Any], Any]] = {
     "Attention": _attention,
     "Concat": _concat,
     "Detect": _detect,
+    "Segment26": _segment26,
+    "Proto26": _proto26,
 }
