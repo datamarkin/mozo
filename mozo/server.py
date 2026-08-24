@@ -30,6 +30,7 @@ from . import __version__
 from .image import load_image
 from .manager import ModelManager
 from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
+from .text import comma_separated
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -88,9 +89,7 @@ def _deployed() -> dict[str, tuple[str, ...]]:
 
     wanted: dict[str, set[str]] = {}
     unknown: list[str] = []
-    for token in (item.strip() for item in spec.split(",")):
-        if not token:
-            continue
+    for token in comma_separated(spec):
         family, _, variant = token.partition("/")
         # Asked of the registry rather than checked here, so what counts as a real name is
         # decided in one place. It also carries the empty-variant-list rule for free.
@@ -407,7 +406,7 @@ def predict(
     floor = {} if threshold is None else {"threshold": threshold}
     try:
         if task == "object_detection":
-            parsed = [n.strip() for n in labels.split(",") if n.strip()] if labels else None
+            parsed = comma_separated(labels) or None
             return JSONResponse(
                 content=model.predict(image, labels=parsed or None, **floor).to_dict())
         if task in PROMPTED:
