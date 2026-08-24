@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..depth import encode as encode_depth
 from .graph import Workflow
@@ -32,6 +33,43 @@ from .node import PortType
 from .registry import catalogue
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
+
+#: The built editor. Its source is ``ui/`` at the repository root, which never ships -- the same
+#: arrangement as ``tools/``, which produces ``weights/``. npm is needed to change the editor and
+#: never to install mozo.
+_EDITOR = Path(__file__).parent / "static"
+
+
+@router.get("", summary="The workflow editor", include_in_schema=False)
+def editor():
+    """Serve the editor.
+
+    Registered without a trailing slash so that ``/workflow`` is the address, and the assets it
+    asks for are relative to it -- which is what lets the whole thing be mounted under a prefix
+    without the page knowing.
+    """
+    page = _EDITOR / "index.html"
+    if not page.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="The editor is not built. Run `npm install && npm run build` in ui/.")
+    return FileResponse(page, media_type="text/html")
+
+
+@router.get("/assets/{name}", summary="The editor's own files", include_in_schema=False)
+def asset(name: str):
+    """Serve one of the editor's built files.
+
+    A route rather than a mounted ``StaticFiles``, because mounting is the application's to do and
+    ``mozo/server.py`` has exactly one line about this package. Vite emits flat names, so one
+    segment is the whole of it -- and the resolved path is checked to be inside the directory, so a
+    name full of ``..`` reaches nothing.
+    """
+    path = (_EDITOR / "assets" / name).resolve()
+    if not path.is_file() or (_EDITOR / "assets").resolve() != path.parent:
+        raise HTTPException(status_code=404, detail=f"no such file: {name}")
+    return FileResponse(path)
+
 
 @router.get("/nodes", summary="List the nodes a workflow can be built from")
 def list_nodes():
