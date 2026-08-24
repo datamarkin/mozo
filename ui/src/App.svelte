@@ -10,7 +10,7 @@
     import NodePalettePanel from './lib/NodePalettePanel.svelte';
     import { generateNodeClasses } from './lib/utils.js';
     import { fetchCatalogue, fromDocument, stream, toDocument } from './lib/api.js';
-    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, appConfig } from './lib/stores.js';
+    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, appConfig, chosenImage } from './lib/stores.js';
 
     // Every workflow starts here: pixels have to come from somewhere, and this is the node whose
     // path the runner overrides per image.
@@ -31,9 +31,6 @@
 
     let svelteFlowInstance;
     let unsubscribeExecuting;
-    //: The image the next run uses, chosen in the toolbar. Without one the workflow runs on
-    //: whatever path its load_image node was saved with.
-    let chosenImage = null;
 
     // Set context for child components - must be during initialization
     setContext('availableNodes', availableNodes);
@@ -288,7 +285,7 @@
         })));
 
         try {
-            await stream(toDocument($nodes, $edges), chosenImage, (event) => {
+            await stream(toDocument($nodes, $edges), $chosenImage, (event) => {
                 if (event.done) {
                     isExecuting.set(false);
                 } else if (event.status === 'running') {
@@ -310,11 +307,6 @@
         } finally {
             isExecuting.set(false);
         }
-    }
-
-    /** Pick the image the next run uses, instead of whatever path the workflow was saved with. */
-    function chooseImage(event) {
-        chosenImage = event.target.files[0] || null;
     }
 
     function exportWorkflow() {
@@ -369,8 +361,6 @@
                     {exportWorkflow}
                     {importWorkflow}
                     isExecuting={$isExecuting}
-                    {chooseImage}
-                    {chosenImage}
             />
 
 

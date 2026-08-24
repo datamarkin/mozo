@@ -15,18 +15,24 @@ from PIL import Image as PillowImage
 
 from mozo.image import load_image as decode
 
-from ..node import Image
+from ..node import Image, Source
 from ..registry import node
 
 
 @node(category="Input")
-def load_image(image: Optional[str] = None) -> Image:
+def load_image(image: Optional[Source] = None) -> Image:
     """Read an image from a path.
 
     The parameter is called *image* so that running a workflow on something else reads the way it
     should: ``workflow.run(image="street.jpg")``. It is optional because a workflow is commonly
     saved with no path at all and given one per run -- which the catalogue now says, rather than
     leaving an empty string to mean it.
+
+    :data:`~mozo.workflow.node.Source` rather than ``str`` for the same reason ``Color`` is not
+    ``str``: it is a path either way, but it is the one parameter whose value a person at a browser
+    has no way to write down, since their file is on their machine and the path would have to name
+    the server's. Saying so in the annotation is what puts a file picker on the node instead of a
+    text box nobody can fill in.
     """
     # Blank as well as unset: a form field sends "" where a Python caller sends None, and both
     # mean the same thing. This is not the sentinel it replaced -- the catalogue says the parameter

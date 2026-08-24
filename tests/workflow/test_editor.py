@@ -74,9 +74,17 @@ class TestTheEditorAndTheServerAgree:
         for gone in ("datamarkin", "/api/tools", "/api/workflow", "toolType", "MediaInput"):
             assert gone not in bundle, f"the built editor still references {gone!r}"
 
-    def test_the_server_offers_every_widget_the_panel_can_draw(self, client):
-        """The panel switches on `kind`. A kind it has never heard of renders as a text box."""
-        drawn = {"int", "float", "str", "bool", "color", "select"}
+    def test_the_server_offers_every_widget_the_panel_can_draw(self):
+        """The panel switches on `kind`, and anything it has not heard of falls to a text box.
+
+        Read out of the panel rather than listed here, for the reason the catalogue is read out of
+        the node functions: a list kept alongside is a second place to keep in step, and this one
+        would drift silently -- a new kind would render as a text box and pass.
+
+        `str` is the text box, so the fall-through is right for it and for nothing else.
+        """
+        panel = (Path(__file__).resolve().parents[2] / "ui/src/lib/PropertiesPanel.svelte").read_text()
+        drawn = set(re.findall(r"field\.kind === '(\w+)'", panel)) | {"str"}
         served = {parameter.kind for name in shipped() for parameter in get(name).parameters}
         assert served <= drawn, f"the server offers widgets the editor cannot draw: {served - drawn}"
 

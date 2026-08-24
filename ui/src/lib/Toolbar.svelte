@@ -5,8 +5,6 @@
   export let exportWorkflow;
   export let importWorkflow;
   export let isExecuting;
-  export let chooseImage;
-  export let chosenImage = null;
 
   let fileInput;
 
@@ -29,11 +27,6 @@
     <div class="navbar-end">
       <div class="navbar-item">
         <div class="buttons">
-          <label class="button" title="Run on this image instead of the saved path">
-            {chosenImage ? chosenImage.name : 'Choose image'}
-            <input type="file" accept="image/*" on:change={chooseImage} style="display: none;" />
-          </label>
-
           <button class="button is-dark" on:click={executeWorkflow} disabled={isExecuting}>
             {isExecuting ? 'Running...' : 'Run workflow'}
           </button>

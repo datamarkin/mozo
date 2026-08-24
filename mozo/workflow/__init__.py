@@ -19,7 +19,8 @@ that say what travels along its ports.
 from __future__ import annotations
 
 from .graph import Event, Workflow
-from .node import Classifications, Color, Depth, Detections, Embedding, Image, NodeSpec, PortType
+from .node import (Classifications, Color, Depth, Detections, Embedding, Image, NodeSpec,
+                   PortType, Source)
 from .registry import catalogue, get, names, node
 
 # Last, and for its side effect: a node registers itself by being declared, so importing the
@@ -32,5 +33,6 @@ from . import nodes  # noqa: E402,F401
 #: part of the surface this module documents.
 __all__ = [
     "Classifications", "Color", "Depth", "Detections", "Embedding", "Event", "Image", "NodeSpec",
+    "Source",
     "PortType", "Workflow", "catalogue", "get", "names", "node",
 ]

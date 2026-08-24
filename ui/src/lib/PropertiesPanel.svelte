@@ -10,8 +10,13 @@
      * A parameter marked `optional` may be left blank, and blank is sent as nothing rather than as
      * a zero or an empty string. That is what lets a thickness scale itself to the image and a
      * crop run to the image's own edge.
+     *
+     * `source` is the one kind that is not just a box: the value is a path, and a person at a
+     * browser cannot write the server's path to a file sitting on their own machine. So it offers
+     * a file to upload as well, and says which of the two the next run will use.
      */
     import { formatParameterLabel } from './utils.js';
+    import { chosenImage } from './stores.js';
 
     export let selectedNode;
     export let updateNodeParameters;
@@ -42,6 +47,14 @@
     function changeText(field, raw) {
         change(field, raw === '' && field.optional ? null : raw);
     }
+
+    /** Take the first image from a picker or a drop, whichever the file arrived by. */
+    function chooseFile(files) {
+        const file = [...(files || [])].find(candidate => candidate.type.startsWith('image/'));
+        if (file) chosenImage.set(file);
+    }
+
+    let dragging = false;
 
     $: result = executionResults?.results?.[selectedNode?.id];
 </script>
@@ -95,6 +108,34 @@
                                     </button>
                                 {/if}
                             </div>
+                        {:else if field.kind === 'source'}
+                            <div class="source" class:dragging
+                                 role="button" tabindex="-1"
+                                 on:dragover|preventDefault={() => (dragging = true)}
+                                 on:dragleave={() => (dragging = false)}
+                                 on:drop|preventDefault={(e) => {
+                                     dragging = false;
+                                     chooseFile(e.dataTransfer.files);
+                                 }}>
+                                <label class="button is-small is-fullwidth">
+                                    {$chosenImage ? $chosenImage.name : 'Drop or choose an image'}
+                                    <input type="file" accept="image/*" style="display: none;"
+                                           on:change={(e) => chooseFile(e.target.files)} />
+                                </label>
+                            </div>
+                            {#if $chosenImage}
+                                <p class="is-size-7 has-text-grey mt-1">
+                                    The next run reads this file.
+                                    <button class="is-link-ish" on:click={() => chosenImage.set(null)}>
+                                        Use the path instead
+                                    </button>
+                                </p>
+                            {/if}
+                            <input id={field.name} class="input is-small mt-1" type="text"
+                                   value={value === null || value === undefined ? '' : value}
+                                   placeholder="or a path on the server"
+                                   disabled={!!$chosenImage}
+                                   on:input={(e) => changeText(field, e.target.value)} />
                         {:else if field.kind === 'int' || field.kind === 'float'}
                             <input id={field.name} class="input is-small" type="number"
                                    step={field.kind === 'int' ? '1' : '0.05'}
@@ -139,3 +180,30 @@
         </div>
     {/if}
 </nav>
+
+<style>
+    /* The drop target. Dashed while idle so it reads as "put something here" rather than as a
+       button that has lost its border, and filled while a file is over it. */
+    .source {
+        border: 1px dashed #c9c9c9;
+        border-radius: 4px;
+        padding: 0.4rem;
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .source.dragging {
+        border-color: #485fc7;
+        background-color: #f0f3ff;
+    }
+
+    /* A button that reads as a link, for an action that undoes rather than commits. */
+    .is-link-ish {
+        background: none;
+        border: none;
+        padding: 0;
+        color: #485fc7;
+        cursor: pointer;
+        font: inherit;
+        text-decoration: underline;
+    }
+</style>

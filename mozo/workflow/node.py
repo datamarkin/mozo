@@ -41,7 +41,7 @@ import pixelflow as pf
 
 __all__ = [
     "Classifications", "Color", "Connection", "Depth", "Detections", "Embedding", "Image",
-    "NodeSpec", "Parameter", "Port", "PortType",
+    "NodeSpec", "Parameter", "Port", "PortType", "Source",
 ]
 
 
@@ -96,6 +96,13 @@ Classifications = pf.Classifications
 #: colour picker instead of a text box; it is a string everywhere else.
 Color = NewType("Color", str)
 
+#: A parameter naming where something is read from. A string everywhere else, exactly as
+#: :data:`Color` is -- but a path is the one kind of value a person at a browser cannot type,
+#: because the file they mean is on their machine and the path they would have to write is on the
+#: server's. So the editor offers a file picker beside the box, and what it uploads arrives as this
+#: parameter's value. From Python or the command line nothing changes: it is a path.
+Source = NewType("Source", str)
+
 #: Annotation -> port type. The membership test that splits inputs from parameters.
 _PORTS = {
     Image: PortType.IMAGE,
@@ -107,7 +114,8 @@ _PORTS = {
 
 #: Annotation -> the widget the editor should offer. ``typing.Literal`` is handled separately: it
 #: is a choice, and its options are the values it names.
-_KINDS = {int: "int", float: "float", str: "str", bool: "bool", Color: "color"}
+_KINDS = {int: "int", float: "float", str: "str", bool: "bool", Color: "color",
+          Source: "source"}
 
 
 @dataclass(frozen=True)
@@ -437,4 +445,5 @@ def _kind(node: str, name: str, annotation: Any) -> str:
     except (KeyError, TypeError):
         raise TypeError(
             f"{node}: parameter {name!r} is annotated {annotation!r}, which the editor has no "
-            f"widget for. Use int, float, str, bool, Color, or Literal for a choice.") from None
+            f"widget for. Use int, float, str, bool, Color, Source, or Literal for a "
+            f"choice.") from None

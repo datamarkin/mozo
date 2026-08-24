@@ -12,7 +12,7 @@ from typing import Literal, Optional
 import numpy as np
 import pytest
 
-from mozo.workflow import Color, Depth, Detections, Embedding, Image, NodeSpec, PortType
+from mozo.workflow import Color, Depth, Detections, Embedding, Image, NodeSpec, PortType, Source
 
 
 def described(function, category="Test", outputs=None) -> NodeSpec:
@@ -203,7 +203,7 @@ class TestParameters:
 
     @pytest.mark.parametrize("annotation, default, kind", [
         (int, 2, "int"), (float, 0.5, "float"), (str, "x", "str"),
-        (bool, True, "bool"), (Color, "#00FF00", "color"),
+        (bool, True, "bool"), (Color, "#00FF00", "color"), (Source, "street.jpg", "source"),
     ])
     def test_the_annotation_chooses_the_widget(self, annotation, default, kind):
         # Set rather than written in the signature: under ``from __future__ import annotations``
@@ -214,6 +214,17 @@ class TestParameters:
 
         one.__annotations__["value"] = annotation
         assert described(one).parameters[0].kind == kind
+
+    @pytest.mark.parametrize("annotation", [Color, Source])
+    def test_a_string_in_disguise_is_a_parameter_and_not_a_port(self, annotation):
+        """Both are `str` underneath. Only the editor is meant to tell them apart."""
+        def one(image: Image, value="x") -> Image:
+            """One."""
+
+        one.__annotations__["value"] = annotation
+        spec = described(one)
+        assert [port.name for port in spec.inputs] == ["image"]
+        assert [parameter.name for parameter in spec.parameters] == ["value"]
 
     def test_a_literal_is_a_choice_and_carries_its_options(self):
         def save(image: Image, format: Literal["JPEG", "PNG"] = "PNG") -> None:
