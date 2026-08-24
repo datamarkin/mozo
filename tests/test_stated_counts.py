@@ -258,3 +258,26 @@ def test_the_readme_s_permissive_deployment_offers_what_it_claims(deploy):
     assert everything - offered == set(restricted), (
         f"it also leaves out {sorted(everything - offered - set(restricted))}, which are permissive"
     )
+
+
+#: What mozo installs. The workflow runtime was absorbed from a separate project that carried
+#: flask, flask-cors, requests and tqdm; none of them came, and the whole merge added nothing. That
+#: was the constraint the work was done under, so it is stated here rather than left as intent --
+#: it is the invariant most easily broken by an ordinary-looking commit.
+REQUIRED = {
+    "fastapi", "uvicorn", "opencv-python-headless", "torch", "Pillow", "numpy", "pixelflow",
+    "click", "python-multipart", "regex", "ftfy", "torchvision",
+}
+
+
+def test_mozo_installs_exactly_what_it_says_it_does():
+    # Read rather than parsed with tomllib, which is 3.11+ where mozo supports 3.9 -- and adding
+    # tomli to read it would break the very thing this test exists to hold.
+    block = re.search(r"^dependencies = \[(.*?)^\]", (ROOT / "pyproject.toml").read_text(),
+                      re.S | re.M).group(1)
+    named = {re.match(r'"([A-Za-z0-9_.-]+)', line.strip()).group(1)
+             for line in block.splitlines()
+             if line.strip().startswith('"')}
+    assert named == REQUIRED, (
+        f"dependencies changed: added {named - REQUIRED}, removed {REQUIRED - named}. "
+        f"If that is deliberate, say so here.")
