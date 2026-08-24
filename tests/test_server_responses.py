@@ -18,16 +18,6 @@ import pytest
 from conftest import FIXTURE, require_weights
 
 
-@pytest.fixture(scope="module")
-def client():
-    from fastapi.testclient import TestClient
-
-    from mozo.server import app
-
-    with TestClient(app) as running:
-        yield running
-
-
 def post(client, payload, family: str, variant: str):
     """Ask for a prediction, skipping only when the weights were never published."""
     require_weights(family, variant)
