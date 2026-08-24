@@ -10,6 +10,12 @@ list and the vendor's ``detect`` has no suppression step at all. Nothing here ch
 the adapter passes an image, a forward pass, a size and a threshold, which is all this family needs
 and a subset of what the others take.
 
+**The ``seg-`` variants add instance masks** and nothing else: the same backbone and neck with a
+``Segment26`` head, so they answer the same question with one more field. That is the RF-DETR
+convention -- a segmentation variant sits beside its detection counterpart in one family rather
+than forming a second -- and it is why the task type does not change. A mask is a boolean array at
+the source image's resolution, one per detection, and PixelFlow carries it beside the box.
+
 There is no CoreML artifact, as for YOLO11 and unlike YOLOv8 and YOLO12. Two separate things stop
 it -- the converter rejects the in-graph top-k's gather indices, and once that is worked around the
 Metal compiler aborts on the attention block -- and the configuration that does run is slower than
@@ -21,6 +27,7 @@ together. Serving predictions from them over a network puts AGPL-3.0 section 13 
 whoever runs the service. The NOTICE published beside every checkpoint says so in full.
 
     >>> model = YOLOv26Predictor("nano")                        # doctest: +SKIP
+    >>> model = YOLOv26Predictor("seg-nano")                    # boxes and masks  # doctest: +SKIP
     >>> model = YOLOv26Predictor("nano", runtime="onnx-fp32")   # doctest: +SKIP
     >>> detections = model.predict(image, threshold=0.25)       # doctest: +SKIP
 """
@@ -37,4 +44,5 @@ class YOLOv26Predictor(YOLOPredictor):
     FAMILY = "yolov26"
     DISPLAY = "YOLO26"
     VENDOR = yolov26_deploy
-    VARIANTS = ("nano", "small", "medium", "large", "xlarge")
+    VARIANTS = ("nano", "small", "medium", "large", "xlarge",
+                "seg-nano", "seg-small", "seg-medium", "seg-large", "seg-xlarge")
