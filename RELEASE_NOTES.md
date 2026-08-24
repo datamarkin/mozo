@@ -1,3 +1,97 @@
+# Mozo v1.0.0: Run a Graph, Not Just a Model
+
+## What's New in v1.0.0
+
+Until now mozo answered one question at a time: load a model, hand it an image, get a result.
+A workflow is the other half — read an image, run a family, crop what it found, run a second
+family on each crop, draw the answer, write it out — as a graph you can save, version, post over
+HTTP, or run from the command line.
+
+That is what the major version is for. Nothing about `get_model()` changes, and nothing in the
+0.7.x catalogue moves; what changed is that the catalogue is now something you can compose.
+
+> **PyPI goes 0.7.1 → 1.0.0.**
+
+### 🔀 Workflows
+
+A workflow is a graph of nodes. 38 of them ship, across ten categories — reading an image,
+seven detectors, segmentation, two classifiers, depth, thirteen transforms, three exposure
+adjustments, eight annotators and a writer.
+
+```python
+from mozo.workflow import Workflow
+
+flow = Workflow.from_dict(saved)
+result = flow.run(image="street.jpg")
+```
+
+**Validation is construction.** `from_dict` refuses a graph rather than failing halfway through
+one: an unknown node type, a wire between mismatched ports, an input nothing feeds, a cycle.
+A workflow that builds is a workflow that can run.
+
+**Batching lives in the node.** A list on an input port fans the node out over it, while
+parameters stay shared — so `crop_around_detections` turns one image into one crop per detection
+and everything downstream runs per crop, with nothing in the graph saying so.
+
+**Four endpoints**, mounted on the same server that serves `/predict`, in the same process:
+`/workflow/nodes` for the catalogue, `/workflow/validate`, `/workflow/run`, and `/workflow/stream`
+for per-node progress. Models are shared with `/predict` rather than loaded twice — one
+`ModelManager` for the process, so a family a workflow loads is a family `/predict` already has.
+
+**An editor**, served at `/workflow`, and a command line:
+
+```bash
+mozo run flow.json --image street.jpg
+```
+
+### 🎭 Instance Segmentation on Two More Families
+
+Ten new variants, all boxes-plus-masks, all sitting beside their detection counterparts under the
+same `object_detection` task type because what they add is a field rather than a different
+question:
+
+- **YOLO26** `seg-nano` … `seg-xlarge`
+- **YOLO11** `seg-nano` … `seg-xlarge`
+
+A mask is a boolean at the source image's resolution, one per detection, aligned with the box
+beside it. Both families publish `torch-fp32` for these.
+
+### 📊 Model Count
+
+**73 published variants** across fourteen families, up from 63. Of those, 36 are Apache-2.0,
+30 are AGPL-3.0 (every YOLO variant), 4 are MIT (CLIP), 2 are CC-BY-NC-4.0 (Depth Anything
+`base` and `large`) and 1 carries Meta's SAM License.
+
+### ✅ Verification
+
+**YOLO11 and YOLO26 are now checked against `ultralytics` itself**, stage by stage, rather than
+only against themselves — `tools/verify/yolov11_reference.py` and its YOLO26 counterpart stand the
+published implementation up beside the vendored one and compare preprocessing, every layer, the
+head, the prototypes, the mask coefficients and the assembled masks. 335 comparisons across
+YOLO11's ten variants, every one within tolerance, with three of the five segmentation variants
+pixel-identical to the reference.
+
+Both gates are falsifiable and have been made to fail on purpose: perturbing a constant moves the
+stages that constant reaches and no others, with a control that provably moves nothing.
+
+### 🐛 Fixes
+
+- **One model manager per process.** The server built its own, so a family reached through
+  `/predict` and through a workflow loaded twice, was resident twice, and `/models/loaded`
+  reported only half of what was in memory.
+- **The YOLO runtime seam states its assumption.** It takes the first output of a graph, which is
+  right for every graph published today and wrong for a multi-output one; it now refuses rather
+  than misreading.
+- **The export gate refuses what it cannot check** instead of comparing a graph against the module
+  on three quarters of the answer.
+
+### 📖 Documentation
+
+`docs/workflows.md` covers what a workflow is, how validation and batching behave, and what each
+node category is for. `docs/models.md` gains the segmentation sections.
+
+---
+
 # Mozo v0.7.1: Decide What You Serve
 
 ## What's New in v0.7.1
