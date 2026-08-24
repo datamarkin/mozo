@@ -146,13 +146,21 @@ class YOLOPredictor:
             labels: Class names for this call only, overriding the adapter's.
 
         Returns:
-            A PixelFlow ``Detections``.
+            A PixelFlow ``Detections``. A segmentation variant carries a mask per detection as
+            well; a detection variant carries none, and the field is absent rather than empty.
         """
         # The vendor wants RGB and mozo's contract already is RGB, so nothing is converted here.
         # Letterboxing and suppression are the vendor's, not restated here, so the answer cannot
         # depend on which of the runtimes ran the forward pass. A family whose head fires once
-        # per object has no suppression step, and needs no special case here either.
-        boxes, scores, class_ids = self.VENDOR.detect(
+        # per object has no suppression step, and needs no special case here either. Nor does a
+        # segmentation head: the vendor answers with a fourth value that is None unless the
+        # checkpoint has a mask branch, so this passes it on without asking which kind it holds.
+        # Every vendor answers with four values, the last being masks or None. That is one
+        # contract rather than three-plus-one: a seam whose width varies by family has to be
+        # measured at the call site, and this is not the only place that reads it -- 
+        # ``tools/export/_detection.py`` unpacks the same tuple, and was silently broken for a
+        # release by a width it never learned about.
+        boxes, scores, class_ids, masks = self.VENDOR.detect(
             load_image(image), self._forward, self.imgsz, threshold)
 
         if self.device == "mps" and self._runner is None:
@@ -163,4 +171,5 @@ class YOLOPredictor:
             scores=scores.numpy(),
             class_ids=class_ids.numpy(),
             labels=labels if labels is not None else self._labels,
+            masks=None if masks is None else masks.numpy(),
         )

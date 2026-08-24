@@ -22,7 +22,7 @@ def detect(
     conf: float = 0.25,
     iou: float = 0.7,
     max_det: int = 300,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, None]:
     """Detect in one image, with *forward* supplying the middle step.
 
     Everything except the forward pass: letterbox the image, run whatever executes the graph,
@@ -40,7 +40,11 @@ def detect(
         max_det: Most detections to return.
 
     Returns:
-        Boxes in the source image's pixels, their scores, and their class ids.
+        Boxes in the source image's pixels, their scores, their class ids, and ``None`` where a
+        family with a mask branch would return one per detection. This family has no such branch,
+        so the fourth value is always ``None`` -- it is present because ``mozo.adapters._yolo``
+        serves four families through one call, and a seam that changes width between them would
+        have to be sniffed at the call site.
     """
     batch, gain, pad_x, pad_y = letterbox(image, imgsz)
     # Brought to the CPU before suppression rather than after, so the answer does not depend on
@@ -48,7 +52,7 @@ def detect(
     # device be compared for exact equality.
     prediction = forward(batch)[0].float().cpu()
     boxes, scores, class_ids = suppress(prediction, conf, iou, max_det)
-    return to_original(boxes, gain, pad_x, pad_y, image.shape[:2]), scores, class_ids
+    return to_original(boxes, gain, pad_x, pad_y, image.shape[:2]), scores, class_ids, None
 
 
 @dataclass
@@ -109,6 +113,9 @@ class Detector:
         max_det: int = 300,
     ) -> Detections:
         """Detect objects in one image, given as an ``HxWx3`` RGB ``uint8`` array."""
-        boxes, scores, class_ids = detect(image, self.forward, self.imgsz, conf, iou, max_det)
+        # The fourth value is the mask slot every vendor's ``detect`` now carries; this
+        # family has no mask branch, so it is always None and nothing reads it.
+        boxes, scores, class_ids, _ = detect(
+            image, self.forward, self.imgsz, conf, iou, max_det)
         ids = class_ids.numpy()
         return Detections(boxes.numpy(), scores.numpy(), ids, [self.names[int(i)] for i in ids])
