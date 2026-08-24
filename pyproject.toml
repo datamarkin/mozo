@@ -79,7 +79,7 @@ version = { attr = "mozo.__version__" }
 # Ship the test UI and its example image; /test-ui and /static/example.jpg
 # return errors without them (they were missing from the 0.4.0 wheel).
 [tool.setuptools.package-data]
-mozo = ["static/*", "manifest.json"]
+mozo = ["static/*", "manifest.json", "workflow/static/*", "workflow/static/assets/*"]
 
 # Every vendored extraction is redistributed under its own terms, so its licence, its NOTICE and
 # its provenance travel in the wheel with it -- the same rule the weights follow. Any asset its

@@ -14,8 +14,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Anchored: these are setuptools' build output at the repository root. Unanchored, `lib/` also
+# matched `ui/src/lib/` and would have dropped every editor component from the commit silently.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -221,3 +223,8 @@ weights/
 
 # Upstream archives a fetch tool unpacks before fusing. Never published.
 .fetch-cache/
+
+# The editor's dependencies. `ui/` is bootstrap machinery like `tools/`: it produces
+# `mozo/workflow/static/`, which is committed, and never ships itself.
+ui/node_modules/
+ui/.vite/

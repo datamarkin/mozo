@@ -217,8 +217,8 @@ class TestTheModelServerIsUnaffected:
         from mozo.server import app
 
         added = {route.path for route in app.routes if "workflow" in route.path}
-        assert added == {"/workflow/nodes", "/workflow/run",
-                         "/workflow/stream", "/workflow/validate"}
+        assert added == {"/workflow", "/workflow/assets/{name}", "/workflow/nodes",
+                         "/workflow/run", "/workflow/stream", "/workflow/validate"}
 
 
 def _post(client, path: str, workflow: str, payload: bytes = None, **fields):

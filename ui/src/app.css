@@ -1,0 +1,13 @@
+/* Import SvelteFlow styles */
+@import '@xyflow/svelte/dist/style.css';
+
+/* Import Bulma CSS framework */
+@import url('./bulma.min.css');
+
+/* Import custom styles and overrides */
+@import url('./custom.css');
+
+/* Reset any remaining conflicts */
+* {
+  box-sizing: border-box;
+}
