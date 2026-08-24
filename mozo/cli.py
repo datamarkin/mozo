@@ -51,22 +51,50 @@ def run(workflow, image, settings):
     """
     from mozo.workflow import Workflow
 
+    built = Workflow.load(workflow)
+
     overrides = {}
     for setting in settings:
         name, separator, value = setting.partition("=")
         if not separator:
             raise click.BadParameter(f"expected NAME=VALUE, got {setting!r}")
-        overrides[name] = value
+        overrides[name] = _typed(built, name, value)
     if image:
         overrides["image"] = image
-
-    built = Workflow.load(workflow)
     for event in built.stream(**overrides):
         if event.status == "failed":
             raise click.ClickException(event.error)
         if event.status == "completed":
             ends = " (an end)" if event.node in built.terminals else ""
             click.echo(f"  {event.node}: {_describe(event.output)}{ends}")
+
+
+def _typed(built, name: str, text: str):
+    """Read *text* as whatever the parameter it is setting was declared to be.
+
+    A command line hands over strings. Passed through, ``--set threshold=0.6`` reaches a model as
+    the string "0.6", and ``--set show_names=false`` reaches a node as a non-empty string, which is
+    true -- the opposite of what was asked, with nothing raised. The catalogue already says what
+    each parameter is, so it says what to read.
+    """
+    kinds = {parameter.name: parameter.kind
+             for step in built.steps.values() for parameter in step.spec.parameters}
+    kind = kinds.get(name)
+    if kind is None:
+        raise click.BadParameter(f"no parameter {name!r} in this workflow. It has: {sorted(kinds)}")
+
+    try:
+        if kind == "int":
+            return int(text)
+        if kind == "float":
+            return float(text)
+        if kind == "bool":
+            if text.lower() not in ("true", "false"):
+                raise ValueError("expected true or false")
+            return text.lower() == "true"
+    except ValueError as error:
+        raise click.BadParameter(f"{name} is a {kind}: {error}") from error
+    return text
 
 
 def _describe(value) -> str:
