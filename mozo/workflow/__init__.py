@@ -22,6 +22,11 @@ from .graph import Event, Workflow
 from .node import Classifications, Color, Depth, Detections, Embedding, Image, NodeSpec, PortType
 from .registry import catalogue, get, names, node
 
+# Last, and for its side effect: a node registers itself by being declared, so importing the
+# runtime has to import the nodes or ``Workflow.load`` would know no node types. It comes after
+# the imports above because the nodes are declared against them.
+from . import nodes  # noqa: E402,F401
+
 #: What a node author and a caller need. ``Port``, ``Parameter`` and ``Connection`` are the
 #: engine's own records -- reachable from ``mozo.workflow.node`` for anyone introspecting, but not
 #: part of the surface this module documents.
