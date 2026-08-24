@@ -47,6 +47,7 @@ import pytest
 import torch
 
 import mozo.vendors
+from conftest import imported
 
 #: Every vendor package with an image module, found rather than listed. Discovery is the point: a
 #: hand-maintained list is the same failure mode one level up -- the fourth detection family would
@@ -195,8 +196,6 @@ def test_no_vendor_reaches_outside_itself():
     imports are resolved against the module's own package, which is the only way to see that
     ``from ....utilities import x`` is still inside its own vendor.
     """
-    import ast
-
     root = Path(mozo.vendors.__file__).parent
     vendors = sorted(p.name for p in root.iterdir() if p.is_dir() and p.name.endswith("_deploy"))
     assert len(vendors) >= 2, f"with one vendor this proves nothing, found {vendors}"
@@ -205,25 +204,9 @@ def test_no_vendor_reaches_outside_itself():
     for vendor in vendors:
         allowed = f"mozo.vendors.{vendor}"
         for source in sorted((root / vendor).rglob("*.py")):
-            parts = source.relative_to(root).with_suffix("").parts
-            module = ".".join(("mozo", "vendors") + parts)
-            package = module.rsplit(".", 1)[0] if source.name != "__init__.py" else module
-            for node in ast.walk(ast.parse(source.read_text())):
-                if isinstance(node, ast.Import):
-                    names = [alias.name for alias in node.names]
-                elif isinstance(node, ast.ImportFrom):
-                    if node.level:
-                        base = package
-                        for _ in range(node.level - 1):
-                            base = base.rsplit(".", 1)[0]
-                        names = [f"{base}.{node.module}" if node.module else base]
-                    else:
-                        names = [node.module or ""]
-                else:
-                    continue
-                for name in names:
-                    if name.startswith("mozo") and not name.startswith(allowed):
-                        offenders.append(f"{source.relative_to(root)}:{node.lineno} -> {name}")
+            for name in imported(source, root, "mozo.vendors"):
+                if name.startswith("mozo") and not name.startswith(allowed):
+                    offenders.append(f"{source.relative_to(root)} -> {name}")
 
     assert not offenders, (
         "vendors must not reach outside themselves:\n  " + "\n  ".join(offenders)
