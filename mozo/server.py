@@ -21,16 +21,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, List, Optional
 
-import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from . import __version__
+from .depth import encode as encode_depth
+from .text import comma_separated
 from .image import load_image
 from .manager import ModelManager
 from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
-from .text import comma_separated
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -231,15 +231,11 @@ def _coordinates(value: str, count: int, what: str) -> List[float]:
 
 
 def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
-    """Encode a depth map as a 16-bit PNG, with what is needed to read it back in the headers.
+    """Send a depth map, with what is needed to read it back in the headers.
 
-    An 8-bit PNG is what the old adapter returned, and it is the wrong answer here: six of the
-    nine Depth Anything V2 variants predict metres, and metres are the entire point of choosing
-    one. Quantising them to 256 levels and calling it an image discards the measurement.
-
-    16-bit is lossless enough to be honest -- over an 80 m range one step is 1.2 mm -- and PNG
-    stays viewable in any tool. The values are min-max normalised into the full 16-bit range and
-    the endpoints travel in the headers, so a client recovers the original with
+    The encoding is :func:`mozo.depth.encode` -- a 16-bit PNG and its endpoints -- so that this
+    endpoint and the workflow runtime describe a depth map the same way. A client recovers the
+    original with
 
         depth = X-Depth-Min + png / 65535 * (X-Depth-Max - X-Depth-Min)
 
@@ -247,20 +243,15 @@ def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
     scale, where larger is nearer. The server does not decide that a unitless map is metres any
     more than mozo decides a class id is a name.
     """
-    low, high = float(depth.min()), float(depth.max())
-    # One pass into one buffer. The arithmetic spelling of this allocates a full-size float32
-    # temporary per operator -- four of them, ~34 MB of churn on a 1920x1281 map -- for the same
-    # rounding, and needs a special case for a flat map that NORM_MINMAX handles itself.
-    scaled = cv2.normalize(depth, None, 0, 65535, cv2.NORM_MINMAX, dtype=cv2.CV_16U)
-
-    success, encoded = cv2.imencode(".png", scaled)
-    if not success:
-        raise HTTPException(status_code=500, detail="Could not encode the depth map.")
+    try:
+        png, low, high = encode_depth(depth)
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
 
     # Response rather than StreamingResponse: the bytes are already in hand, so streaming only
     # buys an extra copy and a chunked transfer with no Content-Length.
     return Response(
-        content=encoded.tobytes(),
+        content=png,
         media_type="image/png",
         headers={
             "X-Depth-Unit": unit or "none",
