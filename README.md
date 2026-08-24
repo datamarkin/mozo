@@ -5,7 +5,9 @@
 [![Python](https://img.shields.io/pypi/pyversions/mozo)](https://pypi.org/project/mozo/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-### 68 computer vision models. One `pip install`. No dependency hell.
+### 68 computer vision models, and the workflows that run them.
+
+One `pip install`. No dependency hell. Runs models, executes workflows, and builds them.
 
 Normally each of these models arrives with its own package, and each package brings its own
 dependencies — torch, numpy and OpenCV, every one pinned to something slightly different. Put a
@@ -24,7 +26,11 @@ mozo start
 No Docker, no Kubernetes, no per-model build step, no conversion step, no `git clone` of
 anything.
 
-Serve  from one install, in one process, behind one API.
+Serve from one install, in one process, behind one API.
+
+A model on its own is rarely the job. Detect, then blur the faces, then save — that is a
+**workflow**, and mozo runs those too: as a graph you draw in the browser, a JSON file you keep in
+version control, or one call from Python. Same models, same process, no extra install.
 
 ## Model Catalog
 
@@ -135,13 +141,15 @@ No family needs an extra. The extras add *ways to execute* a model, not models: 
 
 ## Using it
 
-Two interfaces over the same models, plus a browser page for testing them.
+Three interfaces over the same models, plus two browser pages.
 
 | | |
 |---|---|
 | **HTTP server** | serve models to other machines, or to a language that is not Python |
 | **Python API** | build a pipeline, a script or a notebook, in-process |
+| **Workflows** | wire models and image operations into a graph, and run it headless |
 | *Test UI* | see what a model does to your own image before writing anything |
+| *Workflow editor* | draw the graph, run it, watch each node finish |
 
 ### 1. HTTP server
 
@@ -219,6 +227,35 @@ mozo start        # then open http://localhost:8000/test-ui
 Pick any of the 68, run it on your own image, and see the response two ways at once: drawn on
 the image, and as the raw PixelFlow record. Hovering a box lights its row and its JSON, so when
 something lands somewhere surprising its numbers are one click away.
+
+### 3. Workflows
+
+A workflow is a graph of nodes in a JSON file. Draw it at `/workflow`, or write it by hand; run it
+from Python, from the command line, or over HTTP.
+
+```python
+from mozo.workflow import Workflow
+
+results = Workflow.load("blur_faces.json").run(image="street.jpg")
+```
+
+```bash
+mozo run blur_faces.json --image street.jpg
+```
+
+38 nodes: every model family, the image transforms and annotations PixelFlow provides, and the two
+ends that read and write files. A node is an ordinary Python function — its signature *is* its
+declaration, so what the editor offers you and what actually runs cannot disagree:
+
+```python
+@node(category="Annotate")
+def draw_boxes(image: Image, detections: Detections, thickness: int | None = None) -> Image:
+    """Draw a box around each detection."""
+    return pf.annotate.box(image.copy(), detections, thickness=thickness)
+```
+
+Connections are typed. A port carrying detections cannot be wired into one that takes an image, and
+the editor refuses it before anything runs. Adding a node is adding a function.
 
 ## Verification
 
@@ -410,7 +447,8 @@ things about it are yours to arrange:
 ## What mozo does not do
 
 - **No training and no fine-tuning.** Bring a checkpoint; mozo runs it.
-- **No video, no tracking, no streams.** One image per request.
+- **No video, no tracking, no streams.** One image per request. Object tracking is deliberately
+  absent from workflows for the same reason: it is stateful across frames, and mozo has no frames.
 - **No batching.** One image per forward, which is what keeps results bit-identical.
 - **No model conversion.** ONNX and CoreML artifacts are published where a family exports
   cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
@@ -422,6 +460,11 @@ things about it are yours to arrange:
 1. Write an adapter in `mozo/adapters/your_model.py`
 2. Register it in `mozo/registry.py`
 3. It is available over HTTP, in Python, and in the test UI
+4. Add a node in `mozo/workflow/nodes/model.py` — one function — and it joins the editor's palette
+
+Workflow nodes are the same idea one level up: a function with annotated arguments in
+`mozo/workflow/nodes/`, and the catalogue, the editor's form and the type checking all follow from
+it.
 
 ```
 HTTP request → FastAPI server → ModelManager → Adapter → Vendor
@@ -440,6 +483,13 @@ vendor's `PROVENANCE.md` records the exact upstream commit it came from and what
 pip install -e .
 mozo start --reload
 pytest
+```
+
+The workflow editor is a Svelte app in `ui/`. Its build output is committed, so npm is needed to
+*change* it and never to install mozo:
+
+```bash
+cd ui && npm install && npm run build   # writes mozo/workflow/static/
 ```
 
 ## Links
