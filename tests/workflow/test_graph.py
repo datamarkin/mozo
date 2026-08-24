@@ -1,0 +1,311 @@
+"""Building a workflow, and what running one does.
+
+The rule these tests hold is that a workflow either is valid or does not exist. Every structural
+mistake is refused by the constructor, naming the node -- so nothing here checks that a bad graph
+fails *during* a run, because a bad graph never gets that far.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from conftest import document
+from workflow_nodes import RECORD
+from mozo.workflow import Workflow
+
+
+@pytest.fixture(autouse=True)
+def record():
+    """Clear the log of which nodes ran, before each test, and hand it over."""
+    RECORD.clear()
+    return RECORD
+
+
+class TestOrder:
+    """Nodes run after whatever feeds them."""
+
+    def test_a_chain_runs_from_the_source_down(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {}), "c": ("measure", {})},
+            [("a", "image", "b", "image"), ("b", "image", "c", "image")]))
+        assert workflow.order == ("a", "b", "c")
+
+    def test_a_diamond_puts_the_join_last(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "l": ("brighten", {}), "r": ("widen", {}), "j": ("combine", {})},
+            [("a", "image", "l", "image"), ("a", "image", "r", "image"),
+             ("l", "image", "j", "left"), ("r", "image", "j", "right")]))
+        assert workflow.order[0] == "a"
+        assert workflow.order[-1] == "j"
+
+    def test_the_order_does_not_depend_on_how_the_edges_were_written(self):
+        edges = [("b", "image", "c", "image"), ("a", "image", "b", "image")]
+        workflow = Workflow.from_dict(document(
+            {"c": ("measure", {}), "b": ("brighten", {}), "a": ("make", {})}, edges))
+        assert workflow.order == ("a", "b", "c")
+
+    def test_a_cycle_is_refused_and_the_message_names_it(self):
+        with pytest.raises(ValueError, match="cycle"):
+            Workflow.from_dict(document(
+                {"a": ("brighten", {}), "b": ("brighten", {})},
+                [("a", "image", "b", "image"), ("b", "image", "a", "image")]))
+
+    def test_terminals_are_the_nodes_nothing_reads_from(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {}), "c": ("detect", {})},
+            [("a", "image", "b", "image"), ("a", "image", "c", "image")]))
+        assert set(workflow.terminals) == {"b", "c"}
+
+
+class TestWiring:
+    """Every connection names ports that exist, of types that agree."""
+
+    def test_an_edge_to_a_node_that_is_not_there_is_refused(self):
+        with pytest.raises(ValueError, match="not here"):
+            Workflow.from_dict(document({"a": ("make", {})}, [("a", "image", "ghost", "image")]))
+
+    def test_an_output_the_source_does_not_have_is_refused(self):
+        with pytest.raises(ValueError, match="has no output 'picture'"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "b": ("brighten", {})}, [("a", "picture", "b", "image")]))
+
+    def test_an_input_the_target_does_not_have_is_refused(self):
+        with pytest.raises(KeyError, match="has no input"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "b": ("brighten", {})}, [("a", "image", "b", "picture")]))
+
+    def test_connecting_types_that_disagree_is_refused(self):
+        with pytest.raises(TypeError, match="detections.*takes image"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "d": ("detect", {}), "b": ("brighten", {})},
+                [("a", "image", "d", "image"), ("d", "detections", "b", "image")]))
+
+    def test_a_node_that_produces_nothing_cannot_be_a_source(self):
+        with pytest.raises(ValueError, match="produces nothing"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "m": ("measure", {}), "b": ("brighten", {})},
+                [("a", "image", "m", "image"), ("m", "image", "b", "image")]))
+
+    def test_feeding_one_input_twice_is_refused(self):
+        with pytest.raises(ValueError, match="fed by two"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "b": ("make", {}), "c": ("brighten", {})},
+                [("a", "image", "c", "image"), ("b", "image", "c", "image")]))
+
+    def test_an_input_with_nothing_connected_is_refused(self):
+        with pytest.raises(ValueError, match="nothing connected to its 'image'"):
+            Workflow.from_dict(document({"b": ("brighten", {})}, []))
+
+    def test_two_nodes_sharing_an_id_is_refused(self):
+        twice = document({"a": ("make", {})}, [])
+        twice["nodes"].append({"id": "a", "type": "make", "data": {"parameters": {}}})
+        with pytest.raises(ValueError, match="share an id"):
+            Workflow.from_dict(twice)
+
+    def test_an_edge_missing_a_handle_is_refused_rather_than_guessed(self):
+        with pytest.raises(ValueError, match="missing 'targetHandle'"):
+            Workflow.from_dict({
+                "nodes": document({"a": ("make", {}), "b": ("brighten", {})}, [])["nodes"],
+                "edges": [{"source": "a", "sourceHandle": "image", "target": "b"}],
+            })
+
+    def test_an_unknown_node_type_names_the_ones_there_are(self):
+        with pytest.raises(KeyError, match="unknown node 'invent'"):
+            Workflow.from_dict(document({"a": ("invent", {})}, []))
+
+
+class TestRunning:
+    """What a run produces."""
+
+    def test_every_node_s_output_comes_back_keyed_by_its_id(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {"width": 3}), "b": ("brighten", {"by": 5})},
+            [("a", "image", "b", "image")]))
+        results = workflow.run()
+        assert set(results) == {"a", "b"}
+        assert results["a"][0, 0, 0] == 3
+        assert results["b"][0, 0, 0] == 8
+
+    def test_a_node_that_produces_nothing_comes_back_as_none(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "m": ("measure", {})}, [("a", "image", "m", "image")]))
+        assert workflow.run()["m"] is None
+
+    @pytest.mark.parametrize("saved, overrides, used", [
+        ({"width": 7}, {}, 7),          # what the workflow saved
+        ({}, {}, 2),                    # nothing saved: the node's own default
+        ({"width": 2}, {"width": 9}, 9),  # saved, then overridden at run time
+    ])
+    def test_where_a_parameter_s_value_comes_from(self, record, saved, overrides, used):
+        Workflow.from_dict(document({"a": ("make", saved)}, [])).run(**overrides)
+        assert record == [("make", used)]
+
+    def test_a_node_runs_after_the_one_feeding_it(self, record):
+        Workflow.from_dict(document(
+            {"a": ("make", {"width": 4}), "m": ("measure", {})},
+            [("a", "image", "m", "image")])).run()
+        assert record == [("make", 4), ("measure", 4)]
+
+
+class TestOverrides:
+    """Running the same workflow on something else."""
+
+    def test_a_parameter_that_is_not_there_names_the_ones_that_are(self):
+        workflow = Workflow.from_dict(document({"a": ("make", {})}, []))
+        with pytest.raises(KeyError, match="no parameter 'height'"):
+            workflow.run(height=1)
+
+    def test_an_ambiguous_override_is_refused_rather_than_guessed(self):
+        workflow = Workflow.from_dict(document({"a": ("make", {}), "b": ("make", {})}, []))
+        with pytest.raises(KeyError, match="2 nodes have a parameter 'width'"):
+            workflow.run(width=1)
+
+    def test_the_parameters_of_a_workflow_are_reported_with_their_owners(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {})}, [("a", "image", "b", "image")]))
+        assert workflow.parameters == {"width": ["a"], "by": ["b"]}
+
+
+class TestBatching:
+    """A node written for one image runs over a list of them."""
+
+    def test_a_list_arriving_on_an_input_fans_the_node_out(self, record):
+        Workflow.from_dict(document(
+            {"a": ("several", {"count": 3}), "m": ("measure", {})},
+            [("a", "image", "m", "image")])).run()
+        assert record == [("measure", 1), ("measure", 2), ("measure", 3)]
+
+    def test_the_outputs_come_back_as_a_list_in_order(self):
+        results = Workflow.from_dict(document(
+            {"a": ("several", {"count": 2}), "b": ("brighten", {"by": 10})},
+            [("a", "image", "b", "image")])).run()
+        assert [image[0, 0, 0] for image in results["b"]] == [11, 12]
+
+    def test_a_parameter_is_shared_across_the_batch(self, record):
+        Workflow.from_dict(document(
+            {"a": ("several", {"count": 2}), "b": ("brighten", {"by": 4})},
+            [("a", "image", "b", "image")])).run()
+        assert record == [("brighten", 1), ("brighten", 2)]
+
+    def test_a_scalar_input_is_shared_across_a_batched_one(self):
+        results = Workflow.from_dict(document(
+            {"a": ("several", {"count": 2}), "b": ("make", {"width": 1}), "j": ("combine", {})},
+            [("a", "image", "j", "left"), ("b", "image", "j", "right")])).run()
+        assert [image.shape[1] for image in results["j"]] == [2, 3]
+
+    def test_batches_of_different_lengths_are_refused_rather_than_padded(self):
+        events = list(Workflow.from_dict(document(
+            {"a": ("several", {"count": 2}), "b": ("several", {"count": 3}),
+             "j": ("combine", {})},
+            [("a", "image", "j", "left"), ("b", "image", "j", "right")])).stream())
+        assert events[-1].status == "failed"
+        assert "different lengths" in events[-1].error
+
+    def test_a_batch_stays_a_batch_through_a_chain(self):
+        results = Workflow.from_dict(document(
+            {"a": ("several", {"count": 3}), "b": ("brighten", {}), "c": ("widen", {})},
+            [("a", "image", "b", "image"), ("b", "image", "c", "image")])).run()
+        assert len(results["c"]) == 3
+
+
+class TestSeveralOutputs:
+    """Wiring a node that produces more than one thing."""
+
+    def test_each_output_can_feed_a_different_node(self):
+        results = Workflow.from_dict(document(
+            {"a": ("make", {"width": 2}), "s": ("split", {}),
+             "m": ("measure", {}), "b": ("brighten", {})},
+            [("a", "image", "s", "image"),
+             ("s", "image", "b", "image"),
+             ("s", "image", "m", "image")])).run()
+        assert results["b"][0, 0, 0] == 4      # make 2, split +1, brighten +1
+        assert results["m"] is None
+
+    def test_the_caller_gets_both_as_a_tuple(self):
+        image, detections = Workflow.from_dict(document(
+            {"a": ("make", {"width": 3}), "s": ("split", {})},
+            [("a", "image", "s", "image")])).run()["s"]
+        assert image[0, 0, 0] == 4
+        assert len(detections) == 3
+
+    def test_an_output_the_node_does_not_have_names_the_ones_it_does(self):
+        with pytest.raises(ValueError, match=r"has no output 'depth'.*\['detections', 'image'\]"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "s": ("split", {}), "b": ("brighten", {})},
+                [("a", "image", "s", "image"), ("s", "depth", "b", "image")]))
+
+    def test_the_type_of_the_named_output_is_what_is_checked(self):
+        with pytest.raises(TypeError, match="detections.*takes image"):
+            Workflow.from_dict(document(
+                {"a": ("make", {}), "s": ("split", {}), "b": ("brighten", {})},
+                [("a", "image", "s", "image"), ("s", "detections", "b", "image")]))
+
+    def test_a_batch_flows_through_each_output_independently(self):
+        results = Workflow.from_dict(document(
+            {"a": ("several", {"count": 3}), "s": ("split", {}), "b": ("brighten", {})},
+            [("a", "image", "s", "image"), ("s", "image", "b", "image")])).run()
+        assert len(results["b"]) == 3
+
+
+class TestStreaming:
+    """Progress, and what happens when a node fails."""
+
+    def test_each_node_is_reported_starting_and_finishing(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {})}, [("a", "image", "b", "image")]))
+        assert [(event.node, event.status) for event in workflow.stream()] == [
+            ("a", "running"), ("a", "completed"), ("b", "running"), ("b", "completed")]
+
+    def test_a_failure_is_reported_once_and_names_the_node(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "x": ("explode", {})}, [("a", "image", "x", "image")]))
+        events = list(workflow.stream())
+        assert events[-1].status == "failed"
+        assert events[-1].node == "x"
+        assert "explode: as promised" in events[-1].error
+
+    def test_nothing_downstream_of_a_failure_runs(self, record):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "x": ("explode", {}), "m": ("measure", {})},
+            [("a", "image", "x", "image"), ("x", "image", "m", "image")]))
+        list(workflow.stream())
+        assert ("measure", 2) not in record
+
+    def test_run_reports_only_what_completed(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "x": ("explode", {})}, [("a", "image", "x", "image")]))
+        assert set(workflow.run()) == {"a"}
+
+
+class TestTheFileFormat:
+    """Reading and writing the editor's document."""
+
+    def test_a_workflow_survives_a_round_trip(self, tmp_path):
+        saved = document(
+            {"a": ("make", {"width": 3}), "b": ("brighten", {"by": 2})},
+            [("a", "image", "b", "image")])
+        saved["nodes"][0]["position"] = {"x": 10, "y": 20}
+
+        path = tmp_path / "w.json"
+        Workflow.from_dict(saved).save(path)
+        again = Workflow.load(path)
+
+        assert again.to_dict() == Workflow.from_dict(saved).to_dict()
+        assert again.steps["a"].position == {"x": 10, "y": 20}
+        assert again.steps["a"].parameters == {"width": 3}
+
+    def test_the_saved_file_is_json_with_nodes_and_edges(self, tmp_path):
+        path = tmp_path / "w.json"
+        Workflow.from_dict(document({"a": ("make", {})}, [])).save(path)
+        assert set(json.loads(path.read_text())) == {"nodes", "edges"}
+
+    def test_a_missing_file_says_so(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            Workflow.load(tmp_path / "nothing.json")
+
+    def test_a_node_without_an_id_or_a_type_is_refused(self):
+        with pytest.raises(ValueError, match="needs an id and a type"):
+            Workflow.from_dict({"nodes": [{"type": "make"}], "edges": []})
+

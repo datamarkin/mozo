@@ -293,3 +293,22 @@ def imported(source: Path, root: Path, top: str) -> set:
                 found.add(node.module or "")
     return found
 
+
+def document(nodes: dict, edges: list = ()) -> dict:
+    """Build a workflow document in the editor's format.
+
+    Args:
+        nodes: ``{node id: (type, parameters)}``.
+        edges: ``[(source, source port, target, target port), ...]``.
+    """
+    return {
+        "nodes": [
+            {"id": name, "type": kind, "data": {"parameters": parameters}}
+            for name, (kind, parameters) in nodes.items()
+        ],
+        "edges": [
+            {"source": source, "sourceHandle": out, "target": target, "targetHandle": into}
+            for source, out, target, into in edges
+        ],
+    }
+
