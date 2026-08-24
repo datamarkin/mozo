@@ -36,6 +36,11 @@ BOX_TOLERANCE = 1e-2 + COORD_STEP
 
 ALL = ["nano", "small", "medium", "large", "xlarge"]
 
+#: The segmentation variants: the same backbone and neck with a ``Segment`` head. Listed apart
+#: from :data:`ALL` because most of this file asks about detection, which they also do -- what
+#: they add is a mask, and only :class:`TestSegmentation` is about that.
+SEGMENTING = ["seg-nano", "seg-small", "seg-medium", "seg-large", "seg-xlarge"]
+
 #: Everything any variant of this family reports on the fixture photograph, which is a desk scene.
 #: The union rather than one variant's answer: capacity differs across five sizes and a larger
 #: model legitimately finds more -- everything from small up sees a dining table that nano does
@@ -43,6 +48,27 @@ ALL = ["nano", "small", "medium", "large", "xlarge"]
 #: every size agrees on its contents. Numeric drift is pinned by TestAgainstRecordedDetections,
 #: which is exact.
 EXPECTED_NAMES = {"person", "cup", "dining table", "laptop", "cell phone"}
+
+
+def vendor_answer(variant: str, image):
+    """What the vendored package returns for *variant*, or skip if its weights are absent.
+
+    The resolve-and-skip preamble is here rather than in each test because three of them need the
+    same four lines, and a test that quietly stopped skipping would look like a pass.
+    """
+    from mozo.vendors.yolov11_deploy import Detector
+
+    return Detector(vendor_checkpoint(variant), device="cpu").predict(
+        image, conf=THRESHOLD, iou=0.7, max_det=300)
+
+
+def vendor_checkpoint(variant: str):
+    """The published torch checkpoint for *variant*, or skip if it is not there."""
+    require_weights("yolov11", variant)
+    try:
+        return resolve("yolov11", variant, "torch-fp32")
+    except WeightsError as error:
+        pytest.skip(f"yolov11/{variant} weights unavailable: {error}")
 
 
 @pytest.fixture(scope="module")
@@ -192,15 +218,7 @@ class TestMatchesTheVendor:
 
     @pytest.mark.parametrize("variant", ALL)
     def test_mozo_reports_exactly_what_the_vendor_found(self, predictor_for, image, variant):
-        require_weights("yolov11", variant)
-        from mozo.vendors.yolov11_deploy import Detector
-
-        try:
-            checkpoint = resolve("yolov11", variant, "torch-fp32")
-        except WeightsError as error:
-            pytest.skip(f"yolov11/{variant} weights unavailable: {error}")
-
-        want = Detector(checkpoint, device="cpu").predict(image, conf=THRESHOLD, iou=0.7, max_det=300)
+        want = vendor_answer(variant, image)
         got = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
 
         assert len(want) == len(got)
@@ -264,6 +282,143 @@ class TestRuntimeAgreement:
         if runtime not in executable(published("yolov11", "nano")):
             pytest.skip(f"{runtime} is published but not runnable here")
         assert predictor_for("nano", runtime).imgsz == 640
+
+
+class TestSegmentation:
+    """The ``seg-`` variants answer with a mask per detection, and the others with none."""
+
+    def test_a_segmentation_variant_returns_one_mask_per_detection(self, predictor_for, image):
+        """The count is the point: a mask that does not pair one-to-one with a box is unusable,
+        and nothing about the array's own shape would reveal it."""
+        require_weights("yolov11", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        assert len(found) > 0, "the fixture photograph has objects in it"
+        for detection in found:
+            mask = np.asarray(detection.masks)
+            assert mask.squeeze().shape == image.shape[:2], (
+                "a mask is at the source image's resolution, so it pairs with the box beside it"
+            )
+            assert mask.dtype == np.bool_, "a mask is a yes or no per pixel"
+
+    def test_a_detection_variant_returns_no_masks_at_all(self, predictor_for, image):
+        """``None`` rather than an empty array, so the two kinds are distinguishable without
+        measuring a length -- which is what lets one adapter serve both."""
+        require_weights("yolov11", "nano")
+        found = predictor_for("nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        assert len(found) > 0
+        assert all(detection.masks is None for detection in found)
+
+    def test_a_threshold_nothing_clears_returns_nothing(self, predictor_for, image):
+        """An empty answer is an answer, not a crash.
+
+        Mask assembly resizes the whole stack at once, and ``interpolate`` refuses a tensor with
+        no channels -- so a threshold that keeps nothing raised from inside the resize, which over
+        HTTP is a 500 on a query parameter a caller is entitled to send.
+        """
+        require_weights("yolov11", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=0.999)
+
+        assert len(found) == 0
+
+    def test_every_mask_lies_inside_its_own_box(self, predictor_for, image):
+        """The crop is the last step of assembly and the one that pairs a mask with a box.
+
+        Gathering the coefficients with a second pass over the scores, rather than with the index
+        the suppression already chose, would put each mask on a neighbouring object -- plausible
+        everywhere except here, because a mask cropped to box A cannot have pixels outside box A.
+        """
+        require_weights("yolov11", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        for detection in found:
+            mask = np.asarray(detection.masks).squeeze()
+            rows, columns = np.nonzero(mask)
+            if not len(rows):
+                continue
+            x1, y1, x2, y2 = detection.bbox
+            assert columns.min() >= int(x1) - 1 and columns.max() <= int(x2) + 1
+            assert rows.min() >= int(y1) - 1 and rows.max() <= int(y2) + 1
+
+    @pytest.mark.parametrize("variant", SEGMENTING)
+    def test_mozo_reports_the_masks_the_vendor_found(self, predictor_for, image, variant):
+        """The same promise :class:`TestMatchesTheVendor` makes about boxes, made about masks.
+
+        Every step after the head is the vendor's -- the suppression, the coordinate mapping and
+        the whole of the assembly -- so a mask mozo returns that the vendor did not produce could
+        only have come from the adapter, which is the one place that is meant to hold no model
+        maths at all.
+        """
+        want = vendor_answer(variant, image)
+        got = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        assert want.masks is not None, "a segmentation checkpoint must produce masks"
+        assert len(want) == len(got)
+        for index, detection in enumerate(got):
+            assert np.array_equal(np.asarray(detection.masks).squeeze(), want.masks[index])
+
+
+class TestTheHeadsThisPackageServes:
+    """Which checkpoints the vendor will build, and which it refuses.
+
+    The refusals matter as much as the acceptances: this package reads a checkpoint's own record
+    of itself, so the way it stays honest about a head it does not implement is to say so rather
+    than to build something plausible out of the parts it recognises.
+    """
+
+    def test_the_head_table_names_a_task_and_a_coefficient_count_for_each(self):
+        from mozo.vendors.yolov11_deploy.build import HEADS
+
+        assert HEADS["Detect"] == ("detect", None), "a detection head has no mask coefficients"
+        assert HEADS["Segment"] == ("segment", "nm"), "a segmentation head records them as 'nm'"
+
+    def test_a_head_with_no_dataflow_is_refused_by_name(self):
+        """``Pose`` and ``OBB`` are published for this family and are not implemented here.
+
+        Refused by the dataflow table rather than by :data:`HEADS`, and that is the order: a class
+        nothing knows how to route tensors through cannot be built at all, so the head table never
+        sees it. Which is why the next test exists -- the head table's own gate needs a class that
+        *does* build.
+        """
+        from mozo.vendors.yolov11_deploy.build import build_module
+
+        with pytest.raises(NotImplementedError, match="Pose"):
+            build_module(type("Pose", (), {})())
+
+    def test_a_final_layer_that_is_not_a_head_is_refused(self):
+        """The gate :data:`HEADS` is actually for: a class that builds but does not end a network.
+
+        This is what would catch a head given a dataflow and then forgotten in :data:`HEADS` --
+        the failure that would otherwise reach ``head.cv2`` and raise something about a missing
+        attribute, three steps from the cause.
+        """
+        from mozo.vendors.yolov11_deploy.build import build_network
+
+        layer = type("Concat", (), {})()
+        layer.__dict__.update({"i": 0, "f": -1})
+        layers = type("Layers", (), {})()
+        layers.__dict__["_modules"] = {"0": layer}
+        record = type("Model", (), {})()
+        record.__dict__["_modules"] = {"model": layers}
+
+        with pytest.raises(NotImplementedError, match="Concat"):
+            build_network(record)
+
+    def test_a_head_whose_task_disagrees_with_the_checkpoint_is_refused(self):
+        """The task is recorded on the root and the head is the last layer, independently.
+
+        A checkpoint where they disagree is one this package has misread, not one it can serve --
+        and reading a ``Segment`` head as detection would drop the mask branch and answer boxes,
+        which is the failure that produces plausible output.
+        """
+        from mozo.vendors.yolov11_deploy.build import build_network
+        from mozo.vendors.yolov11_deploy.reader import load_model_record
+
+        record = load_model_record(vendor_checkpoint("seg-nano"))
+        record.__dict__["task"] = "detect"
+        with pytest.raises(ValueError, match="task 'detect' for a Segment head"):
+            build_network(record)
 
 
 class TestCallerSuppliedNames:
