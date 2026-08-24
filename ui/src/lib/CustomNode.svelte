@@ -36,13 +36,9 @@
     allOutputsConnected && 'outputs-connected'
   ].filter(Boolean).join(' ');
 
-  function isRequiredInput() {
-    return true;
-  }
+  // Every input is required: an input carrying a default is refused when the node registers,
+  // because an input arrives over a connection and a default is a value nothing can produce.
 
-  function isOptionalInput(inputName) {
-    return optionalInputs.includes(inputName);
-  }
 
   function isInputConnected(inputName) {
     return connectedInputs.includes(inputName);
@@ -53,12 +49,9 @@
   }
 
   function getInputHandleClass(inputName) {
-    let baseClass = '';
-    if (isRequiredInput(inputName)) {
-      baseClass = 'handle-required';
-    } else if (isOptionalInput(inputName)) {
-      baseClass = 'handle-optional';
-    }
+    // Every input is required: an input carrying a default is refused when the node registers,
+    // because an input arrives over a connection and a default is a value nothing can produce.
+    let baseClass = 'handle-required';
 
     // Add pending class if this handle is pending connection
     const pending = $pendingConnection;

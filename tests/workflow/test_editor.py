@@ -12,10 +12,13 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from urllib.parse import urljoin
 
 import pytest
 
 import mozo
+from mozo.workflow import get
+from workflow_nodes import shipped
 
 EDITOR = Path(mozo.__file__).parent / "workflow" / "static"
 
@@ -37,12 +40,20 @@ class TestItIsServed:
         assert "text/html" in response.headers["content-type"]
 
     def test_every_file_the_page_asks_for_is_there(self, client):
-        """A page that loads with a 404 script is a blank screen and no explanation."""
+        """A page that loads with a 404 script is a blank screen and no explanation.
+
+        Each URL is resolved against the page's own address the way a browser would, rather than
+        being pasted onto a prefix by the test. That distinction is the whole point here: the page
+        is served at ``/workflow`` with no trailing slash, so a relative ``./assets/x.js`` resolves
+        to ``/assets/x.js`` -- which nothing serves. An earlier version of this test joined the
+        prefix itself and passed against exactly that broken page.
+        """
         page = client.get("/workflow").text
-        wanted = re.findall(r'"\./(assets/[^"]+)"', page)
+        wanted = re.findall(r'(?:src|href)="([^"]+\.(?:js|css))"', page)
         assert wanted, "the page asks for nothing, so it cannot be the built editor"
         for asset in wanted:
-            assert client.get(f"/workflow/{asset}").status_code == 200, asset
+            resolved = urljoin("/workflow", asset)
+            assert client.get(resolved).status_code == 200, f"{asset} resolves to {resolved}"
 
     def test_a_name_that_climbs_out_of_the_directory_reaches_nothing(self, client):
         assert client.get("/workflow/assets/../../server.py").status_code == 404
@@ -66,10 +77,19 @@ class TestTheEditorAndTheServerAgree:
     def test_the_server_offers_every_widget_the_panel_can_draw(self, client):
         """The panel switches on `kind`. A kind it has never heard of renders as a text box."""
         drawn = {"int", "float", "str", "bool", "color", "select"}
-        served = {parameter["kind"]
-                  for node in client.get("/workflow/nodes").json()["nodes"]
-                  for parameter in node["parameters"]}
+        served = {parameter.kind for name in shipped() for parameter in get(name).parameters}
         assert served <= drawn, f"the server offers widgets the editor cannot draw: {served - drawn}"
+
+    def test_every_category_has_an_icon(self, client):
+        """A category the icons do not know renders as a bare circle in the palette.
+
+        Eight of the ten did, at one point: the icons came from the project the editor came from
+        and named its categories, not mozo's.
+        """
+        icons = (Path(__file__).resolve().parents[2] / "ui/src/lib/CategoryIcon.svelte").read_text()
+        drawn = set(re.findall(r"^    (\w+): '", icons, re.M))
+        declared = {get(name).category for name in shipped()}
+        assert declared <= drawn, f"these categories have no icon: {sorted(declared - drawn)}"
 
     def test_every_port_type_has_a_colour(self, client):
         """Handles are coloured by port type, and two of a colour is what "wireable" looks like."""
@@ -77,7 +97,6 @@ class TestTheEditorAndTheServerAgree:
         if not css:
             pytest.skip("the editor is not built")
         styled = set(re.findall(r"\.port-type-([a-z]+)", css[0].read_text()))
-        served = {port["type"]
-                  for node in client.get("/workflow/nodes").json()["nodes"]
-                  for port in node["inputs"] + node["outputs"]}
+        served = {port.type.value for name in shipped()
+                  for port in get(name).inputs + get(name).outputs}
         assert served <= styled, f"these port types have no colour: {served - styled}"
