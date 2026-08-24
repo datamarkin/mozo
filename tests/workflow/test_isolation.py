@@ -137,6 +137,26 @@ print("OK")
 """
 
 
+class TestTheRuntimeReachesNothing:
+    """What running a graph must never be a reason to do."""
+
+    def test_the_workflow_runtime_imports_nothing_that_opens_a_socket(self):
+        """Fetching weights is ``weights.py``'s job. Running a graph is not a reason to open one.
+
+        Resolved by imports rather than by looking for ``urlopen`` in the text, for the reason
+        ``conftest.imported`` was written: a substring search stays green against ``http.client``,
+        ``aiohttp``, ``urllib3`` and anything else nobody thought to list.
+        """
+        networking = {"urllib", "urllib3", "http", "socket", "ssl", "ftplib",
+                      "requests", "httpx", "aiohttp", "asyncio"}
+        reaching = []
+        for source in sorted((PACKAGE / "workflow").rglob("*.py")):
+            for name in _reaches(source):
+                if name.split(".")[0] in networking:
+                    reaching.append(f"{source.relative_to(PACKAGE)} -> {name}")
+        assert not reaching, f"the workflow runtime must not reach out: {reaching}"
+
+
 #: What ``import mozo`` must not drag in. The workflow runtime needs ``pixelflow.Detections`` at
 #: decoration time, so it pays for PixelFlow -- 179 ms against mozo's 2.5 ms. (It was 528 ms until
 #: PixelFlow deferred ``pixelflow.tracker``, which was pulling SciPy for ByteTrack on every import.)
