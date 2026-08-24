@@ -36,6 +36,11 @@ BOX_TOLERANCE = 1e-2 + COORD_STEP
 
 ALL = ["nano", "small", "medium", "large", "xlarge"]
 
+#: The segmentation variants: the same backbone and neck with a ``Segment26`` head. Listed apart
+#: from :data:`ALL` because most of this file asks about detection, which they also do -- what
+#: they add is a mask, and only :class:`TestSegmentation` is about that.
+SEGMENTING = ["seg-nano", "seg-small", "seg-medium", "seg-large", "seg-xlarge"]
+
 #: Everything any variant of this family reports on the fixture photograph, which is a desk scene.
 #: The union rather than one variant's answer: capacity differs across five sizes and a larger
 #: model legitimately finds more -- everything from small up sees a dining table that nano does
@@ -73,7 +78,7 @@ def predictor_for():
 
 
 class TestPublished:
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_every_published_variant_carries_its_licence(self, variant):
         """These weights are AGPL-3.0, so the licence has to travel with them, not near them.
 
@@ -89,7 +94,7 @@ class TestPublished:
         assert "LICENSE" in accompanying, "AGPL-3.0 weights published without their licence text"
         assert "NOTICE" in accompanying, "AGPL-3.0 weights published without a source pointer"
 
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_a_graph_is_published_with_the_names_it_cannot_carry(self, variant):
         """A graph records no class names, so publishing one without labels leaves ids unnamed."""
         keys = published("yolov26", variant)
@@ -97,7 +102,7 @@ class TestPublished:
             pytest.skip(f"yolov26/{variant} publishes no graph artifact")
         assert "labels" in keys
 
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_no_coreml_is_published(self, variant):
         """Two separate things stop CoreML for this family, and one of them kills the process.
 
@@ -113,7 +118,7 @@ class TestPublished:
         """
         assert not [k for k in published("yolov26", variant) if k.startswith("coreml")]
 
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_no_fp16_is_published(self, variant):
         """Faster, and puts the objects it finds in slightly the wrong place.
 
@@ -125,7 +130,7 @@ class TestPublished:
 
 
 class TestDetections:
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_finds_the_scene(self, predictor_for, image, variant):
         require_weights("yolov26", variant)
         detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
@@ -218,7 +223,7 @@ class TestChannelOrder:
 class TestMatchesTheVendor:
     """mozo must return what the vendored package returns, not merely something like it."""
 
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_mozo_reports_exactly_what_the_vendor_found(self, predictor_for, image, variant):
         require_weights("yolov26", variant)
         from mozo.vendors.yolov26_deploy import Detector
@@ -244,7 +249,7 @@ class TestMatchesTheVendor:
 class TestRuntimeAgreement:
     """The artifact you pick must not change the answer."""
 
-    @pytest.mark.parametrize("variant", ALL)
+    @pytest.mark.parametrize("variant", ALL + SEGMENTING)
     def test_the_published_graph_agrees_with_torch(self, predictor_for, image, variant):
         """ONNX is the only graph this family publishes; see ``test_no_coreml_is_published``."""
         runtime = "onnx-fp32"
@@ -304,6 +309,63 @@ class TestCallerSuppliedNames:
         assert any(d.class_name == "human" for d in detections)
         assert not any(d.class_name == "person" for d in detections)
 
+
+class TestSegmentation:
+    """The ``seg-`` variants answer with a mask per detection, and the others with none."""
+
+    def test_a_segmentation_variant_returns_one_mask_per_detection(self, predictor_for, image):
+        """The count is the point: a mask that does not pair one-to-one with a box is unusable,
+        and nothing about the array's own shape would reveal it."""
+        require_weights("yolov26", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        assert len(found) > 0, "the fixture photograph has objects in it"
+        for detection in found:
+            mask = np.asarray(detection.masks)
+            assert mask.squeeze().shape == image.shape[:2], (
+                "a mask is at the source image's resolution, so it pairs with the box beside it"
+            )
+            assert mask.dtype == np.bool_, "a mask is a yes or no per pixel"
+
+    def test_a_detection_variant_returns_no_masks_at_all(self, predictor_for, image):
+        """``None`` rather than an empty array, so the two kinds are distinguishable without
+        measuring a length -- which is what lets one adapter serve both."""
+        require_weights("yolov26", "nano")
+        found = predictor_for("nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        assert len(found) > 0
+        assert all(detection.masks is None for detection in found)
+
+    def test_a_threshold_nothing_clears_returns_nothing(self, predictor_for, image):
+        """An empty answer is an answer, not a crash.
+
+        Mask assembly resizes the whole stack at once, and ``interpolate`` refuses a tensor with
+        no channels -- so a threshold that keeps nothing raised from inside the resize, which over
+        HTTP is a 500 on a query parameter a caller is entitled to send.
+        """
+        require_weights("yolov26", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=0.999)
+
+        assert len(found) == 0
+
+    def test_every_mask_lies_inside_its_own_box(self, predictor_for, image):
+        """The crop is the last step of assembly and the one that pairs a mask with a box.
+
+        Gathering the coefficients with a second top-k rather than the one that picked the boxes
+        would put each mask on a neighbouring object -- plausible everywhere except here, because
+        a mask cropped to box A cannot have pixels outside box A.
+        """
+        require_weights("yolov26", "seg-nano")
+        found = predictor_for("seg-nano", "torch-fp32").predict(image, threshold=THRESHOLD)
+
+        for detection in found:
+            mask = np.asarray(detection.masks).squeeze()
+            rows, columns = np.nonzero(mask)
+            if not len(rows):
+                continue
+            x1, y1, x2, y2 = detection.bbox
+            assert columns.min() >= int(x1) - 1 and columns.max() <= int(x2) + 1
+            assert rows.min() >= int(y1) - 1 and rows.max() <= int(y2) + 1
 
 class TestRegistry:
     def test_registry_agrees_with_the_adapter(self):
