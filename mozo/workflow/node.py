@@ -30,6 +30,7 @@ Two inputs, one parameter, one output, a name and a description -- none of it wr
 from __future__ import annotations
 
 import inspect
+import types
 import typing
 from dataclasses import dataclass
 from enum import Enum
@@ -393,8 +394,13 @@ def _stated(annotation: Any, default: Any) -> Any:
 
 
 def _optional(annotation: Any) -> Any:
-    """The ``T`` in ``T | None``, or ``None`` where the annotation is not exactly that."""
-    if typing.get_origin(annotation) is not typing.Union:
+    """The ``T`` in ``T | None``, or ``None`` where the annotation is not exactly that.
+
+    Both spellings. ``Optional[int]`` resolves to ``typing.Union``; ``int | None`` resolves to
+    ``types.UnionType``, which is a different thing with the same meaning. Checking only the first
+    refused the spelling this package's own docstrings tell node authors to use.
+    """
+    if typing.get_origin(annotation) not in (typing.Union, types.UnionType):
         return None
     named = [item for item in typing.get_args(annotation) if item is not type(None)]
     return named[0] if len(named) == 1 else None

@@ -118,6 +118,11 @@ def run(
 
     results = {}
     for event in _events(built, inputs, image):
+        if event.status == "failed":
+            # A run that failed is not a run that returned nothing. Answering 200 with an empty
+            # results dict is indistinguishable from success to any client that does not go
+            # looking, and the reason the node gave would be thrown away.
+            raise HTTPException(status_code=422, detail=event.error)
         if event.status == "completed" and (include == "all" or event.node in terminals):
             # Serialised as it arrives, so a node's output is not held past the one it feeds.
             # Combined with the engine dropping a wire once its last reader has run, a five-node
