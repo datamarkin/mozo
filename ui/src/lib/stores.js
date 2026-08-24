@@ -51,13 +51,3 @@ export function clearPendingConnection() {
  * have one is refused by name rather than guessed at.
  */
 export const chosenImage = writable(null);
-
-// App config from window (injected by Jinja2)
-function getAppConfig() {
-    if (typeof window !== 'undefined' && window.APP_CONFIG) {
-        return window.APP_CONFIG;
-    }
-    return { deploymentMode: 'local', user: null, workflowId: null };
-}
-
-export const appConfig = writable(getAppConfig());
