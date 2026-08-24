@@ -19,8 +19,7 @@
 <nav class="navbar is-fixed-top border-bottom" aria-label="main navigation">
   <div class="navbar-brand">
     <div class="navbar-item">
-      <img alt="Datamarkin logo" src="/logo.png" width="120" height="24">
-    </div>
+        </div>
     <div class="navbar-item">
 
     </div>

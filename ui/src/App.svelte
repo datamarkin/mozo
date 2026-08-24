@@ -84,9 +84,8 @@
             type: 'default',
             position,
             data: {
-                label: nodeType,
                 nodeType: nodeType,
-                parameters: getDefaultParameters(nodeType)
+                parameters: getDefaultParameters()
             },
             class: generateNodeClasses(nodeType, category),
             origin: [0.5, 0.0]
@@ -103,9 +102,9 @@
         }
     }
 
-    function getDefaultParameters(nodeType) {
-        const currentNodes = $availableNodes || {};
-        return currentNodes[nodeType]?.parameters || {};
+    /** A new node sets nothing. Unset means the node's own default, on both sides of the wire. */
+    function getDefaultParameters() {
+        return {};
     }
 
     function getNodeCategory(nodeType) {
@@ -191,8 +190,11 @@
         const sourceNodeType = sourceNode.data?.nodeType;
         const targetNodeType = targetNode.data?.nodeType;
 
-        const sourceHandle = getDefaultOutput(sourceNodeType);
-        const targetHandle = getDefaultInput(targetNodeType);
+        // The handles the user actually dragged. Only fall back to the first port when a drag did
+        // not name one -- picking the first regardless would make a multi-output node's second
+        // port unreachable, and would send a handle nobody chose.
+        const sourceHandle = connection.sourceHandle || getDefaultOutput(sourceNodeType);
+        const targetHandle = connection.targetHandle || getDefaultInput(targetNodeType);
 
         // Validate connection types
         if (!isValidConnection(sourceNodeType, sourceHandle, targetNodeType, targetHandle)) {
@@ -219,31 +221,24 @@
         if (!sourceNodeInfo || !targetNodeInfo) return false;
         if (!sourceHandle || !targetHandle) return false;
 
-        const sourceOutputType = sourceNodeInfo.outputs?.[sourceHandle];
-        const targetInputType = targetNodeInfo.inputs?.[targetHandle];
+        // Ports are ordered lists of {name, type}, so they are found by name rather than indexed.
+        // Indexing an array by a handle name yields undefined; indexing it by position yields a
+        // port object, and comparing two of those compares references, which are never equal.
+        const source = sourceNodeInfo.outputs?.find(port => port.name === sourceHandle);
+        const target = targetNodeInfo.inputs?.find(port => port.name === targetHandle);
 
-        if (!sourceOutputType || !targetInputType) return false;
-
-        // Types must match exactly
-        return sourceOutputType === targetInputType;
+        if (!source || !target) return false;
+        return source.type === target.type;
     }
 
+    /** The name of a node's first output port, for a drag that did not name one. */
     function getDefaultOutput(nodeType) {
-        const nodeInfo = $availableNodes?.[nodeType];
-        if (!nodeInfo?.outputs) return 'image';
-
-        // Get first output handle name
-        const outputHandles = Object.keys(nodeInfo.outputs);
-        return outputHandles[0] || 'image';
+        return $availableNodes?.[nodeType]?.outputs?.[0]?.name || null;
     }
 
+    /** The name of a node's first input port, for a drag that did not name one. */
     function getDefaultInput(nodeType) {
-        const nodeInfo = $availableNodes?.[nodeType];
-        if (!nodeInfo?.inputs) return null;
-
-        // Get first input handle name
-        const inputHandles = Object.keys(nodeInfo.inputs);
-        return inputHandles[0] || null;
+        return $availableNodes?.[nodeType]?.inputs?.[0]?.name || null;
     }
 
     function updateNodeParameters(nodeId, parameters) {
@@ -253,6 +248,14 @@
                     ? { ...node, data: { ...node.data, parameters } }
                     : node
             )
+        );
+        // And the selection, which the panel reads its current values from. Left stale, the panel
+        // spreads the values it was opened with, so setting a second parameter discarded the
+        // first.
+        selectedNode.update(node =>
+            node && node.id === nodeId
+                ? { ...node, data: { ...node.data, parameters } }
+                : node
         );
     }
 
@@ -337,7 +340,8 @@
                 const canvas = fromDocument(JSON.parse(e.target.result), $availableNodes);
                 nodes.set(canvas.nodes.map(node => ({
                     ...node, type: 'default',
-                    class: generateNodeClasses($availableNodes[node.data.nodeType]?.category)
+                    class: generateNodeClasses(
+                        node.data.nodeType, $availableNodes[node.data.nodeType]?.category || '')
                 })));
                 edges.set(canvas.edges);
             } catch (error) {

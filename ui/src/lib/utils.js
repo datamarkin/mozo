@@ -1,18 +1,11 @@
 /**
- * Shared utility functions for agentui components
+ * The small shared helpers the editor's components use.
+ *
+ * Deliberately thin. Anything that talks to the server lives in `api.js`, and anything about what
+ * a parameter *is* comes from the catalogue the server derives -- the panel used to guess a widget
+ * from the value it happened to hold, which cannot tell an unset number from a zero.
  */
 
-/**
- * Build an API URL with the configured base prefix.
- * When AgentUI is mounted at a sub-path (e.g. /agentui), all API calls
- * need to include that prefix. In standalone mode apiBase is empty.
- * @param {string} path - The API path (e.g. '/api/tools')
- * @returns {string} Full URL with prefix
- */
-export function apiUrl(path) {
-    const config = (typeof window !== 'undefined' && window.APP_CONFIG) || {};
-    return (config.apiBase || '') + path;
-}
 
 /**
  * Format parameter label - convert snake_case to Title Case
@@ -23,65 +16,9 @@ export function formatParameterLabel(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
-/**
- * Get CSS class for port type colors
- * @param {string} portType - The port type (image, detections)
- * @returns {string} CSS class name
- */
-export function getPortTypeClass(portType) {
-  const typeClasses = {
-    'image': 'port-type-image',
-    'detections': 'port-type-detections'
-  };
-  return typeClasses[portType] || 'port-type-image';
-}
 
-/**
- * Get parameter type from value
- * @param {*} value - The parameter value
- * @returns {string} Parameter type
- */
-export function getParameterType(value) {
-  if (typeof value === 'boolean') return 'boolean';
-  if (typeof value === 'number') return 'number';
-  if (typeof value === 'string') {
-    if (value.startsWith('#')) return 'color';
-    if (value.includes('.jpg') || value.includes('.png') || value.includes('.jpeg')) return 'file';
-    return 'text';
-  }
-  return 'text';
-}
 
-/**
- * Parse value according to type
- * @param {*} value - The value to parse
- * @param {string} type - The expected type
- * @returns {*} Parsed value
- */
-export function parseValue(value, type) {
-  if (type === 'number') return parseFloat(value) || 0;
-  if (type === 'boolean') return value === 'true' || value === true;
-  return value;
-}
 
-/**
- * Get category icon for node palette
- * @param {string} category - The category name
- * @returns {string} Emoji icon
- */
-export function getCategoryIcon(category) {
-  const icons = {
-    'Input/Output': '📥',
-    'Transform': '🔧',
-    'Adjust': '🎨',
-    'Filter': '🔍',
-    'Analysis': '📊',
-    'Detection': '🤖',
-    'Combine': '🔀',
-    'Other': '⚙️'
-  };
-  return icons[category] || '⚙️';
-}
 
 /**
  * Convert text to CSS-safe class name (slugify)

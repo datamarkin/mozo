@@ -3,8 +3,10 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [svelte()],
-  // Relative, because the page is served from mozo's own static directory
-  base: './',
+  // Absolute, and matching the route the page is served at. Relative would resolve against
+  // `/workflow` -- which has no trailing slash, so the browser drops the last segment and asks for
+  // `/assets/...`, which nothing serves. A blank page with one 404 in the console.
+  base: '/workflow/',
   build: {
     outDir: '../mozo/workflow/static',
     emptyOutDir: true,
