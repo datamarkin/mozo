@@ -153,7 +153,7 @@
                 $nodes.find(n => n.id === pendingNodeId)?.data?.nodeType :
                 newNode.data.nodeType;
 
-            if (isValidConnection(sourceNodeType, sourceHandle, targetNodeType, targetHandle)) {
+            if (portsAgree(sourceNodeType, sourceHandle, targetNodeType, targetHandle)) {
                 const newEdge = {
                     id: `edge-${Date.now()}`,
                     source: sourceNode,
@@ -172,46 +172,29 @@
         }
     }
 
-    function onConnect(event) {
-        const connection = event.detail.connection;
-
-        // Get node types to determine correct handles
-        const sourceNode = $nodes.find(n => n.id === connection.source);
-        const targetNode = $nodes.find(n => n.id === connection.target);
-
-        if (!sourceNode || !targetNode) {
-            console.warn('Could not find source or target node');
-            return;
-        }
-
-        const sourceNodeType = sourceNode.data?.nodeType;
-        const targetNodeType = targetNode.data?.nodeType;
+    /**
+     * Whether a connection may be made, asked by Svelte Flow while the wire is being dragged.
+     *
+     * Its own hook rather than a check on the `connect` event, because that event is a
+     * notification: the library has already added the edge by the time it fires, and returning
+     * early from it leaves the edge on the canvas. Asked here, an incompatible target simply does
+     * not take the wire -- and it says so while the drag is still happening, by which handles
+     * light up, rather than after the fact.
+     */
+    function isValidConnection(connection) {
+        const source = $nodes.find(n => n.id === connection.source)?.data?.nodeType;
+        const target = $nodes.find(n => n.id === connection.target)?.data?.nodeType;
+        if (!source || !target) return false;
 
         // The handles the user actually dragged. Only fall back to the first port when a drag did
         // not name one -- picking the first regardless would make a multi-output node's second
         // port unreachable, and would send a handle nobody chose.
-        const sourceHandle = connection.sourceHandle || getDefaultOutput(sourceNodeType);
-        const targetHandle = connection.targetHandle || getDefaultInput(targetNodeType);
-
-        // Validate connection types
-        if (!isValidConnection(sourceNodeType, sourceHandle, targetNodeType, targetHandle)) {
-            console.warn(`Invalid connection: ${sourceNodeType}.${sourceHandle} -> ${targetNodeType}.${targetHandle}`);
-            alert(`Cannot connect ${sourceNodeType} output to ${targetNodeType} input: incompatible types`);
-            return;
-        }
-
-        const newEdge = {
-            id: `edge-${Date.now()}`,
-            source: connection.source,
-            target: connection.target,
-            sourceHandle: sourceHandle,
-            targetHandle: targetHandle
-        };
-
-        edges.update(edges => [...edges, newEdge]);
+        return portsAgree(source, connection.sourceHandle || getDefaultOutput(source),
+                          target, connection.targetHandle || getDefaultInput(target));
     }
 
-    function isValidConnection(sourceNodeType, sourceHandle, targetNodeType, targetHandle) {
+    /** Whether what one port carries is what the other takes. */
+    function portsAgree(sourceNodeType, sourceHandle, targetNodeType, targetHandle) {
         const sourceNodeInfo = $availableNodes?.[sourceNodeType];
         const targetNodeInfo = $availableNodes?.[targetNodeType];
 
@@ -379,7 +362,7 @@
                     bind:this={svelteFlowInstance}
                     on:nodeclick={onNodeClick}
                     on:paneclick={onPaneClick}
-                    on:connect={onConnect}
+                    {isValidConnection}
                     maxZoom={1}
                     fitView
                     fitViewOptions={{
@@ -404,3 +387,16 @@
 
 
 </SvelteFlowProvider>
+
+<style>
+    /* While a wire is being dragged, Svelte Flow marks the handle under the pointer `connectingto`
+       and adds `valid` when `isValidConnection` said yes. Saying which is the whole point of being
+       asked before the connection is made rather than after. */
+    :global(.svelte-flow__handle.connectingto) {
+        box-shadow: 0 0 0 3px rgba(214, 54, 56, 0.35);
+    }
+
+    :global(.svelte-flow__handle.connectingto.valid) {
+        box-shadow: 0 0 0 3px rgba(72, 199, 116, 0.45);
+    }
+</style>

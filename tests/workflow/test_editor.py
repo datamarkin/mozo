@@ -88,6 +88,20 @@ class TestTheEditorAndTheServerAgree:
         served = {parameter.kind for name in shipped() for parameter in get(name).parameters}
         assert served <= drawn, f"the server offers widgets the editor cannot draw: {served - drawn}"
 
+    def test_a_connection_is_refused_before_it_is_made_rather_than_after(self):
+        """Svelte Flow's `isValidConnection`, not its `connect` event.
+
+        The event is a notification: by the time it fires the edge is on the canvas, and returning
+        early from it leaves it there. Checked that way, the editor accepted a detections output
+        into an image input and only the server noticed -- 400 at the end of a drag that looked
+        like it had worked. `isValidConnection` is asked while the wire is still in the air.
+        """
+        app = (Path(__file__).resolve().parents[2] / "ui/src/App.svelte").read_text()
+        assert "{isValidConnection}" in app, "the canvas does not validate connections at all"
+        assert "on:connect=" not in app, (
+            "the canvas checks connections on the `connect` event, which fires after the edge "
+            "has already been added")
+
     def test_every_category_has_an_icon(self, client):
         """A category the icons do not know renders as a bare circle in the palette.
 
