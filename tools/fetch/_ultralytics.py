@@ -41,6 +41,19 @@ RELEASE = "v8.4.0"
 
 ASSETS = f"https://github.com/ultralytics/assets/releases/download/{RELEASE}"
 
+#: The `ultralytics` release to check a vendored family's numbers against, derived from the tag
+#: above rather than typed again. The assets repository and the package are versioned together, so
+#: the checkpoints in `RELEASE` and the code in `REFERENCE` are the same release of the same
+#: project -- which is the only pairing where "these weights were checked against this code" is a
+#: statement about one thing rather than two.
+#:
+#: Derived, because it was typed out separately in `tools/verify/yolov26_reference.py` and
+#: `tools/bench/yolov26.py`, and this module's own docstring already argues against exactly that:
+#: a bump reaches whichever copies someone remembered, and the ones missed keep naming the old
+#: version in a table that still passes. Should the tag and the published version ever diverge,
+#: this is the one line that says so.
+REFERENCE = RELEASE.removeprefix("v")
+
 #: Where the corresponding source for these weights lives, for the NOTICE.
 SOURCE_URL = "https://github.com/ultralytics/ultralytics"
 
