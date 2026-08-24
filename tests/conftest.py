@@ -343,3 +343,14 @@ def port_types_of(value) -> set:
     if isinstance(value, np.ndarray) and value.ndim == 3:
         return {PortType.IMAGE}
     raise AssertionError(f"nothing a port can carry: {type(value)}")
+
+@pytest.fixture(scope="module")
+def client():
+    """A test client over the mozo server. Imports deferred so collection stays cheap."""
+    from fastapi.testclient import TestClient
+
+    from mozo.server import app
+
+    with TestClient(app) as running:
+        yield running
+

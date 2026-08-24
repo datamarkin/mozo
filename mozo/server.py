@@ -31,6 +31,7 @@ from .text import comma_separated
 from .image import load_image
 from .manager import ModelManager
 from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
+from .workflow.api import router as workflow_router
 
 app = FastAPI(
     title="Mozo Model Server",
@@ -41,6 +42,11 @@ app = FastAPI(
 # Built at import: a manager is an empty dict and a lock, and loads nothing until asked. There is
 # no startup work to defer, and no window where a request can arrive before it exists.
 app.state.model_manager = ModelManager()
+
+# The one place in mozo that reaches into the workflow runtime. Everything else about that
+# subpackage is invisible from here, and `tests/workflow/test_isolation.py` keeps it that way --
+# importing it costs PixelFlow, which a caller of `get_model` should never pay for.
+app.include_router(workflow_router)
 
 _STATIC = Path(__file__).parent / "static"
 

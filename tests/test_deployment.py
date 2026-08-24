@@ -26,16 +26,6 @@ import logging
 import pytest
 
 
-@pytest.fixture(scope="module")
-def client():
-    from fastapi.testclient import TestClient
-
-    from mozo.server import app
-
-    with TestClient(app) as running:
-        yield running
-
-
 def refuse(client, payload, family: str, variant: str) -> str:
     """Ask for a prediction that should be refused, and return the reason given."""
     response = client.post(f"/predict/{family}/{variant}",
