@@ -1,0 +1,2091 @@
+{
+  "conf": 0.001,
+  "device": "cpu",
+  "fused": true,
+  "imgsz": 640,
+  "iou": 0.7,
+  "reference": "ultralytics 8.4.0",
+  "torch": "2.9.1",
+  "variants": {
+    "large": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.000152587890625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 8.344650268554688e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.001373291015625
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.0018310546875
+          },
+          "tolerance": null
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 3.7103891372680664e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 8.344650268554688e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 6.318092346191406e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 7.867813110351562e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 1.1920928955078125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 1.430511474609375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 1.1086463928222656e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 2.86102294921875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 6.198883056640625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 8.392333984375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 8.410215377807617e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 8.410215377807617e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 0.00011038780212402344
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 5.2325427532196045e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        }
+      }
+    },
+    "medium": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.000244140625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.0005645751953125
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00103759765625
+          },
+          "tolerance": null
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 4.082918167114258e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 7.510185241699219e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 7.152557373046875e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 8.821487426757812e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 1.1920928955078125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 1.0013580322265625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 1.4066696166992188e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.049041748046875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.537799835205078e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 1.093745231628418e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 1.2636184692382812e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 1.2636184692382812e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 4.315376281738281e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 1.2993812561035156e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.2993812561035156e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 1.5735626220703125e-05
+          },
+          "tolerance": 0.002
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        }
+      }
+    },
+    "nano": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.00018310546875
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 1.430511474609375e-06
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.001617431640625
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.001617431640625
+          },
+          "tolerance": null
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 4.202127456665039e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 2.384185791015625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 5.7220458984375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 8.58306884765625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 5.662441253662109e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 1.7523765563964844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 2.6106834411621094e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.9311904907226562e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.2695789337158203e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.2040138244628906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.2040138244628906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.7523765563964844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 1.2345612049102783e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 1.2345612049102783e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 1.2345612049102783e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 1.0788440704345703e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 1.138448715209961e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 1.2345612049102783e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 1.2755393981933594e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 1.77919864654541e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.77919864654541e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        }
+      }
+    },
+    "seg-large": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.000152587890625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 8.344650268554688e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.001373291015625
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.0018310546875
+          },
+          "tolerance": null
+        },
+        "head.coefficients": {
+          "per_image": {
+            "example.jpg": 7.72625207901001e-05
+          },
+          "tolerance": 0.001
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 3.7103891372680664e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 8.344650268554688e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 6.318092346191406e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 7.867813110351562e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 1.1920928955078125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 1.430511474609375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 1.1086463928222656e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 2.86102294921875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 6.198883056640625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 8.392333984375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 8.410215377807617e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 8.410215377807617e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 0.00011038780212402344
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 5.2325427532196045e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 7.611513137817383e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 5.53131103515625e-05
+          },
+          "tolerance": 0.002
+        },
+        "masks.pixels": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-05
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        },
+        "protos": {
+          "per_image": {
+            "example.jpg": 7.730722427368164e-05
+          },
+          "tolerance": 0.001
+        }
+      }
+    },
+    "seg-medium": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.000244140625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.0005645751953125
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00103759765625
+          },
+          "tolerance": null
+        },
+        "head.coefficients": {
+          "per_image": {
+            "example.jpg": 7.733702659606934e-06
+          },
+          "tolerance": 0.001
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 4.082918167114258e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 7.510185241699219e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 7.152557373046875e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 8.821487426757812e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 1.1920928955078125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 1.0013580322265625e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 1.4066696166992188e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.049041748046875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.537799835205078e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 1.093745231628418e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 1.2636184692382812e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 1.2636184692382812e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 4.315376281738281e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 1.2993812561035156e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.2993812561035156e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 1.5735626220703125e-05
+          },
+          "tolerance": 0.002
+        },
+        "masks.pixels": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-05
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        },
+        "protos": {
+          "per_image": {
+            "example.jpg": 1.3113021850585938e-05
+          },
+          "tolerance": 0.001
+        }
+      }
+    },
+    "seg-nano": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.0006103515625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 1.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.00164794921875
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00164794921875
+          },
+          "tolerance": null
+        },
+        "head.coefficients": {
+          "per_image": {
+            "example.jpg": 1.1235475540161133e-05
+          },
+          "tolerance": 0.001
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 3.159046173095703e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 2.1457672119140625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 1.1205673217773438e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 4.291534423828125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 6.4373016357421875e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 6.4373016357421875e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 7.271766662597656e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 6.4373016357421875e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.4901161193847656e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 1.0728836059570312e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 9.417533874511719e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 9.417533874511719e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 1.4543533325195312e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 9.179115295410156e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 1.990795135498047e-05
+          },
+          "tolerance": 0.002
+        },
+        "masks.pixels": {
+          "per_image": {
+            "example.jpg": 7.39242542521231e-08
+          },
+          "tolerance": 1e-05
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        },
+        "protos": {
+          "per_image": {
+            "example.jpg": 3.123283386230469e-05
+          },
+          "tolerance": 0.001
+        }
+      }
+    },
+    "seg-small": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.0001373291015625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 7.152557373046875e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.00140380859375
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00140380859375
+          },
+          "tolerance": null
+        },
+        "head.coefficients": {
+          "per_image": {
+            "example.jpg": 5.602836608886719e-06
+          },
+          "tolerance": 0.001
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 1.1712312698364258e-05
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 5.602836608886719e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 6.496906280517578e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 5.245208740234375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 5.7220458984375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 7.3909759521484375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 9.059906005859375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.0967254638671875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.0967254638671875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.0967254638671875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 7.62939453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 8.702278137207031e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 9.5367431640625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 9.5367431640625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 1.6748905181884766e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.3709068298339844e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 3.790855407714844e-05
+          },
+          "tolerance": 0.002
+        },
+        "masks.pixels": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-05
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        },
+        "protos": {
+          "per_image": {
+            "example.jpg": 1.4424324035644531e-05
+          },
+          "tolerance": 0.001
+        }
+      }
+    },
+    "seg-xlarge": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.0001373291015625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 5.364418029785156e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.000518798828125
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00461578369140625
+          },
+          "tolerance": null
+        },
+        "head.coefficients": {
+          "per_image": {
+            "example.jpg": 7.209181785583496e-05
+          },
+          "tolerance": 0.001
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 1.1980533599853516e-05
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 4.291534423828125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 8.821487426757812e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 1.0609626770019531e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 2.9802322387695312e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 2.193450927734375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.811981201171875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 2.282857894897461e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.2516975402832031e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.2516975402832031e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 0.0002090930938720703
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 0.00020000338554382324
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 0.00020000338554382324
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 0.0003056526184082031
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "masks.pixels": {
+          "per_image": {
+            "example.jpg": 2.9041671313334078e-08
+          },
+          "tolerance": 1e-05
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        },
+        "protos": {
+          "per_image": {
+            "example.jpg": 9.766221046447754e-05
+          },
+          "tolerance": 0.001
+        }
+      }
+    },
+    "small": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.00018310546875
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 1.043081283569336e-06
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.001129150390625
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.001129150390625
+          },
+          "tolerance": null
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 4.76837158203125e-06
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 2.7120113372802734e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 5.424022674560547e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 3.5762786865234375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 7.510185241699219e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 1.430511474609375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 9.059906005859375e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 8.106231689453125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 1.6570091247558594e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 1.239776611328125e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 1.150369644165039e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 1.0788440704345703e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 1.1622905731201172e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 2.199411392211914e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 1.436471939086914e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 1.436471939086914e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 2.4318695068359375e-05
+          },
+          "tolerance": 0.002
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        }
+      }
+    },
+    "xlarge": {
+      "images": [
+        "example.jpg"
+      ],
+      "stages": {
+        "detections.boxes": {
+          "per_image": {
+            "example.jpg": 0.0001373291015625
+          },
+          "tolerance": 0.01
+        },
+        "detections.classes": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 0
+        },
+        "detections.count.marginal": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": null
+        },
+        "detections.scores": {
+          "per_image": {
+            "example.jpg": 5.364418029785156e-07
+          },
+          "tolerance": 0.001
+        },
+        "head.boxes": {
+          "per_image": {
+            "example.jpg": 0.000518798828125
+          },
+          "tolerance": 0.01
+        },
+        "head.boxes.all": {
+          "per_image": {
+            "example.jpg": 0.00461578369140625
+          },
+          "tolerance": null
+        },
+        "head.scores": {
+          "per_image": {
+            "example.jpg": 1.1980533599853516e-05
+          },
+          "tolerance": 0.001
+        },
+        "layer.00": {
+          "per_image": {
+            "example.jpg": 4.291534423828125e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.01": {
+          "per_image": {
+            "example.jpg": 3.814697265625e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.02": {
+          "per_image": {
+            "example.jpg": 8.821487426757812e-06
+          },
+          "tolerance": 0.002
+        },
+        "layer.03": {
+          "per_image": {
+            "example.jpg": 1.0609626770019531e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.04": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.05": {
+          "per_image": {
+            "example.jpg": 2.9802322387695312e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.06": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.07": {
+          "per_image": {
+            "example.jpg": 2.193450927734375e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.08": {
+          "per_image": {
+            "example.jpg": 1.811981201171875e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.09": {
+          "per_image": {
+            "example.jpg": 2.282857894897461e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.10": {
+          "per_image": {
+            "example.jpg": 1.2516975402832031e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.11": {
+          "per_image": {
+            "example.jpg": 1.2516975402832031e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.12": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.13": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.14": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.15": {
+          "per_image": {
+            "example.jpg": 2.3484230041503906e-05
+          },
+          "tolerance": 0.002
+        },
+        "layer.16": {
+          "per_image": {
+            "example.jpg": 0.0002090930938720703
+          },
+          "tolerance": 0.002
+        },
+        "layer.17": {
+          "per_image": {
+            "example.jpg": 0.00020000338554382324
+          },
+          "tolerance": 0.002
+        },
+        "layer.18": {
+          "per_image": {
+            "example.jpg": 0.00020000338554382324
+          },
+          "tolerance": 0.002
+        },
+        "layer.19": {
+          "per_image": {
+            "example.jpg": 0.0003056526184082031
+          },
+          "tolerance": 0.002
+        },
+        "layer.20": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "layer.21": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "layer.22": {
+          "per_image": {
+            "example.jpg": 0.0002562999725341797
+          },
+          "tolerance": 0.002
+        },
+        "preprocess": {
+          "per_image": {
+            "example.jpg": 0.0
+          },
+          "tolerance": 1e-06
+        }
+      }
+    }
+  }
+}
