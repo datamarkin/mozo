@@ -312,3 +312,34 @@ def document(nodes: dict, edges: list = ()) -> dict:
         ],
     }
 
+
+def port_types_of(value) -> set:
+    """Which port types *value* could be travelling on, judged by what it is.
+
+    The counterpart of ``mozo.workflow.api``'s serialiser, which judges by the *declared* port --
+    and deliberately so. This one exists to check a declaration against reality, which it can only
+    do by looking at the value.
+
+    A **set**, because shape cannot always tell them apart: a depth map and an embedding are both
+    two-dimensional float arrays, and claiming otherwise is the guess ``_serialise`` was changed to
+    stop making. Returning both is honest, and it lets a node declaring ``-> Embedding`` be checked
+    at all rather than failing against a checker that had already decided 2-D means depth.
+
+    A list is a batch: one wire carrying many of the same thing.
+    """
+    import numpy as np
+    import pixelflow as pf
+
+    from mozo.workflow import PortType
+
+    if isinstance(value, list):
+        return port_types_of(value[0])
+    if isinstance(value, pf.Classifications):
+        return {PortType.CLASSIFICATIONS}
+    if isinstance(value, pf.Detections):
+        return {PortType.DETECTIONS}
+    if isinstance(value, np.ndarray) and value.ndim == 2:
+        return {PortType.DEPTH, PortType.EMBEDDING}
+    if isinstance(value, np.ndarray) and value.ndim == 3:
+        return {PortType.IMAGE}
+    raise AssertionError(f"nothing a port can carry: {type(value)}")
