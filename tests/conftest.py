@@ -251,3 +251,45 @@ def weights(monkeypatch, zoo: Path, manifest_file: Path, tmp_path: Path):
     monkeypatch.delenv("MOZO_OFFLINE", raising=False)
     yield module
     module._manifest = None
+
+
+def imported(source: Path, root: Path, top: str) -> set:
+    """Every module *source* imports, with relative imports resolved against its own package.
+
+    Resolved with ``ast`` rather than by grepping import lines, because the failures these checks
+    exist to prevent are structural: a shared substrate under a neutral name stays green against a
+    substring search over the names you were watching for.
+
+    Shared by the two isolation rules -- no vendor reaches outside itself, and mozo does not reach
+    into its workflow runtime -- because the subtle half is the same in both. Resolving a relative
+    import is what shows that ``from ....utilities import x`` is still inside its own vendor, and
+    a second copy of that would let the two rules disagree about what an import is.
+
+    Args:
+        source: The ``.py`` file to read.
+        root: The directory *source*'s dotted name is relative to.
+        top: The package name *root* itself stands for, e.g. ``"mozo.vendors"``.
+
+    Returns:
+        Dotted module names, absolute wherever they could be resolved.
+    """
+    import ast
+
+    parts = source.relative_to(root).with_suffix("").parts
+    module = ".".join((top,) + parts)
+    package = module if source.name == "__init__.py" else module.rsplit(".", 1)[0]
+
+    found = set()
+    for node in ast.walk(ast.parse(source.read_text())):
+        if isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = package
+                for _ in range(node.level - 1):
+                    base = base.rsplit(".", 1)[0]
+                found.add(f"{base}.{node.module}" if node.module else base)
+            else:
+                found.add(node.module or "")
+    return found
+
