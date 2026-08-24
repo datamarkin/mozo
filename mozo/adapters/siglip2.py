@@ -134,7 +134,7 @@ class Siglip2Predictor:
         image: Union[str, Path, bytes, np.ndarray],
         text: Union[str, Sequence[str]],
         threshold: float | None = None,
-    ) -> "pf.detections.Classifications":
+    ) -> "pf.Classifications":
         """Score *image* against each phrase in *text*.
 
         Args:
