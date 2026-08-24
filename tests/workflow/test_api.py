@@ -94,6 +94,13 @@ class TestRunning:
         assert set(_run(client, GRAYSCALE, payload)["results"]) == {"gray"}
         assert set(_run(client, GRAYSCALE, payload, include="all")["results"]) == {"load", "gray"}
 
+    def test_a_node_that_fails_is_reported_rather_than_answered_with_nothing(self, client):
+        """200 with an empty results dict is indistinguishable from a workflow that produced
+        nothing, and throws away the reason the node gave."""
+        response = client.post("/workflow/run", data={"workflow": GRAYSCALE})
+        assert response.status_code == 422
+        assert "run(image=...)" in response.json()["detail"]
+
     def test_a_workflow_that_is_not_one_is_refused_before_anything_runs(self, client):
         response = client.post("/workflow/run", data={"workflow": as_json({"a": ("invent", {})})})
         assert response.status_code == 400
@@ -123,9 +130,11 @@ class TestStreaming:
             ("gray", "running"), ("gray", "completed")]
         assert events[-1] == {"done": True}
 
-    def test_a_completed_node_carries_its_output(self, client, payload):
-        events = _stream(client, GRAYSCALE, payload)
+    def test_a_completed_node_carries_its_output_when_it_was_asked_for(self, client, payload):
+        """Every node completes; only the ones `include` covers carry a result."""
+        events = _stream(client, GRAYSCALE, payload, include="all")
         finished = [e for e in events if e.get("status") == "completed"]
+        assert len(finished) == 2
         assert all(e["output"].startswith("data:image/png") for e in finished)
 
     def test_a_failing_node_is_reported_and_the_stream_stops(self, client):
@@ -135,6 +144,23 @@ class TestStreaming:
         assert not any(e.get("node") == "gray" for e in events)
         assert not any("done" in event for event in events), (
             "a stream that failed should not also report that it finished")
+
+    def test_only_the_ends_are_sent_unless_you_ask_for_more(self, client, payload):
+        """`include` means here what it means on /run. It was declared on neither at one point,
+        so the editor's request for every node was accepted and silently discarded."""
+        ends = _stream(client, GRAYSCALE, payload)
+        everything = _stream(client, GRAYSCALE, payload, include="all")
+        assert [e["node"] for e in ends if "output" in e] == ["gray"]
+        assert [e["node"] for e in everything if "output" in e] == ["load", "gray"]
+
+    def test_an_override_that_names_nothing_is_refused_before_the_stream_opens(self, client,
+                                                                               payload):
+        """A stream that has already claimed success is the wrong place to learn it was refused."""
+        response = client.post("/workflow/stream", data={
+            "workflow": GRAYSCALE, "inputs": json.dumps({"nonsense": 1})},
+            files={"image": ("photo.jpg", payload, "image/jpeg")})
+        assert response.status_code == 400
+        assert "no parameter" in response.json()["detail"]
 
     def test_a_document_that_is_not_a_workflow_fails_before_the_stream_opens(self, client):
         """A stream that has already claimed success is the wrong place to learn it was refused."""
