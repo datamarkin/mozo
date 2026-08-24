@@ -26,7 +26,7 @@ from __future__ import annotations
 
 # Single source of truth for the package version.
 # pyproject.toml reads this via [tool.setuptools.dynamic] version.attr
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 __all__ = ["MODEL_REGISTRY", "ModelManager", "__version__", "get_model", "get_model_info"]
 
