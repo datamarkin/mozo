@@ -128,6 +128,17 @@ class TestCatalogue:
         body = client.get("/models/loaded").json()
         assert body["models"] == client.app.state.model_manager.loaded()
 
+    def test_the_server_and_get_model_share_one_cache(self, client):
+        """One process, one manager.
+
+        A workflow node loads its model through :func:`mozo.get_model`, so a manager of the
+        server's own would hold ``yolov8/nano`` twice -- once for /predict, once for the node --
+        and ``/models/loaded`` would report only the half it owned. Neither failure raises.
+        """
+        import mozo
+
+        assert client.app.state.model_manager is mozo._shared
+
     def test_the_catalogue_costs_no_model_loads(self, client):
         """It is answered from the registry alone -- no adapter import, no torch, no weights."""
         before = client.app.state.model_manager.loaded()
