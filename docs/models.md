@@ -27,10 +27,31 @@ with `class_name` unset — pass `labels=[...]` to name them. Mozo never guesses
 ## YOLOv8, YOLO11, YOLO12, YOLO26
 
 Real-time detection by Ultralytics. Five sizes each: `nano` `small` `medium` `large` `xlarge`.
+YOLO11 and YOLO26 add five instance-segmentation variants apiece, `seg-nano` … `seg-xlarge`.
 
 **YOLO26 is NMS-free.** Its head fires once per object and the network returns a ranked detection
 list, so there is no overlap threshold to tune. The other three suppress in the usual way. Either
 way `predict` takes a confidence threshold and returns the same PixelFlow result.
+
+**YOLO11 and YOLO26 also segment.** Five `seg-` variants each, sitting beside the detection ones
+in the same family under the same task type, because what they add is a field rather than a
+different question:
+
+```python
+model = mozo.get_model("yolov11/seg-nano")
+found = model.predict("desk.jpg", threshold=0.25)
+found[0].masks          # a boolean array at the source image's resolution
+```
+
+A mask is a yes-or-no per pixel, one per detection, aligned with the box beside it. The `seg-`
+variants currently publish `torch-fp32` only, so `runtime="auto"` gives you torch for them and can
+still give you a graph for their detection counterparts.
+
+Two behaviours are upstream's and are reproduced rather than tidied away. A detection whose mask
+comes out empty is dropped, so a `seg-` variant can return fewer objects than its detection
+counterpart on the same photograph. And the mask crop takes a different branch below 50
+detections, rounding box edges to whole pixels where the other compares against the unrounded
+float — so the mask you get depends slightly on how many objects are in the picture.
 
 **Runtimes differ across the four generations.** YOLOv8 and YOLO12 publish a CoreML artifact,
 which is by far the fastest way to run them on Apple silicon. YOLO11 and YOLO26 do not: the

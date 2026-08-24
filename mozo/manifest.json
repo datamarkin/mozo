@@ -1300,6 +1300,151 @@
         }
       }
     },
+    "yolov11/seg-large": {
+      "latest": "2026-08-24",
+      "revisions": {
+        "2026-08-24": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/seg-large/2026-08-24/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/seg-large/2026-08-24/NOTICE",
+              "sha256": "49ea33a96c4fd5f04d2aeeb2e56de91d6550b04237a04a1d337ac62a15d88808",
+              "size": 958
+            },
+            "labels": {
+              "path": "yolov11/seg-large/2026-08-24/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "torch-fp32": {
+              "path": "yolov11/seg-large/2026-08-24/torch-fp32.pth",
+              "sha256": "cabe90049795dfc9a370b7934d6dec7f6b9e44a20e573b0ff81b7e205512c872",
+              "size": 56096965
+            }
+          }
+        }
+      }
+    },
+    "yolov11/seg-medium": {
+      "latest": "2026-08-24",
+      "revisions": {
+        "2026-08-24": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/seg-medium/2026-08-24/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/seg-medium/2026-08-24/NOTICE",
+              "sha256": "917df5ef51f1f3527c5ecdc02eb07d475149cbcfcbbb0cf9ab32f97fdb784135",
+              "size": 959
+            },
+            "labels": {
+              "path": "yolov11/seg-medium/2026-08-24/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "torch-fp32": {
+              "path": "yolov11/seg-medium/2026-08-24/torch-fp32.pth",
+              "sha256": "eb9a06f63e2206c35d68d839b08c362429ebecf933ad54c1ad68b2fd001c17cf",
+              "size": 45400152
+            }
+          }
+        }
+      }
+    },
+    "yolov11/seg-nano": {
+      "latest": "2026-08-24",
+      "revisions": {
+        "2026-08-24": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/seg-nano/2026-08-24/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/seg-nano/2026-08-24/NOTICE",
+              "sha256": "a8a32720881d6577a52bc457ff89d3e775a54ef99a26f0dd1b6c908b0be69a5c",
+              "size": 957
+            },
+            "labels": {
+              "path": "yolov11/seg-nano/2026-08-24/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "torch-fp32": {
+              "path": "yolov11/seg-nano/2026-08-24/torch-fp32.pth",
+              "sha256": "55ed65c56c91713d23e8402371c6c49a6fd84f257f7dce452e8d70e41dcbe152",
+              "size": 6182636
+            }
+          }
+        }
+      }
+    },
+    "yolov11/seg-small": {
+      "latest": "2026-08-24",
+      "revisions": {
+        "2026-08-24": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/seg-small/2026-08-24/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/seg-small/2026-08-24/NOTICE",
+              "sha256": "e1fd1a9ada9ab5ef44c10b002b25b53f4644f356e9cc8d08ca1592777ec16b04",
+              "size": 958
+            },
+            "labels": {
+              "path": "yolov11/seg-small/2026-08-24/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "torch-fp32": {
+              "path": "yolov11/seg-small/2026-08-24/torch-fp32.pth",
+              "sha256": "1caa81c0195412efa411b632bcfb8c184939dddb6ae41f6a80c41b211ff257c3",
+              "size": 20669228
+            }
+          }
+        }
+      }
+    },
+    "yolov11/seg-xlarge": {
+      "latest": "2026-08-24",
+      "revisions": {
+        "2026-08-24": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "yolov11/seg-xlarge/2026-08-24/LICENSE",
+              "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+              "size": 34523
+            },
+            "NOTICE": {
+              "path": "yolov11/seg-xlarge/2026-08-24/NOTICE",
+              "sha256": "f2b0a821249dca6458d74690e4918c537fca958ba936c4b486a7f533cf29c403",
+              "size": 959
+            },
+            "labels": {
+              "path": "yolov11/seg-xlarge/2026-08-24/labels.json",
+              "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
+              "size": 2451
+            },
+            "torch-fp32": {
+              "path": "yolov11/seg-xlarge/2026-08-24/torch-fp32.pth",
+              "sha256": "4e53a5f5fd3ee2ae3361c62169c6bb3ed4ae251dd0e57606e230955aa52d919c",
+              "size": 125090821
+            }
+          }
+        }
+      }
+    },
     "yolov11/small": {
       "latest": "2026-08-19",
       "revisions": {
