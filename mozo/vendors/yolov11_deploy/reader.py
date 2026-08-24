@@ -64,6 +64,42 @@ class Placeholder:
         return f"<{type(self).__name__} {sorted(self.__dict__)}>"
 
 
+class MethodReference:
+    """Inert stand-in for one method of a class we will not import.
+
+    A module may record a *function* among its attributes rather than a number: the segmentation
+    head written by ``ultralytics`` 8.2.100 keeps ``self.detect = Detect.forward``, which pickles
+    as ``getattr(Detect, "forward")``. It is plumbing the head used to reach its base class's
+    forward pass, not configuration, and nothing this package builds reads it.
+
+    It is kept by name rather than dropped for the reason :class:`Placeholder` exists at all: a
+    reader that silently discarded whatever it did not recognise could not tell a checkpoint that
+    records nothing from one whose contents it failed to understand.
+    """
+
+    def __init__(self, owner: str, name: str):
+        """Remember which class's attribute this was, without resolving either."""
+        self.owner = owner
+        self.name = name
+
+    def __repr__(self):
+        """Show what was referenced, which is all this object is."""
+        return f"<method reference {self.owner}.{self.name}>"
+
+
+def _reference_attribute(owner, name):
+    """Resolve a recorded ``getattr(cls, name)`` to an inert :class:`MethodReference`.
+
+    ``getattr`` is a pickle's general-purpose way to reach anything a module exposes, so it is
+    resolved only against a class this reader has already refused to import -- where the answer
+    can be nothing but inert. Applied to anything else it is an escape from the restriction the
+    rest of :meth:`_CheckpointUnpickler.find_class` exists to impose, and is refused.
+    """
+    if not (isinstance(owner, type) and issubclass(owner, Placeholder)):
+        raise ValueError(f"checkpoint takes attribute {name!r} of {owner!r}, which this reader will not resolve")
+    return MethodReference(owner.__name__, name)
+
+
 def _rebuild_tensor(storage, offset, size, stride, *_ignored):
     """Materialise a tensor as a writable, contiguous numpy array.
 
@@ -110,6 +146,8 @@ class _CheckpointUnpickler(pickle.Unpickler):
         if module == "collections" and name == "OrderedDict":
             return OrderedDict
         if module in _BUILTIN_MODULES:
+            if name == "getattr":
+                return _reference_attribute
             if name not in _ALLOWED_BUILTINS:
                 raise ValueError(f"checkpoint references disallowed builtin {name!r}")
             return getattr(builtins, name)
