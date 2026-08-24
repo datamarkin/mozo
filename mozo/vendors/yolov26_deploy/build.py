@@ -86,12 +86,34 @@ def _maxpool2d(node: reader.Placeholder) -> nn.MaxPool2d:
     )
 
 
+def _convtranspose2d(node: reader.Placeholder) -> nn.ConvTranspose2d:
+    """The proto branch's upsample, which is a *learned* transposed convolution.
+
+    Upstream's own source carries the comment ``# nn.Upsample(scale_factor=2, mode='nearest')``
+    beside it, naming the substitution that looks equivalent and is not: an interpolation has no
+    parameters, so swapping it in drops a 64x64x2x2 weight and a bias the strict load would then
+    report as surplus. It is read like every other leaf.
+    """
+    return nn.ConvTranspose2d(
+        reader.attr(node, "in_channels"),
+        reader.attr(node, "out_channels"),
+        reader.attr(node, "kernel_size"),
+        stride=reader.attr(node, "stride"),
+        padding=reader.attr(node, "padding"),
+        output_padding=reader.attr(node, "output_padding"),
+        groups=reader.attr(node, "groups"),
+        dilation=reader.attr(node, "dilation"),
+        bias="bias" in reader.tensors(node),
+    )
+
+
 def _upsample(node: reader.Placeholder) -> nn.Upsample:
     return nn.Upsample(scale_factor=reader.attr(node, "scale_factor"), mode=reader.attr(node, "mode"))
 
 
 LEAVES: dict[str, Callable[[reader.Placeholder], nn.Module]] = {
     "Conv2d": _conv2d,
+    "ConvTranspose2d": _convtranspose2d,
     "BatchNorm2d": _batchnorm2d,
     "MaxPool2d": _maxpool2d,
     "Upsample": _upsample,
