@@ -30,12 +30,16 @@ def _tensors(record, group):
     return {name: array for name, array in record.__dict__.get(group, {}).items() if array is not None}
 
 
-def _conv2d(record):
-    """Build a convolution; padding, dilation and groups are read, never derived."""
+def _convolution(record, kind, **extra):
+    """Build a convolution of *kind*; padding, dilation and groups are read, never derived.
+
+    Shared by the two convolution leaves so that the padding-mode guard and the bias detection
+    have one home. Anything a particular kind reads on top of these comes in through *extra*.
+    """
     mode = recorded(record, "padding_mode")
     if mode != "zeros":
-        raise ValueError(f"Conv2d with padding_mode {mode!r} is not supported")
-    return nn.Conv2d(
+        raise ValueError(f"{kind.__name__} with padding_mode {mode!r} is not supported")
+    return kind(
         recorded(record, "in_channels"),
         recorded(record, "out_channels"),
         recorded(record, "kernel_size"),
@@ -44,7 +48,27 @@ def _conv2d(record):
         dilation=recorded(record, "dilation"),
         groups=recorded(record, "groups"),
         bias="bias" in _tensors(record, "_parameters"),
+        **extra,
     )
+
+
+def _conv2d(record):
+    return _convolution(record, nn.Conv2d)
+
+
+def _convtranspose2d(record):
+    """Build the mask prototypes' upsampling, which is a *learned* transposed convolution.
+
+    Upstream's own source carries the comment ``# nn.Upsample(scale_factor=2, mode='nearest')``
+    beside it, naming the substitution that looks equivalent and is not: an interpolation has no
+    parameters, so swapping it in drops a 64x64x2x2 weight and a bias, which :func:`load_weights`
+    would then report as unused rather than silently ignore.
+
+    ``output_padding`` is the one hyperparameter a transposed convolution records that a forward
+    one does not.
+    """
+    return _convolution(record, nn.ConvTranspose2d,
+                        output_padding=recorded(record, "output_padding"))
 
 
 def _batchnorm2d(record):
@@ -69,6 +93,7 @@ def _upsample(record):
 
 LEAVES = {
     "Conv2d": _conv2d,
+    "ConvTranspose2d": _convtranspose2d,
     "BatchNorm2d": _batchnorm2d,
     "MaxPool2d": _maxpool2d,
     "Upsample": _upsample,
@@ -78,6 +103,22 @@ LEAVES = {
 
 # Attribute types worth carrying into a block's spec; tensors and submodules are handled elsewhere.
 _SPEC_TYPES = (int, float, bool, str, tuple, list)
+
+#: The heads this package serves: recorded class name -> the task the checkpoint must record for
+#: it, and the attribute that head uses for its mask-coefficient count (``None`` for a head with no
+#: mask branch). One row per head, so adding another is a deliberate, reviewable act rather than a
+#: check getting looser. A head also needs a dataflow in :data:`~.flow.DATAFLOW`, and that table
+#: refuses first -- a class nothing knows how to route tensors through cannot be built at all, so
+#: this one only ever sees classes that already have one.
+#:
+#: The coefficient count is *looked up* rather than defaulted from a missing attribute.
+#: ``spec.get("nm", 0)`` reads the absence of a name as the number zero, so a head added here that
+#: recorded its coefficients under any other name would split cleanly, return the detection shape,
+#: and serve boxes with no masks and no error anywhere.
+HEADS = {
+    "Detect": ("detect", None),
+    "Segment": ("segment", "nm"),
+}
 
 
 class Block(nn.Module):
@@ -243,9 +284,6 @@ def _strides_of(record, levels):
 
 def build_network(record):
     """Build a :class:`DetectionNetwork` from a recorded model object."""
-    task = recorded(record, "task")
-    if task != "detect":
-        raise NotImplementedError(f"checkpoint task is {task!r}; this package implements detection only")
     children = recorded(record, "_modules")["model"].__dict__["_modules"]
     layers, sources = [], []
     for position, (name, child) in enumerate(children.items()):
@@ -255,8 +293,16 @@ def build_network(record):
         sources.append(recorded(child, "f"))
 
     head_record = list(children.values())[-1]
-    if type(head_record).__name__ != "Detect":
-        raise NotImplementedError(f"final layer is {type(head_record).__name__!r}; only a Detect head is supported")
+    kind = type(head_record).__name__
+    if kind not in HEADS:
+        raise NotImplementedError(f"final layer is {kind!r}; this package reads {', '.join(sorted(HEADS))}")
+    wanted_task, coefficient_count = HEADS[kind]
+    task = recorded(record, "task")
+    # The task lives on the root and the head is the last layer, so the two are recorded
+    # independently and a checkpoint whose head and task disagree is one this package has
+    # misread rather than one it can serve.
+    if task != wanted_task:
+        raise ValueError(f"checkpoint records task {task!r} for a {kind} head, which is {wanted_task!r}")
     if getattr(head_record, "end2end", False):
         raise NotImplementedError("checkpoint records an end-to-end head, which needs no NMS and is not supported")
     levels = recorded(head_record, "nl")
@@ -266,6 +312,12 @@ def build_network(record):
     head = layers[-1]
     if len(head.cv2) != levels or len(head.cv3) != levels:
         raise ValueError(f"head records {levels} levels but has {len(head.cv2)} box and {len(head.cv3)} class branches")
+    # Mask coefficients per anchor, or 0 for a head with no mask branch. Read through ``value``,
+    # which raises on an attribute the checkpoint does not carry, so a head listed in ``HEADS`` as
+    # having coefficients must actually record them.
+    coefficients = head.value(coefficient_count) if coefficient_count else 0
+    if coefficients and len(head.cv4) != levels:
+        raise ValueError(f"head records {levels} levels but has {len(head.cv4)} mask-coefficient branches")
     # The strides live on the root. The head decodes with them and the detector checks imgsz
     # against them, so both the head's spec and the network carry the validated tuple.
     strides = _strides_of(record, levels)
