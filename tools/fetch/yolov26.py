@@ -32,6 +32,14 @@ CHECKPOINTS: dict[str, tuple[str, str]] = {
     "medium": ("yolo26m.pt", "401cea9ab23ad19246ff7744859816bc599f350e93c9dd30367b6f0a0745d0b7"),
     "large": ("yolo26l.pt", "9fe3c544f2b19bebad7ea41e76d7ad3d88b7c2f10d11d24430c5311f6b32db26"),
     "xlarge": ("yolo26x.pt", "9fdd44a31c504547ffb81d2c6d9e6dac3493c8eaa8b0398d3f43bae6c7003e92"),
+    # Instance segmentation: the same backbone and neck with a Segment26 head, published in the
+    # same release under the same terms. Named on the RF-DETR convention, where a segmentation
+    # variant sits beside its detection counterpart in one family rather than forming a second.
+    "seg-nano": ("yolo26n-seg.pt", "361fbfabab285c3237700b6bb91d7ecfa602cd945fffda8dbe1242829b71e73f"),
+    "seg-small": ("yolo26s-seg.pt", "3da1d83e31caec96f9300eb4064f4f62882c133c7c264d63dfe61a7c197837a4"),
+    "seg-medium": ("yolo26m-seg.pt", "16b636f04e8fb6a325b3370f22dc5e5535ff473e384f4d041fd28d788f6ee9f5"),
+    "seg-large": ("yolo26l-seg.pt", "636024306410afa1732692322fba57d22ea2b1c2f07613fcee131a93d7dd380c"),
+    "seg-xlarge": ("yolo26x-seg.pt", "92b3de0065766a17180d6219858717dc9d03cdce8a3ca9576c97fd75aabb64f3"),
 }
 
 if __name__ == "__main__":
