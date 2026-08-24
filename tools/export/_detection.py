@@ -89,11 +89,18 @@ def _detections(vendor, source: np.ndarray, forward, imgsz: int) -> tuple[np.nda
     module and nothing else.
     """
     with torch.no_grad():
-        # Masks are dropped rather than compared: no family publishes a graph that carries them,
-        # so a graph and the torch module it came from have nothing to disagree about there. The
-        # value is unpacked rather than sliced off, so a family that starts publishing one fails
-        # here instead of being compared on three quarters of its answer.
-        boxes, scores, class_ids, _masks = vendor.detect(source, forward, imgsz, CONF)
+        # No family publishes a graph carrying masks, so a graph and the torch module it came
+        # from have nothing to disagree about there and this compares boxes, scores and classes.
+        # A checkpoint that *does* produce masks is refused rather than compared on three quarters
+        # of its answer -- unpacking the value into a discard would have read exactly the same and
+        # guarded nothing.
+        boxes, scores, class_ids, masks = vendor.detect(source, forward, imgsz, CONF)
+        if masks is not None:
+            raise NotImplementedError(
+                "this checkpoint has a mask branch, and this gate compares boxes, scores and "
+                "class ids only. Comparing a graph against the module on three quarters of the "
+                "answer would report agreement it has not checked."
+            )
         return boxes.numpy(), scores.numpy(), class_ids.numpy()
 
 
