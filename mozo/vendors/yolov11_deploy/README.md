@@ -1,7 +1,8 @@
 # yolov11_deploy
 
-Deployment-only YOLO11 detection. Apache-2.0 code that does not import, depend on, or contain any
-code from the `ultralytics` package — it reads the checkpoint file directly.
+Deployment-only YOLO11 detection and instance segmentation. Apache-2.0 code that does not import,
+depend on, or contain any code from the `ultralytics` package — it reads the checkpoint file
+directly.
 
 ```python
 from mozo.vendors.yolov11_deploy import Detector
@@ -14,8 +15,15 @@ found.boxes        # (n, 4) float32 x1, y1, x2, y2 in the source image's pixels
 found.scores       # (n,) float32
 found.class_ids    # (n,) int64
 found.names        # (n,) the class name of each detection
+found.masks        # (n, h, w) bool from a Segment checkpoint, None from a Detect one
 detector.names     # {class id: name} as recorded in the checkpoint
 ```
+
+A segmentation checkpoint — `yolo11n-seg.pt` and its four siblings — goes through the same
+`Detector` and the same call. It has a `Segment` head instead of a `Detect` one, which adds 32
+mask coefficients per anchor and a prototype stack; `mask.py` combines them into one boolean mask
+per surviving detection, at the source image's resolution. `masks` is `None` rather than empty
+from a detection checkpoint, so the two are distinguishable without measuring a length.
 
 Most users reach this through `mozo.adapters.yolov11`, which resolves the weights, picks the
 runtime and returns a PixelFlow result. This package is the layer under that.
