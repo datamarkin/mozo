@@ -71,7 +71,8 @@ class TestTheEditorAndTheServerAgree:
 
     def test_it_carries_nothing_from_the_project_it_came_from(self, bundle):
         """agentui's API and its cloud are both gone; a bundle still calling them is a stale one."""
-        for gone in ("datamarkin", "/api/tools", "/api/workflow", "toolType", "MediaInput"):
+        for gone in ("datamarkin", "agentui", "/api/tools", "/api/workflow", "toolType",
+                     "MediaInput"):
             assert gone not in bundle, f"the built editor still references {gone!r}"
 
     def test_the_server_offers_every_widget_the_panel_can_draw(self):

@@ -10,7 +10,7 @@
     import NodePalettePanel from './lib/NodePalettePanel.svelte';
     import { generateNodeClasses } from './lib/utils.js';
     import { fetchCatalogue, fromDocument, stream, toDocument } from './lib/api.js';
-    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, appConfig, chosenImage } from './lib/stores.js';
+    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, chosenImage } from './lib/stores.js';
 
     // Every workflow starts here: pixels have to come from somewhere, and this is the node whose
     // path the runner overrides per image.
@@ -30,7 +30,10 @@
     let isExecuting = writable(false);
 
     let svelteFlowInstance;
-    let unsubscribeExecuting;
+    //: What the last connection was refused for, shown beside the canvas rather than in an alert.
+    //: A modal stops the editor to say a drag did not take, which the missing edge already said.
+    let refusal = null;
+    let refusalTimer;
 
     // Set context for child components - must be during initialization
     setContext('availableNodes', availableNodes);
@@ -41,35 +44,23 @@
     };
 
     onMount(async () => {
-        console.log('App onMount started');
-
-        // Apply toolbar-hidden body class when default toolbar is suppressed
-        if ($appConfig.hideToolbar) {
-            document.body.classList.add('toolbar-hidden');
-            document.documentElement.classList.remove('has-navbar-fixed-top');
-        }
-
         try {
             availableNodes.set(await fetchCatalogue());
         } catch (error) {
-            console.error('Could not load the node catalogue:', error);
+            say(`Could not load the node catalogue: ${error.message}`);
         }
-
-        // Dispatch a custom event whenever execution state changes so the
-        // host app's custom header can react (e.g. disable the Run button)
-        unsubscribeExecuting = isExecuting.subscribe(value => {
-            window.dispatchEvent(new CustomEvent('agentui:statechange', {
-                detail: { isExecuting: value }
-            }));
-        });
     });
 
+    /** Say something went wrong, where the person is looking, and take it back after a while. */
+    function say(message) {
+        refusal = message;
+        clearTimeout(refusalTimer);
+        refusalTimer = setTimeout(() => (refusal = null), 6000);
+    }
 
     function initializeCanvas() {
-        console.log('initializeCanvas called');
         nodes.set([createLoadImageNode()]);
         edges.set([]);
-
     }
 
     function handleNodeDrop(event) {
@@ -110,7 +101,6 @@
     }
 
     function onNodeClick(event) {
-        console.log('Node clicked:', event.detail.node.id);
         const node = event.detail.node;
 
         selectedNode.set(node);
@@ -163,12 +153,12 @@
                 };
 
                 edges.update(edges => [...edges, newEdge]);
-                console.log('Auto-connection created:', newEdge);
             } else {
-                console.warn('Auto-connection validation failed');
+                say(`${sourceNodeType}.${sourceHandle} carries `
+                    + `${typeOf($availableNodes?.[sourceNodeType]?.outputs, sourceHandle)}, but `
+                    + `${targetNodeType}.${targetHandle} takes `
+                    + `${typeOf($availableNodes?.[targetNodeType]?.inputs, targetHandle)}.`);
             }
-        } else {
-            console.warn('Could not determine handles for auto-connection');
         }
     }
 
@@ -209,6 +199,11 @@
 
         if (!source || !target) return false;
         return source.type === target.type;
+    }
+
+    /** What a named port carries, for saying why two of them would not join. */
+    function typeOf(ports, name) {
+        return ports?.find(port => port.name === name)?.type || 'nothing';
     }
 
     /** The name of a node's first output port, for a drag that did not name one. */
@@ -282,11 +277,13 @@
                 } else if (event.status === 'failed') {
                     if (event.node) updateNodeClass(event.node, 'node-error');
                     executionResults.update(r => ({ ...r, success: false, error: event.error }));
+                    say(event.error);
                     isExecuting.set(false);
                 }
             });
         } catch (error) {
             executionResults.update(r => ({ ...r, success: false, error: error.message }));
+            say(error.message);
         } finally {
             isExecuting.set(false);
         }
@@ -320,7 +317,7 @@
                 })));
                 edges.set(canvas.edges);
             } catch (error) {
-                alert('Invalid workflow file');
+                say(`That file is not a workflow: ${error.message}`);
             }
         };
         reader.readAsText(file);
@@ -332,9 +329,7 @@
         executionResults.set(null);
     }
 
-    onDestroy(() => {
-        if (unsubscribeExecuting) unsubscribeExecuting();
-    });
+    onDestroy(() => clearTimeout(refusalTimer));
 
 </script>
 
@@ -377,6 +372,13 @@
     </div>
 </div>
 
+{#if refusal}
+    <div class="refusal" role="status">
+        {refusal}
+        <button class="delete is-small" aria-label="dismiss" on:click={() => (refusal = null)}></button>
+    </div>
+{/if}
+
 <!-- Drawer sidebar for context-aware panels -->
 <DrawerSidebar
     {availableNodes}
@@ -398,5 +400,25 @@
 
     :global(.svelte-flow__handle.connectingto.valid) {
         box-shadow: 0 0 0 3px rgba(72, 199, 116, 0.45);
+    }
+
+    /* Said at the bottom of the canvas, where a rejected drag ended, and dismissable. Not an
+       alert(): a modal halts everything to report something the missing edge already showed. */
+    .refusal {
+        position: fixed;
+        left: 50%;
+        bottom: 1.5rem;
+        transform: translateX(-50%);
+        z-index: 40;
+        max-width: min(40rem, 90vw);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 0.9rem;
+        border-radius: 6px;
+        background: #2b2b2b;
+        color: #fff;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
 </style>

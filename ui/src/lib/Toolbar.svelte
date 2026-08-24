@@ -1,28 +1,20 @@
 <script>
-  import { appConfig } from './stores.js';
-
+  /**
+   * What you do to a workflow as a whole: run it, save it, open one.
+   *
+   * The image a run reads is not here. It belongs to the node that reads it, where the person is
+   * already looking when they wonder what it will run on -- see the `source` widget in
+   * PropertiesPanel.
+   */
   export let executeWorkflow;
   export let exportWorkflow;
   export let importWorkflow;
   export let isExecuting;
 
   let fileInput;
-
-  function handleImportClick() {
-    fileInput.click();
-  }
 </script>
 
-{#if !$appConfig.hideToolbar}
 <nav class="navbar is-fixed-top border-bottom" aria-label="main navigation">
-  <div class="navbar-brand">
-    <div class="navbar-item">
-        </div>
-    <div class="navbar-item">
-
-    </div>
-  </div>
-
   <div class="navbar-menu">
     <div class="navbar-end">
       <div class="navbar-item">
@@ -32,7 +24,7 @@
           </button>
 
           <button class="button is-dark" on:click={exportWorkflow}>Export</button>
-          <button class="button" on:click={handleImportClick}>Import</button>
+          <button class="button" on:click={() => fileInput.click()}>Import</button>
         </div>
       </div>
     </div>
@@ -46,4 +38,3 @@
     on:change={importWorkflow}
   />
 </nav>
-{/if}
