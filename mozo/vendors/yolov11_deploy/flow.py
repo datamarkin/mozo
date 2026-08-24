@@ -127,6 +127,37 @@ def detect(block, features):
     return torch.cat((boxes, scores.sigmoid()), 1)
 
 
+def proto(block, x):
+    """Proto: the mask prototype stack -- a convolution, a *learned* upsample, then two more.
+
+    ``upsample`` is a ``ConvTranspose2d``, not an interpolation; see
+    :func:`~mozo.vendors.yolov11_deploy.build._convtranspose2d` for what substituting one costs.
+    """
+    return block.cv3(block.cv2(block.upsample(block.cv1(x))))
+
+
+def segment(block, features):
+    """Segment: the detection head's answer with mask coefficients appended, plus the prototypes.
+
+    The box and class branches are the detection head's own, so this runs :func:`detect` on the
+    same block rather than restating the decode -- a second copy of the anchor arithmetic is a
+    second place for it to drift.
+
+    Output is ``(batch, 4 + nc + nm, anchors)`` and a ``(batch, nm, H/4, W/4)`` prototype stack.
+    The two travel together because either alone is unusable: a coefficient means nothing without
+    the prototypes it is a coefficient of.
+
+    The prototypes come from ``features[0]``, the finest feature map, and from nothing else. Older
+    upstream versions computed them before running the detection branches because that code wrote
+    its concatenated per-level outputs back into the list it was handed; this one does not mutate
+    its input, so only the index matters.
+    """
+    rows = detect(block, features)
+    coefficients = torch.cat(
+        [branch(f).flatten(2) for branch, f in zip(block.cv4, features)], 2)
+    return torch.cat((rows, coefficients), 1), proto(block.proto, features[0])
+
+
 DATAFLOW = {
     "Conv": chain,
     "DWConv": chain,
@@ -140,4 +171,6 @@ DATAFLOW = {
     "Concat": concat,
     "DFL": dfl,
     "Detect": detect,
+    "Proto": proto,
+    "Segment": segment,
 }
