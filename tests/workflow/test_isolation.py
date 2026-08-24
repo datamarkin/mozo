@@ -79,7 +79,7 @@ class TestTheImportRule:
         ``from .registry import ...`` is resolved rather than skipped -- which is the only way
         ``from .workflow.api import router`` would ever be seen.
         """
-        assert {"mozo.image", "mozo.manager", "mozo.registry"} <= _reaches(PACKAGE / "server.py")
+        assert {"mozo.image", "mozo.depth", "mozo.registry"} <= _reaches(PACKAGE / "server.py")
 
     def test_there_is_a_workflow_runtime_to_exclude(self):
         """Excluding a directory that is not there would make the scan trivially clean."""
