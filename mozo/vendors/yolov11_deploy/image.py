@@ -65,15 +65,44 @@ def suppress(prediction: torch.Tensor, conf: float, iou: float, max_det: int) ->
 
     ``prediction`` is ``(4 + classes, anchors)`` holding centre-form boxes and per-class scores.
     """
+    return survivors(prediction, conf, iou, max_det)[:3]
+
+
+def survivors(prediction: torch.Tensor, conf: float, iou: float,
+              max_det: int) -> tuple[torch.Tensor, ...]:
+    """The suppression itself, reporting *which anchors* survived it.
+
+    ``prediction`` is ``(4 + classes, anchors)`` holding centre-form boxes and per-class scores.
+
+    Returns the corner boxes, their scores, their class ids, and the index of the anchor each
+    surviving row came from.
+
+    That index is why this is a function of its own rather than the body of :func:`suppress`. A
+    segmentation head carries mask coefficients on the same anchors, and they have to be gathered
+    with the index the boxes were chosen by. Deriving the survivors a second time -- another
+    threshold, another sort -- is the bug that does not raise: two orderings of equal scores are
+    free to differ, so each mask would pair with a neighbouring object and every number downstream
+    would still look reasonable.
+
+    ``suppress`` stays, under that name and with three values, because
+    ``tests/test_vendor_agreement.py`` keys on both: ``suppresses()`` there decides whether a
+    family is NMS-free by asking whether its ``image`` module exposes a ``suppress`` at all, and
+    two cross-vendor invariants are then skipped for the families that do not. Renaming this or
+    folding it away would quietly reclassify YOLO11 as NMS-free and drop it from those checks,
+    leaving a green suite with a family no longer covered.
+    """
     boxes, scores = prediction[:4].T, prediction[4:].T
     best, labels = scores.max(1)
     chosen = best > conf
+    # Which anchor each kept row came from, carried through the compaction so that the index
+    # returned at the end is in the anchor space the caller handed in.
+    anchors = chosen.nonzero().flatten()
     boxes, best, labels = boxes[chosen], best[chosen], labels[chosen]
 
     half = boxes[:, 2:] / 2
     corners = torch.cat((boxes[:, :2] - half, boxes[:, :2] + half), 1)
     if not corners.numel():
-        return corners, best, labels
+        return corners, best, labels, anchors
 
     # Shift each class into its own coordinate band so boxes of different classes cannot suppress one another.
     band = (corners.max() - corners.min() + 1) * labels[:, None]
@@ -90,7 +119,7 @@ def suppress(prediction: torch.Tensor, conf: float, iou: float, max_det: int) ->
         overlap = (bottom_right - top_left).clamp(min=0).prod(1)
         order = rest[overlap / (areas[first] + areas[rest] - overlap) <= iou]
     index = torch.stack(kept) if kept else torch.zeros(0, dtype=torch.long, device=corners.device)
-    return corners[index], best[index], labels[index]
+    return corners[index], best[index], labels[index], anchors[index]
 
 
 def to_original(boxes: torch.Tensor, gain: float, pad_x: int, pad_y: int, shape: tuple[int, int]) -> torch.Tensor:
