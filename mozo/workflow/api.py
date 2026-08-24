@@ -136,21 +136,29 @@ def run(
 def stream(
     workflow: str = Form(..., description="The workflow document, as JSON"),
     inputs: str = Form("{}", description="Parameter overrides, as a JSON object"),
+    include: Literal["terminals", "all"] = Form(
+        "terminals", description="Which nodes' outputs to send back"),
     image: Optional[UploadFile] = File(None, description="An image to run on, if not on disk"),
 ):
     """Run a workflow as server-sent events, one per node starting and finishing.
 
-    The document is built before the response begins, so a document that is not a workflow is a
-    400 rather than an error delivered inside a stream that already claimed success.
+    The document is built and the overrides are settled before the response begins, so a document
+    that is not a workflow -- or an override naming no parameter -- is a 400 rather than an error
+    delivered inside a stream that has already claimed success.
+
+    Args:
+        include: What ``/run`` means by it, and for the same measured reason. Watching a workflow
+            go by is not a reason to be sent every intermediate at full resolution.
     """
     built = _build(workflow)
-    overrides = _overrides(inputs, image)
+    terminals = built.terminals
+    started = _events(built, inputs, image)
 
     def events():
         try:
-            for event in built.stream(**overrides):
+            for event in started:
                 reported = {"node": event.node, "status": event.status}
-                if event.status == "completed":
+                if event.status == "completed" and (include == "all" or event.node in terminals):
                     reported["output"] = _serialise(built, event.node, event.output)
                 if event.error:
                     reported["error"] = event.error
