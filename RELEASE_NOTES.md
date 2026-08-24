@@ -8,8 +8,6 @@ of the 63 published variants, 20 are AGPL-3.0, 2 are CC-BY-NC-4.0 and 1 carries 
 License, and serving those over a network places obligations on you that serving the other 40
 does not.
 
-SigLIP 2 also stops advertising models it had no bytes for.
-
 ### 🔒 `MOZO_ENABLE`
 
 One environment variable, alongside `MOZO_CACHE` and the rest. Name a family or a single variant,
@@ -21,47 +19,39 @@ MOZO_ENABLE=clip,siglip2/base-224 mozo start
 
 Unset offers everything, so nothing changes for anyone who does not set it.
 
-**An allow-list, not a deny-list.** The two fail in opposite directions across an upgrade. A
-deny-list naming today's AGPL families serves whatever lands tomorrow, silently and without
-asking; an allow-list serves nothing it was not told to, and the absence is visible. The failure
-you cannot see is the worse one.
+**An allow-list, not a deny-list.** A deny-list naming today's AGPL families would serve whatever
+lands tomorrow, silently. An allow-list serves nothing it was not told to.
 
-**A name that matches nothing warns rather than refusing to start.** That is safe only because it
-is an allow-list: an unrecognised token can only ever subtract, so `MOZO_ENABLE=siglip` yields a
-server missing SigLIP and never one serving something unsanctioned. A typo cannot produce the
-exposure this exists to prevent, so it does not warrant killing the process. One log line, and it
-always ends with what was actually deployed.
+**A name that matches nothing warns rather than refusing to start.** An unrecognised token can
+only ever subtract, so a typo yields a server missing a model, never one serving something
+unsanctioned.
 
-**A refusal never names a model the server declined to offer.** The registry's own messages list
-every family and variant it knows, so forwarding them would close the catalogue at `/models` and
-reopen it at every typo — answering a wrong turn with a menu of exactly what you configured it to
-decline. Both refusals are composed from the deployment instead, and `/encode`'s 501 no longer
-lists every embedding family either. What is kept is the distinction between a name that does not
-exist and one this server does not deploy: they want different fixes, and one message covering
-both sends an operator hunting for a typo they did not make.
+**A refusal never names a model the server declined to offer**, so a narrowed catalogue stays
+narrowed at every wrong turn rather than answering it with a menu of what you configured it to
+decline.
 
 **The refusal costs nothing.** It is the first thing `/predict` and `/encode` do — before the
 image decode, before the download — so a model excluded on licence grounds is never fetched, and
 its weights never reach the disk.
 
-**Server-side only.** `mozo.get_model()` is untouched. This says what is *deployed*, and
-importing a library is not a deployment.
+**Server-side only.** `mozo.get_model()` is untouched.
 
-For a permissively licensed demo, the README now carries the line that offers the 40 Apache-2.0
-and MIT variants and nothing else. Depth Anything is named variant by variant because it is the
-one family whose licence is not uniform — seven of its nine are Apache-2.0 and two are
-CC-BY-NC-4.0 — which is why the variable takes `family/variant` at all.
+For a permissively licensed demo, the README carries the line that offers the 40 Apache-2.0 and
+MIT variants and nothing else. Depth Anything is named variant by variant because it is the one
+family whose licence is not uniform — seven of its nine are Apache-2.0 and two are CC-BY-NC-4.0 —
+which is why the variable takes `family/variant` at all.
 
 ### 🔢 SigLIP 2 Carries Five Variants
 
-Google publishes fifteen fixed-resolution SigLIP 2 models. mozo registered all fifteen and
-shipped weights for three, so twelve of them answered a request with a 500 — a catalogue
-advertising models it had no bytes for.
+mozo registered fifteen fixed-resolution SigLIP 2 models and shipped weights for three, so twelve
+of them answered a request with a 500. Now five are registered and five are published:
+`base-224`, `base-256`, `so400m-384`, `so400m16-256` and `giant-384` — together 89% of the
+downloads across those fifteen. The other ten need a checkpoint and no new code.
 
-Now five are registered and five are published: `base-224`, `base-256`, `so400m-384`,
-`so400m16-256` and `giant-384`, which together took 89% of the downloads across those fifteen.
-The other ten are real models and this is not a judgement about them; each needs a `Spec` row, a
-registry entry and a checkpoint, and no new code at all.
+### 🐛 Fixes
+
+**The test page said "Cannot reach the server" when a deployment offered no models.** It now says
+which problem it actually is.
 
 ### 📊 Model Count
 
@@ -73,38 +63,8 @@ CC-BY-NC-4.0 (Depth Anything `base` and `large`), and 1 carries Meta's SAM Licen
 
 ### ✅ Verification
 
-**SigLIP 2: 160 comparisons across all five variants, every one bit-identical.** `torch.equal` at
-every stage — pixels, token ids, image features, text features, logits, sigmoid — with the CPU,
-eager attention, the reference's re-allocated parameters and `Siglip2Tokenizer` all pinned,
-because without those four it means nothing.
-
-**The deployment guard is shown to be falsifiable, not assumed.** Six perturbations, each failing
-at its own site and nowhere else: `/models` not filtering, the route guard not checking, an
-unknown name becoming fatal, the union becoming last-one-wins, the order coming from the variable
-rather than the registry, and a refusal listing the whole catalogue again.
-
-**The README's permissive deployment line is held to the published licence files.** An operator
-pastes it to decline obligations, so a variant slipping through is not a documentation bug. It is
-derived from the manifest rather than a written-out list of names: the licence of every variant
-is the sha256 of the LICENSE published beside its weights, and those hashes partition all 63 into
-exactly the seven groups the breakdown above describes. Keyed on content and not on names
-deliberately — a list of names only notices a non-permissive *family* being added, and mozo's
-exposure is per variant, as Depth Anything already proves.
-
-### 🔧 Infrastructure
-
-**A family can no longer register a variant the manifest does not publish.** That is what put
-twelve unreachable SigLIP 2 models in the catalogue, and the symptom was a 500 rather than a red
-test. Both directions are now guarded, along with the counts each family's own description states
-about itself.
-
-**CI runs on Python 3.10 and 3.12**, as a reusable workflow the publish pipeline calls rather than
-a second copy of the same steps.
-
-**The test page says which problem it is when a deployment offers nothing.** An empty catalogue is
-a state the server can legitimately reach, and the page walked into it — `Object.keys(models)[0]`
-undefined, the throw landing in `boot`'s catch as "Cannot reach the server". The one
-misconfiguration the design consciously chose to survive was the one the page misdiagnosed.
+**SigLIP 2: 160 comparisons across all five variants, every one bit-identical** — pixels, token
+ids, image features, text features, logits and sigmoid, at exact equality with no tolerance.
 
 ### 📖 Documentation
 
@@ -136,12 +96,6 @@ computed in. No training, no labelled data, no fixed class list.
 The five ResNet variants are not carried: they replace the Vision Transformer with a modified
 ResNet and attention pooling, which is a second image tower rather than a second configuration.
 
-Upstream publishes TorchScript archives. These are repacked to plain state dicts and cast to
-fp32 — a scripted archive is a serialised graph that a future torch may refuse, so the version
-risk is taken once, on a machine we control, rather than on your machine years from now. The
-download is verified against the sha256 in OpenAI's own URL, which serves these
-content-addressed, so the digest is the file's rather than one transcribed from a README.
-
 **The two towers build and load separately.** An ingest job that only encodes images never
 allocates the text tower, so a query service holds 63.4M parameters rather than 151.3M.
 
@@ -159,14 +113,10 @@ so 0.31 does not mean "31% sure". Softmax it yourself if you want CLIP's publish
 behaviour.
 
 **SigLIP 2:** The same question, answered as a probability, by Google
-- 3 variants published: `base-224`, `so400m-384`, `giant-384` — the other twelve are one run away
+- 3 variants published: `base-224`, `so400m-384`, `giant-384`
 - Phrases up to 64 tokens each; a probability per phrase, or 768/1152/1536-d vectors
 - Multilingual
 - Apache-2.0 throughout, ungated, on the code and on every checkpoint
-
-Three rather than fifteen because between them they cover every distinct code path: the patch-14
-grid that floors, head dimensions of 64, 72 and 96, asymmetric towers, and the sharded download
-the two giant checkpoints need. The other twelve exercise nothing new.
 
 **The score is what makes it worth having beside CLIP.** SigLIP was trained pair by pair with a
 sigmoid loss and carries a learned bias as well as a temperature, so `predict` returns a
@@ -196,10 +146,17 @@ Repeat the part or the parameter for a batch. The response carries `model`, `rev
 `embeddings`, and the revision is read off the loaded model rather than re-derived — a vector
 stamped with the wrong revision is undetectable afterwards.
 
-**Every refusal is answered from the registry**, before the image decode and before the download.
-`/predict` can afford a late 501 because a test proves every registered task has an arm there;
-here the reverse holds, and a late refusal would fetch a multi-gigabyte checkpoint in order to
-say no.
+Refusals are answered before the image decode and before the download, so naming a family that
+does not embed never costs a multi-gigabyte fetch.
+
+### 🐛 Fixes
+
+**An installed mozo raised the moment anything encoded a phrase.** SigLIP 2 reads its tokenizer
+vocabulary from a file that was missing from the wheel. Every vendored package's LICENSE, NOTICE
+and PROVENANCE were missing too, for all four YOLO extractions and SigLIP 2.
+
+**CLIP rendered with no text box on the test page**, so the page could not drive it. The page had
+kept a hand-written copy of which tasks take a prompt; it now reads that from `/models`.
 
 ### 📊 Model Count
 
@@ -215,76 +172,21 @@ licence mozo had not shipped before.
 **CLIP: 104 comparisons across all four variants, every one bit-identical** against
 `openai/CLIP` — the authors' own repository, which is what the published checkpoints reproduce.
 Preprocessing, token ids, image features, text features, cosine similarities and
-`logits_per_image`. Exact equality, not a tolerance: both divergences found while building the
-package would have been swallowed by any sane one.
+`logits_per_image`, at exact equality rather than a tolerance.
 
-Shown to be falsifiable rather than assumed. Substituting `nn.GELU` for QuickGELU fails 5
-comparisons at both towers and nothing else; squashing the resize instead of scaling the short
-side fails preprocessing alone; scaling the logits after the matmul rather than before fails only
-the logits, at exactly 1.907e-06 — which is the whole difference between this passing and
-failing.
-
-**SigLIP 2: 96 comparisons across the three published variants**, `torch.equal` at every stage —
-pixels, token ids, image features, text features, logits, sigmoid. Four things are pinned or it
-means nothing: the CPU, eager attention, the reference's parameters re-allocated first (BLAS
-picks different paths for page-aligned storage), and `Siglip2Tokenizer` rather than
-`AutoTokenizer` — gating against the wrong one would have shipped a family that mis-encodes every
-capitalised prompt, with a green gate. Shown to work by breaking the model eight ways; every
-perturbation was caught, each at the stage it belongs to.
+**SigLIP 2: 96 comparisons across the three published variants**, bit-identical at every stage —
+pixels, token ids, image features, text features, logits and sigmoid.
 
 ### ⏱️ Benchmarks
 
 SigLIP 2 against `transformers` — same checkpoint, same photograph, same device, so any gap is
 the extraction rather than a comparison between models:
 
-- **4% slower on CPU, 11% faster on MPS**, both from the same eager-attention choice the gate
-  requires, where the fused path is the slower one on Metal
+- **4% slower on CPU, 11% faster on MPS**, both from the same eager-attention choice, where the
+  fused path is the slower one on Metal
 - **Batching wins 1.6x at 224 and nothing at 384** — one image already saturates the device
 - The text tower is a quarter of a classify call rather than a rounding error, because the
   context is always padded to 64
-
-Every measurement drains the device first. Metal queues asynchronously, so an unsynchronised
-timer measures submission — without this, mozo reported 23% *slower* on MPS purely because
-`encode_image` ends in `.cpu()` and the reference path did not.
-
-### 🔧 Infrastructure
-
-**`zero_shot_classification` joins `PROMPTED`.** It shares the prompt contract with the detectors
-and nothing else: no boxes, and every phrase comes back scored rather than only the ones that
-hit. A classifier that drops a class has not classified.
-
-**`ENCODES` records what each family can embed and from what**, so `/models` can say which without
-loading anything. A dict rather than a set, because the kinds differ — CLIP takes both, a
-re-identification embedder would take images only. The task type cannot carry this: two families
-can classify while only one of them embeds.
-
-**The catalogue's capability fields are now guarded.** A family promising `"image"` whose adapter
-has no `encode_image` used to answer 500 *after* fetching gigabytes — the one refusal that costs
-something. The adapter class is imported, not instantiated: the method has to exist, not run.
-
-**The test page reads the prompt rule from `/models`.** It kept a hand-written copy of `PROMPTED`
-that had already gone stale — it never learned about `zero_shot_classification`, so CLIP rendered
-with no text box and the page silently could not drive it. `/models` now reports `prompted`
-beside `encodes`, and the page reads both off the catalogue it already fetches.
-
-### 📦 Packaging
-
-**Every vendored package's terms now ship in the wheel.** `package-data` was a hand-written list
-with one entry per family, and it had gone stale for five of the fourteen: all four YOLO
-extractions and SigLIP 2 shipped their code with no LICENSE, no NOTICE and no PROVENANCE. One
-rule over every package replaces it, so a family added tomorrow needs no packaging edit and
-cannot be forgotten the way these five were.
-
-It also covers `assets/`, which is not only a licensing matter — SigLIP 2 reads its tokenizer
-vocabulary from there at construction, so without it an installed mozo raised the moment anything
-encoded a phrase.
-
-**Releases are automated.** Pushing a `v*` tag builds, checks and publishes through PyPI Trusted
-Publishing — no API token in the repository or its secrets. The tag must match `mozo.__version__`
-and the version must be unclaimed on PyPI, or the run stops before building. `tools/check_dist.py`
-then holds both the wheel and the sdist against the working tree: every run-time file the package
-reads must be in both, derived by rule rather than from a list, because a list is what went stale
-above.
 
 ### 📖 Documentation
 
@@ -331,15 +233,8 @@ no fixed input size and no graph to export. `runtime="auto"` will not offer one.
 ### ✅ Verification
 
 138 comparisons against the authors' own implementation, both variants, exact equality with no
-tolerance. Every intermediate is hooked — preprocessing, token ids, the BERT tower, all three
-Swin levels, encoder memory, and each of the six decoder layers — not just the final boxes, since
-two implementations can agree on the last tensor and disagree in the middle.
-
-### 🔧 Infrastructure
-
-**Stated counts are now tested.** `tests/test_stated_counts.py` holds the package docstring and
-the README's model counts against the manifest. The docstring had said "Seventeen published
-variants across two families" for eight families longer than it was true.
+tolerance — preprocessing, token ids, the BERT tower, all three Swin levels, encoder memory and
+each of the six decoder layers, not just the final boxes.
 
 ---
 
@@ -359,13 +254,14 @@ variants across two families" for eight families longer than it was true.
 **Total Models:** 63 variants across 10 model families
 **Growth:** +8 variants (RF-DETR), +1 family
 
-### 🔧 Infrastructure Improvements
+### 🔧 Improvements
 
-**Automatic device detection:** CPU/GPU (CUDA)/Apple MPS auto-selection integrated into `get_model()` and ModelFactory
+**Automatic device detection:** CPU/GPU (CUDA)/Apple MPS auto-selection integrated into
+`get_model()` and ModelFactory
 
-**Unified image loading:** New `load_image` utility allows all adapters to accept both file paths and numpy arrays as input
+**Unified image loading:** all adapters accept both file paths and numpy arrays as input
 
-**Simplified API:** New top-level `get_model()` function for direct access with shared ModelManager instance
+**Simplified API:** a top-level `get_model()` for direct access with a shared ModelManager
 
 ### 🗑️ Removed
 
@@ -373,16 +269,3 @@ variants across two families" for eight families longer than it was true.
 - **Datamarkin** adapter removed (the hosted Vision Service is no longer available)
 - **SAM3** adapter removed — it was never registered and therefore unreachable; it will
   return once implemented properly
-
-## Installation
-
-```bash
-pip install --upgrade mozo
-mozo start
-```
-
-## Links
-
-- PyPI: https://pypi.org/project/mozo/0.4.0/
-- Documentation: https://github.com/datamarkin/mozo
-- Issue Tracker: https://github.com/datamarkin/mozo/issues
