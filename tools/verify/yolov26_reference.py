@@ -288,6 +288,11 @@ def compare(vendor, prepared: dict[str, dict], perturb: str | None = None) -> di
         # The same batch to both, so the 23 layer rows measure the layers and nothing else.
         seen = observe(vendor, ready["batch"], "vendor")
         expected = ready["stages"]
+        # A stage one side produced and the other did not is not a small disagreement, and a
+        # comparison that quietly skipped it would read as agreement. Recorded before the loop
+        # below, which consumes ``seen`` as it goes.
+        for stage in sorted(set(seen) ^ set(expected)):
+            measured.setdefault(stage, {})[name] = None
         for stage in sorted(set(seen) & set(expected)):
             measured.setdefault(stage, {})[name] = difference(seen.pop(stage), expected[stage])
     return measured
