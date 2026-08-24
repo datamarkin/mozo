@@ -42,6 +42,16 @@ export function clearPendingConnection() {
     pendingConnection.set(null);
 }
 
+/**
+ * The file the next run reads, chosen on a node whose parameter is a `source`.
+ *
+ * A store rather than a prop, because the node that offers the picker and the code that submits
+ * the run are at opposite ends of the tree. One file per run, which is what the server accepts: an
+ * upload arrives as the value of the parameter named `image`, and a workflow with two nodes that
+ * have one is refused by name rather than guessed at.
+ */
+export const chosenImage = writable(null);
+
 // App config from window (injected by Jinja2)
 function getAppConfig() {
     if (typeof window !== 'undefined' && window.APP_CONFIG) {
