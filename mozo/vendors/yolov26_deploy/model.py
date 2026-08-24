@@ -11,6 +11,7 @@ import numpy as np
 import torch
 
 from .image import letterbox, to_original
+from .mask import assemble
 from .network import build_detector, check_imgsz
 
 
@@ -40,16 +41,31 @@ def detect(
         conf: Minimum score to keep.
 
     Returns:
-        Boxes in the source image's pixels, their scores, and their class ids.
+        Boxes in the source image's pixels, their scores, their class ids, and -- for a
+        segmentation checkpoint -- one boolean mask per detection at the source image's
+        resolution. A detection checkpoint returns ``None`` in that slot rather than an empty
+        array, so the two are distinguishable without inspecting a length.
     """
     batch, gain, pad_x, pad_y = letterbox(image, imgsz)
     # Brought to the CPU before the threshold rather than after, so the answer does not depend on
     # where the forward pass ran -- which is what lets a graph runtime and a torch module on any
     # device be compared for exact equality.
-    rows = forward(batch)[0].float().cpu()
+    answer = forward(batch)
+    rows, protos = answer if isinstance(answer, tuple) else (answer, None)
+    rows = rows[0].float().cpu()
     kept = rows[rows[:, 4] > conf]
     boxes = to_original(kept[:, :4], gain, pad_x, pad_y, image.shape[:2])
-    return boxes, kept[:, 4], kept[:, 5].to(torch.int64)
+    if protos is None:
+        return boxes, kept[:, 4], kept[:, 5].to(torch.int64), None
+
+    masks = assemble(protos[0].float().cpu(), kept[:, 6:], boxes, image.shape[:2])
+    # Upstream drops any detection whose mask came out empty, and so does this. A box with nothing
+    # under it is a detection the segmentation head did not agree with, and keeping it would put a
+    # ``None`` where every other row has a mask.
+    alive = masks.amax((-2, -1)) > 0
+    if not bool(alive.all()):
+        boxes, kept, masks = boxes[alive], kept[alive], masks[alive]
+    return boxes, kept[:, 4], kept[:, 5].to(torch.int64), masks
 
 
 @dataclass
@@ -60,6 +76,7 @@ class Detections:
     scores: np.ndarray  # (n,)
     class_ids: np.ndarray  # (n,) int
     names: list[str]  # (n,) the name of each detected class
+    masks: np.ndarray | None = None  # (n, h, w) bool, or None from a detection checkpoint
 
     def __len__(self) -> int:
         return len(self.scores)
@@ -100,6 +117,7 @@ class Detector:
 
     def predict(self, image: np.ndarray, conf: float = 0.25) -> Detections:
         """Detect objects in one image, given as an ``HxWx3`` RGB ``uint8`` array."""
-        boxes, scores, class_ids = detect(image, self.forward, self.imgsz, conf)
+        boxes, scores, class_ids, masks = detect(image, self.forward, self.imgsz, conf)
         ids = class_ids.numpy()
-        return Detections(boxes.numpy(), scores.numpy(), ids, [self.names[int(i)] for i in ids])
+        return Detections(boxes.numpy(), scores.numpy(), ids, [self.names[int(i)] for i in ids],
+                          None if masks is None else masks.numpy())
