@@ -212,6 +212,22 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         'variants': ['base-224', 'base-256', 'so400m-384', 'so400m16-256', 'giant-384'],
     },
 
+    'vitpose': {
+        'adapter_class': 'ViTPosePredictor',
+        'module': 'mozo.adapters.vitpose',
+        'task_type': 'pose_estimation',
+        'description': (
+            'ViTPose++ by the University of Sydney — human pose estimation. Give it a frame and '
+            "the boxes of the people in it, and it returns those same detections with COCO's 17 "
+            'joints attached to each. 4 variants (small/base/large/huge). It is top-down: it does '
+            'not find people, so pair it with a detector — RF-DETR and the YOLO families all '
+            'produce boxes it accepts. It also does not filter them, so pass it the people rather '
+            'than everything, or it will place joints on a car as readily as on a person. Code '
+            'and weights are both Apache-2.0.'
+        ),
+        'variants': ['small', 'base', 'large', 'huge'],
+    },
+
     'yolov8': {
         'adapter_class': 'YOLOv8Predictor',
         'module': 'mozo.adapters.yolov8',

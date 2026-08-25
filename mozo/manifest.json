@@ -1222,6 +1222,137 @@
         }
       }
     },
+    "vitpose/base": {
+      "latest": "2026-08-25",
+      "revisions": {
+        "2026-08-25": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "vitpose/base/2026-08-25/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "vitpose/base/2026-08-25/NOTICE",
+              "sha256": "8fc2e18f2b9b332eac9bc99708c28568533e1bddf7687fc0ab89f96fadf73661",
+              "size": 1111
+            },
+            "labels": {
+              "path": "vitpose/base/2026-08-25/labels.json",
+              "sha256": "29b7eab6ced1f2bf2962052930ede62af683adc4aff8766bc31534ef0b75249f",
+              "size": 847
+            },
+            "onnx-fp32": {
+              "path": "vitpose/base/2026-08-25/onnx-fp32.onnx",
+              "sha256": "266bc854415d12256196fcc9f16aef6bb9d36ac81501c6ed294dc16a3762b391",
+              "size": 360228759
+            },
+            "torch-fp32": {
+              "path": "vitpose/base/2026-08-25/torch-fp32.pth",
+              "sha256": "1afb018017d80d6af73733c0882366df6ab6915b004d578e671fb1fb60979bdf",
+              "size": 501701940
+            }
+          }
+        }
+      }
+    },
+    "vitpose/huge": {
+      "latest": "2026-08-25",
+      "revisions": {
+        "2026-08-25": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "vitpose/huge/2026-08-25/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "vitpose/huge/2026-08-25/NOTICE",
+              "sha256": "4fbe09af3bee09763ed0365d6ffcedee133154d04bbccc0f5e115fa07da8f1f8",
+              "size": 1111
+            },
+            "labels": {
+              "path": "vitpose/huge/2026-08-25/labels.json",
+              "sha256": "29b7eab6ced1f2bf2962052930ede62af683adc4aff8766bc31534ef0b75249f",
+              "size": 847
+            },
+            "torch-fp32": {
+              "path": "vitpose/huge/2026-08-25/torch-fp32.pth",
+              "sha256": "2a5e840b65e13d562edc0dea34973b98f7a9343c1f0e76c311dbaec4a935f514",
+              "size": 3597920164
+            }
+          }
+        }
+      }
+    },
+    "vitpose/large": {
+      "latest": "2026-08-25",
+      "revisions": {
+        "2026-08-25": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "vitpose/large/2026-08-25/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "vitpose/large/2026-08-25/NOTICE",
+              "sha256": "667a53076b7ca328f3153870ce162693e5999c2c1d0b6cc43ce70a25ed893041",
+              "size": 1113
+            },
+            "labels": {
+              "path": "vitpose/large/2026-08-25/labels.json",
+              "sha256": "29b7eab6ced1f2bf2962052930ede62af683adc4aff8766bc31534ef0b75249f",
+              "size": 847
+            },
+            "onnx-fp32": {
+              "path": "vitpose/large/2026-08-25/onnx-fp32.onnx",
+              "sha256": "4b562896f3b98a59fdc8f837708a008db17290314fce85aa1ca5bd30a0e4d363",
+              "size": 1234672727
+            },
+            "torch-fp32": {
+              "path": "vitpose/large/2026-08-25/torch-fp32.pth",
+              "sha256": "28ab288a284f0cedc73ba59ea256cba4da95884bbc6eab243c4f5e1139a89ff6",
+              "size": 1737848964
+            }
+          }
+        }
+      }
+    },
+    "vitpose/small": {
+      "latest": "2026-08-25",
+      "revisions": {
+        "2026-08-25": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "vitpose/small/2026-08-25/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "vitpose/small/2026-08-25/NOTICE",
+              "sha256": "ba2cdd6b6f48957323c42fb8149ba6107d31d7f293c1cdfa8006fcb9310962ea",
+              "size": 1113
+            },
+            "labels": {
+              "path": "vitpose/small/2026-08-25/labels.json",
+              "sha256": "29b7eab6ced1f2bf2962052930ede62af683adc4aff8766bc31534ef0b75249f",
+              "size": 847
+            },
+            "onnx-fp32": {
+              "path": "vitpose/small/2026-08-25/onnx-fp32.onnx",
+              "sha256": "6d183a2d01ea81ead10ab33ccec4034628d75a714ef77fd08c3054e7a19d8283",
+              "size": 97412844
+            },
+            "torch-fp32": {
+              "path": "vitpose/small/2026-08-25/torch-fp32.pth",
+              "sha256": "e49fd3d5c8d0884f842c9752108b9c6353d64c1783e6bdc33f1ae3f1e4efd510",
+              "size": 132694836
+            }
+          }
+        }
+      }
+    },
     "yolov11/large": {
       "latest": "2026-08-19",
       "revisions": {

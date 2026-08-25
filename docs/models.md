@@ -263,6 +263,127 @@ travel with the weights if you pass them on. Mozo's own SAM 3 code is Apache-2.0
 `transformers`, not from `facebookresearch/sam3`; the code and the weights are separate works
 travelling together. Complying is the operator's responsibility.
 
+## ViTPose
+
+Human pose estimation. Give it a frame and the boxes of the people in it, and it hands those same
+detections back with COCO's 17 joints attached to each.
+
+```python
+found = mozo.get_model("rfdetr", "medium").predict(frame)
+posed = mozo.get_model("vitpose", "base").predict(frame, found.filter_by_class_id(1))
+
+posed[0].keypoints[0].name        # 'nose'
+posed[0].class_name               # 'person' -- still the detector's, not ours
+```
+
+### It takes detections, and it is the only family that does
+
+Every other model in mozo produces detections. This one is handed them. That is not an interface
+quirk, it is what top-down pose estimation *is*: the model answers a question about a person whose
+location it was told. Pair it with anything that produces boxes — RF-DETR, a YOLO, a tracker, a
+rectangle someone drew.
+
+The result is a copy of what you passed in, with joints added. Same boxes, same class ids, same
+scores, same names, same tracker ids. Rebuilding them would have been easier and would have thrown
+all of that away.
+
+Both arguments are required. There is no "no detections" shortcut that treats the whole image as
+one person — that is a guess about intent, and on a street scene it returns one confident skeleton
+stretched across the frame. An **empty** `Detections` is a different thing and is answered with an
+empty result: a frame with nobody in it is an answer, not an error.
+
+### It does not filter what you give it
+
+Pass the box of a car and it returns seventeen confident joints on a car. It will not hedge — a
+heatmap model puts a nose somewhere and scores it well — so low confidence does not save you.
+
+That is deliberate. Which boxes are people is a fact about your pipeline, not about this model,
+and a filter here would be mozo deciding it for you. `filter_by_class_id` already does the job,
+and note the id is the detector's: RF-DETR emits COCO's original ids where person is 1, while the
+YOLO families use a contiguous vocabulary where it is 0.
+
+### Give it the frame, not a crop
+
+The crop this model wants is **larger than the box it is given**. Each box is first widened or
+heightened to the input's 3:4 aspect ratio, then padded by a further 1.25×. For a 50×140 person
+that is roughly a 131×175 crop — about forty pixels of width and thirty-five of height the
+detector's box never contained, taken from the surrounding frame.
+
+So passing a pre-cropped person is not the same operation. Those pixels are already gone, the
+padding falls back to black, and a wrist just outside the box — which the real crop would have
+recovered — is unrecoverable. If a crop is all you have, pass it with a box covering its full
+extent and expect slightly worse joints near the edges.
+
+### Confidences are per joint, and worth reading
+
+Each joint carries the peak of its heatmap channel. It is not a probability and not comparable
+across models, but it does track visibility usefully: on the fixture photograph, where five people
+sit behind a table, the visible faces and shoulders score 0.6–0.97 while the occluded knees sit
+near 0.4 and the ankles near 0.15. **Filter on it before reading a coordinate** — a joint the model
+cannot see comes back with a position that means nothing, because the argmax of a flat heatmap
+lands somewhere.
+
+### Every published variant is ViTPose++
+
+Seven checkpoints exist upstream; mozo publishes the four that are ViTPose++, the mixture-of-experts
+revision, named by size. The other three are the original ViTPose, which ViTPose++ beats at every
+size — and the smallest of them is 344 MB against `small`'s 133.
+
+Every block picks one of six dataset experts. mozo always runs COCO's, because COCO's is the one
+the published heads match; the other five are not alternatives but ways to get a wrong answer, so
+there is no argument for them.
+
+### Cost
+
+One forward pass for the whole frame: N boxes are N crops batched together, so per-image cost
+depends on how crowded the photograph is and per-person is the number that transfers. Measured on
+the fixture photograph, five people, `torch-fp32`, on an M-series laptop:
+
+| | MPS ms/person | CPU ms/person |
+|---|---|---|
+| `small` | 9.9 | 23.1 |
+| `base` | 14.8 | 39.3 |
+| `large` | 28.5 | 111.6 |
+| `huge` | 49.5 | 190.3 |
+
+### The ONNX graphs are for portability, not for speed
+
+`small`, `base` and `large` publish an `onnx-fp32` graph as well, verified to return the same
+joints as the checkpoint it came from. On the machine above it is **slower** than torch — 35.5
+against 23.1 ms per person on `small`, 299 against 112 on `large` — because ONNX Runtime has no
+Metal path and falls back to its CPU provider. `auto` never picks it on CPU or MPS, so asking for
+it is a deliberate choice: serving without torch, or reaching a runtime torch cannot.
+
+The graphs are also smaller than the checkpoints — 97 MB against 133 for `small` — because binding
+the expert to a constant lets the exporter fold the other five away. That is exactly `5/6` of the
+expert parameters in every variant.
+
+**`huge` publishes no graph.** Its weights are 2.5 GB after folding, past protobuf's single-file
+ceiling, so ONNX writes them beside the graph rather than inside it — leaving a few hundred
+kilobytes of stub that loads fine where it was made and fails everywhere else. `tools/export/vitpose.py`
+refuses to write that. An artifact in mozo is one file.
+
+**No CoreML, and that one is a measurement rather than a gap.** It converts directly and the joints
+agree to 0.0005 px, but it is not faster than torch on MPS: 22.9 ms against 22.6 for five people on
+`small`, 44.0 against 44.2 on `base`. A fixed batch shape does not help, fp16 does not help, and the
+Neural Engine is three and a half times worse. Publishing it would make it the `auto` choice on
+Apple silicon and cost a `coremltools` install plus a second copy of every variant, for nothing.
+
+This is the opposite of RF-DETR, where CoreML is five times faster — probably because this trunk is
+a plain ViT, and Metal already runs matmuls and layer norms at full speed.
+
+### Parity
+
+Joints land within **0.005 pixels** of `transformers` on every variant — which is not a measurement
+of this model so much as of PixelFlow, whose coordinates round to 0.01. Half a step is the floor,
+and every variant sits exactly on it. Underneath that, the heatmaps are bit-identical.
+
+Two pieces of preprocessing were rewritten to avoid a SciPy dependency, and both have a border rule
+that is easy to get wrong in a way that looks right: SciPy's `mode="constant"` returns the constant
+outside the frame rather than blending toward it, and its `mode="reflect"` repeats the edge sample
+where `torch`'s skips it. Both are pinned against SciPy in `tests/families/test_vitpose.py`. See
+`mozo/vendors/vitpose_deploy/PROVENANCE.md`.
+
 ## EasyOCR
 
 Text recognition. Finds every line of text on a page and reads it.

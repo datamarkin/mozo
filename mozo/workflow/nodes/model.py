@@ -11,7 +11,7 @@ Each node is its family's ``predict`` with the arguments the editor can offer. N
 how a model works; :func:`mozo.get_model` does, and it caches, so a node that runs over fifty
 images loads the checkpoint once.
 
-Twelve of the fourteen families are here. SAM 2 and EdgeTAM are not: they are prompted with points
+Thirteen of the fifteen families are here. SAM 2 and EdgeTAM are not: they are prompted with points
 and boxes -- pixel coordinates picked on the image -- and there is no widget for that yet. Adding
 one before anything asks for it would be inventing a requirement, so they wait until the editor can
 express a click. Everything else about them already works through :func:`mozo.get_model`.
@@ -115,6 +115,15 @@ def sam3(image: Image, text: str = "person", variant: variants("sam3") = "sam3",
     """SAM 3 by Meta -- masks for every instance of a concept you name."""
     return mozo.get_model("sam3", variant).predict(
         image, text=comma_separated(text), threshold=threshold)
+
+
+# --- Pose ------------------------------------------------------------------------------------------
+
+@node(category="Pose")
+def vitpose(image: Image, detections: Detections,
+            variant: variants("vitpose") = "small") -> Detections:
+    """ViTPose++ -- the joints of everyone you point it at. Wire a detector into ``detections``."""
+    return mozo.get_model("vitpose", variant).predict(image, detections)
 
 
 # --- Classification ------------------------------------------------------------------------------
