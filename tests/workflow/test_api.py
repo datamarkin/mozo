@@ -13,7 +13,7 @@ import json
 import pytest
 
 import mozo
-from conftest import FIXTURE, document, require_weights
+from conftest import FIXTURE, document, require_present
 import workflow_nodes  # noqa: F401 -- imported to register the port-type test nodes
 
 
@@ -195,7 +195,7 @@ class TestSerialisingResults:
 
     def test_detections_arrive_as_data_rather_than_a_picture(self, client, payload):
         pytest.importorskip("torch")
-        require_weights("yolov26", "nano")
+        require_present("yolov26", "nano")
 
         found = as_json(
             {"load": ("load_image", {}), "detect": ("yolov26", {"threshold": 0.5})},
@@ -206,7 +206,7 @@ class TestSerialisingResults:
         assert {"bbox", "class_name", "confidence"} <= set(found[0])
 
     def test_a_depth_map_keeps_the_numbers_that_make_it_a_measurement(self, client, payload):
-        require_weights("depth_anything_v2", "small")
+        require_present("depth_anything_v2", "small")
 
         far = as_json(
             {"load": ("load_image", {}), "depth": ("depth_anything_v2", {})},
@@ -217,7 +217,7 @@ class TestSerialisingResults:
 
     def test_a_batch_arrives_as_a_list(self, client, payload):
         """One image in, several out: the fan-out has to survive the wire too."""
-        require_weights("yolov26", "nano")
+        require_present("yolov26", "nano")
 
         crops = as_json(
             {"load": ("load_image", {}), "detect": ("yolov26", {}),
@@ -242,9 +242,35 @@ class TestTheModelServerIsUnaffected:
     def test_the_workflow_routes_are_all_under_one_prefix(self, client):
         from mozo.server import app
 
-        added = {route.path for route in app.routes if "workflow" in route.path}
+        added = {path for path in _every_path(app.routes) if "workflow" in path}
         assert added == {"/workflow", "/workflow/assets/{name}", "/workflow/nodes",
                          "/workflow/run", "/workflow/stream", "/workflow/validate"}
+
+
+def _every_path(routes) -> set:
+    """Every path in *routes*, reaching into routers that were included rather than flattened.
+
+    Up to FastAPI 0.136 ``include_router`` copied a sub-router's routes into ``app.routes``, so
+    every entry there had a ``.path``. Since 0.137 it appends one ``_IncludedRouter`` standing in
+    for the whole router, which has no ``.path`` at all -- reading the attribute unconditionally
+    raises, and skipping the entries that lack it would find no workflow routes and assert that
+    mozo mounts nothing.
+
+    Both shapes are walked, so this asserts where mozo puts its routes rather than which FastAPI
+    happens to be installed. The private name is unavoidable: the object is not part of the public
+    API, and neither is the flattening it replaced.
+    """
+    found = set()
+    for route in routes:
+        path = getattr(route, "path", None)
+        if path is not None:
+            found.add(path)
+        nested = getattr(route, "original_router", None)
+        if nested is None:
+            nested = getattr(route, "routes", None)
+        if nested is not None:
+            found |= _every_path(getattr(nested, "routes", nested))
+    return found
 
 
 def _post(client, path: str, workflow: str, payload: bytes = None, **fields):
