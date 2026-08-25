@@ -1,6 +1,6 @@
-# Mozo v1.0.0: Run a Graph, Not Just a Model
+# Mozo v1.0.1: Run a Graph, Not Just a Model
 
-## What's New in v1.0.0
+## What's New in v1.0.1
 
 Until now mozo answered one question at a time: load a model, hand it an image, get a result.
 A workflow is the other half — read an image, run a family, crop what it found, run a second
@@ -10,7 +10,9 @@ HTTP, or run from the command line.
 That is what the major version is for. Nothing about `get_model()` changes, and nothing in the
 0.7.x catalogue moves; what changed is that the catalogue is now something you can compose.
 
-> **PyPI goes 0.7.1 → 1.0.0.**
+> **PyPI goes 0.7.1 → 1.0.1.** v1.0.0 was tagged, but its release run failed the test gate
+> before it published anything, so nothing reached PyPI. Everything below ships here for the
+> first time.
 
 ### 🔀 Workflows
 
@@ -84,6 +86,12 @@ stages that constant reaches and no others, with a control that provably moves n
   than misreading.
 - **The export gate refuses what it cannot check** instead of comparing a graph against the module
   on three quarters of the answer.
+- **The suite runs without weights again.** Three workflow tests asked the manifest whether a model
+  was published and then ran it, which is a different question: run through a workflow, a missing
+  checkpoint surfaces as a failed node rather than an exception, so a machine without the weights
+  failed instead of skipping.
+- **Route introspection survives FastAPI 0.137**, which stopped copying an included router's routes
+  into `app.routes` and started listing the router itself.
 
 ### 📖 Documentation
 
