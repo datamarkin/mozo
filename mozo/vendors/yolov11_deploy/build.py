@@ -239,9 +239,16 @@ class DetectionNetwork(nn.Module):
         keep (set): Indices some later layer reads back, and the only outputs held.
         strides (tuple): Pixel stride of each detection level.
         names (dict): Class index to class name.
+        nm (int): Mask coefficients per anchor, or 0 for a head with no mask branch -- which is
+            the same thing as saying whether :meth:`forward` answers with a pair or a lone
+            tensor. Held rather than recomputed because it is a property of the checkpoint that
+            outlives any one forward pass: ``tools/export`` reads it to decide how many outputs
+            the graph it writes declares, the way it reads ``end2end`` from YOLO26's network for
+            the same kind of decision. Deriving it instead from what a forward pass returned
+            would make the answer depend on when it was asked.
     """
 
-    def __init__(self, layers, sources, strides, names):
+    def __init__(self, layers, sources, strides, names, nm=0):
         """Assemble the network from built layers and the facts read off the checkpoint."""
         super().__init__()
         self.model = nn.Sequential(*layers)
@@ -254,6 +261,7 @@ class DetectionNetwork(nn.Module):
                      if index != -1}
         self.strides = strides
         self.names = names
+        self.nm = nm
 
     @torch.no_grad()
     def forward(self, x):
@@ -323,7 +331,7 @@ def build_network(record):
     strides = _strides_of(record, levels)
     head.spec["strides"] = strides
 
-    return DetectionNetwork(layers, tuple(sources), strides, recorded(record, "names"))
+    return DetectionNetwork(layers, tuple(sources), strides, recorded(record, "names"), coefficients)
 
 
 def load_network(weights, fuse=True):
