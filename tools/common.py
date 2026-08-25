@@ -24,6 +24,8 @@ import hashlib
 import urllib.request
 from pathlib import Path
 
+import numpy as np
+
 #: Read size for hashing and streaming. One megabyte: large enough that the syscall overhead
 #: disappears, small enough that a checkpoint never has to be held in memory to be verified.
 CHUNK = 1 << 20
@@ -45,6 +47,47 @@ def fixtures() -> list[Path]:
     if not images:
         raise SystemExit(f"no fixture images in {FIXTURES}. Add photographs to verify against.")
     return images
+
+
+#: Which detector supplies person boxes to the tools that need them, and what a box must clear.
+#: Fixed rather than a flag, and shared for the same reason :data:`FIXTURES` is: the export gate
+#: verifies a graph against these people and the bench measures against them, so the two numbers
+#: are only comparable while both mean the same people. A private copy in each would let one
+#: change without the other.
+DETECTOR = ("rfdetr", "medium")
+DETECTOR_THRESHOLD = 0.5
+
+#: ``person`` in the detector's vocabulary. RF-DETR emits COCO's original sparse ids, where person
+#: is 1; a contiguous vocabulary would say 0, which is why this travels with the detector above.
+PERSON = 1
+
+
+def person_boxes(images: list[Path], device: str = "cpu") -> dict[Path, np.ndarray]:
+    """Person boxes per image, from the detector the publishing tools hold fixed.
+
+    For the top-down families, which answer a question about a box they are given. Verifying one
+    against synthetic boxes would test the tie-breaking of an ``argmax`` over a flat heatmap rather
+    than the model, so the people have to be real.
+
+    Args:
+        images: Photographs to run over.
+        device: Where to run the detector.
+
+    Returns:
+        Image -> ``(N, 4)`` xyxy boxes, ``(0, 4)`` for a photograph with nobody in it. Kept rather
+        than dropped, so a caller decides whether an empty one is a skip or a failure.
+    """
+    from mozo.adapters.rfdetr import RFDETRPredictor
+    from mozo.image import load_image
+
+    detector = RFDETRPredictor(DETECTOR[1], device=device)
+    return {
+        image: np.array(
+            [row.bbox for row in detector.predict(load_image(str(image)),
+                                                  threshold=DETECTOR_THRESHOLD)
+             if row.class_id == PERSON], dtype=np.float64).reshape(-1, 4)
+        for image in images
+    }
 
 
 def digest(path: Path, algorithm: str = "sha256") -> str:
