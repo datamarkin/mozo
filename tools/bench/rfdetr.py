@@ -37,17 +37,19 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).resolve().parent]
 sys.path.insert(0, str(ROOT))
 
-from mozo.image import load_image
+from mozo.image import load_image  # noqa: E402
 from mozo.runtimes import runnable  # noqa: E402
 from mozo.weights import WeightsError, artifacts  # noqa: E402
 
-VARIANTS = ["nano", "small", "medium", "large", "seg-nano", "seg-small", "seg-medium", "seg-large"]
+VARIANTS = ["nano", "small", "medium", "large", "seg-nano", "seg-small", "seg-medium", "seg-large",
+            "keypoint-preview"]
 
 #: Upstream exposes each variant as its own class.
 UPSTREAM_CLASS = {
     "nano": "RFDETRNano", "small": "RFDETRSmall", "medium": "RFDETRMedium", "large": "RFDETRLarge",
     "seg-nano": "RFDETRSegNano", "seg-small": "RFDETRSegSmall",
     "seg-medium": "RFDETRSegMedium", "seg-large": "RFDETRSegLarge",
+    "keypoint-preview": "RFDETRKeypointPreview",
 }
 
 THRESHOLD = 0.5
@@ -78,7 +80,7 @@ def compare(baseline: list[dict], ours: list[dict]) -> dict:
         movement, and how often the matched pair disagreed on the class.
     """
     unmatched = list(range(len(ours)))
-    ious, score_deltas, class_flips = [], [], 0
+    ious, score_deltas, kp_deltas, class_flips = [], [], [], 0
 
     for want in baseline:
         best, best_iou = None, 0.0
@@ -93,6 +95,12 @@ def compare(baseline: list[dict], ours: list[dict]) -> dict:
         ious.append(best_iou)
         score_deltas.append(abs(want["score"] - got["score"]))
         class_flips += int(want["class_id"] != got["class_id"])
+        # Compared only for a pair that already matched by box: keypoints belonging to two
+        # different people are not a delta, they are a mismatch, and the IoU test above is what
+        # rules that out. One side is enough to test -- a run compares a variant against itself,
+        # so either both containers carry joints or neither does.
+        if want["keypoints"] is not None:
+            kp_deltas.append(float(np.abs(want["keypoints"] - got["keypoints"]).max()))
 
     return {
         "baseline": len(baseline),
@@ -102,14 +110,23 @@ def compare(baseline: list[dict], ours: list[dict]) -> dict:
         "extra": len(unmatched),
         "worst_iou": min(ious) if ious else None,
         "worst_score_delta": max(score_deltas) if score_deltas else None,
+        "worst_keypoint_delta": max(kp_deltas) if kp_deltas else None,
         "class_flips": class_flips,
     }
 
 
 def _as_records(detections) -> list[dict]:
-    """Normalise a PixelFlow ``Detections`` into plain comparable records."""
+    """Normalise a PixelFlow ``Detections`` into plain comparable records.
+
+    ``keypoints`` is ``(K, 3)`` as ``(x, y, confidence)`` for a keypoint variant and ``None`` for
+    every other, which is what the models themselves return -- a detection variant is not a
+    keypoint variant with its joints missing.
+    """
     return [{"box": np.asarray(d.bbox, dtype=float), "score": float(d.confidence),
-             "class_id": int(d.class_id)} for d in detections]
+             "class_id": int(d.class_id),
+             "keypoints": None if not d.keypoints else np.array(
+                 [[k.x, k.y, k.confidence] for k in d.keypoints], dtype=float)}
+            for d in detections]
 
 
 def upstream_baseline(variant: str, images: list[Path], device: str) -> dict[str, list[dict]]:
@@ -126,12 +143,36 @@ def upstream_baseline(variant: str, images: list[Path], device: str) -> dict[str
     results = {}
     for path in images:
         out = model.predict(Image.open(path).convert("RGB"), threshold=THRESHOLD)
+        boxes, scores, joints = _unpack(out)
         results[path.name] = [
-            {"box": np.asarray(box, dtype=float), "score": float(score), "class_id": int(cls)}
-            for box, score, cls in zip(out.xyxy, out.confidence, out.class_id)
+            {"box": np.asarray(box, dtype=float), "score": float(score), "class_id": int(cls),
+             "keypoints": None if joints is None else joints[i]}
+            for i, (box, score, cls) in enumerate(zip(boxes, scores, out.class_id))
         ]
     del model
     return results
+
+
+def _unpack(out) -> tuple:
+    """Return upstream's boxes, object scores and joints, whichever container it answered in.
+
+    Read off the object rather than looked up by variant name. A keypoint model answers with an
+    ``sv.KeyPoints``, which spells two of these fields differently -- boxes move into
+    ``.data["xyxy"]``, and ``.confidence`` becomes per-*joint* so the object score is
+    ``.detection_confidence``. Reading the detection container's names off one silently compares
+    the wrong numbers, and the difference is a property of what came back, not of which name was
+    asked for: a table of keypoint variants would be a third place to update when upstream
+    publishes the rest of the curve, and the one nobody would think to.
+
+    Joints are stacked once per image into ``(N, K, 3)`` -- the shape mozo's side already
+    produces -- rather than per detection, and are ``None`` for a container that has none.
+    """
+    if not hasattr(out, "xy"):
+        return out.xyxy, out.confidence, None
+    joints = np.concatenate(
+        [np.asarray(out.xy, dtype=float),
+         np.asarray(out.keypoint_confidence, dtype=float)[..., None]], axis=-1)
+    return out.data["xyxy"], out.detection_confidence, joints
 
 
 def measure(model, images: list[np.ndarray], iters: int) -> float:
@@ -184,6 +225,8 @@ def run(variant: str, runtime: str, device: str, paths: list[Path], arrays: list
         "worst_iou": min(worst_ious) if worst_ious else None,
         "worst_score_delta": max((a["worst_score_delta"] for a in agreement
                                   if a["worst_score_delta"] is not None), default=None),
+        "worst_keypoint_delta": max((a["worst_keypoint_delta"] for a in agreement
+                                     if a["worst_keypoint_delta"] is not None), default=None),
         "ms": latency,
         "fps": 1000.0 / latency,
     }
@@ -238,8 +281,10 @@ def main() -> int:
                 rows.append(row)
                 iou = f"{row['worst_iou']:.3f}" if row["worst_iou"] is not None else "n/a"
                 delta = f"{row['worst_score_delta']:.4f}" if row["worst_score_delta"] is not None else "n/a"
+                kp = (f"  kp Δ {row['worst_keypoint_delta']:.4f}"
+                      if row["worst_keypoint_delta"] is not None else "")
                 print(f"    {device:4} {runtime:11} {row['matched']:3}/{row['baseline_detections']:<3} matched  "
-                      f"worst IoU {iou}  score Δ {delta}  "
+                      f"worst IoU {iou}  score Δ {delta}{kp}  "
                       f"{row['ms']:7.1f} ms  {row['fps']:5.1f} fps")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
