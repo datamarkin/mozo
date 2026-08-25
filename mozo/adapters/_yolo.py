@@ -123,28 +123,32 @@ class YOLOPredictor:
             )
         print(f"{self.DISPLAY} {variant} ready on {self.device} via {self.runtime} at {self.imgsz}px.")
 
-    def _forward(self, batch: torch.Tensor) -> torch.Tensor:
+    def _forward(self, batch: torch.Tensor) -> Union[torch.Tensor, tuple[torch.Tensor, ...]]:
         """Run the batch through whichever runtime is loaded, returning the raw head output.
 
         The only step that differs between runtimes. Everything around it is the vendor's.
 
-        Every graph published for these families has exactly one output, and this takes it. A
-        segmentation head does not: it answers with rows *and* the prototypes those rows carry
-        coefficients of, and keeping only the first of those would hand the vendor a tensor whose
-        trailing mask rows it would read as class scores -- wrong classes, wrong scores, no masks,
-        nothing raised. So the assumption is stated rather than left implicit, and the day a graph
-        carrying a mask branch is published this is where it stops.
+        A detection graph has one output; a segmentation graph has two, the rows and the
+        prototypes those rows carry coefficients of. The vendor's ``detect`` tells them apart by
+        type rather than by length, so the lone tensor is handed back bare and the pair as a
+        tuple. Wrapping the lone one would hand ``detect`` rows with their batch axis still
+        attached, which is plausible, wrong and silent; taking only the first of the pair would
+        hand it a tensor whose trailing mask rows it would read as class scores -- wrong classes,
+        wrong scores, no masks, nothing raised. The order is the graph's own, which
+        ``tools/export/_detection.py`` names ``predictions`` then ``prototypes``.
         """
         if self._runner is None:
             return self._detector.forward(batch)
         outputs = self._runner(batch.numpy())
-        if len(outputs) != 1:
-            raise NotImplementedError(
-                f"{self.runtime} for {self.FAMILY}/{self.variant} returned {len(outputs)} outputs; "
-                "this seam carries one. A multi-output graph -- a segmentation head's rows and "
-                "prototypes -- needs the vendor's detect() to receive all of them."
-            )
-        return torch.from_numpy(outputs[0])
+        if len(outputs) == 1:
+            return torch.from_numpy(outputs[0])
+        if len(outputs) == 2:
+            return tuple(torch.from_numpy(output) for output in outputs)
+        raise NotImplementedError(
+            f"{self.runtime} for {self.FAMILY}/{self.variant} returned {len(outputs)} outputs; "
+            "this seam carries one from a detection graph and two -- rows and prototypes -- from "
+            "a segmentation one."
+        )
 
     def predict(
         self,
