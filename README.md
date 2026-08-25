@@ -54,8 +54,8 @@ variant is what decides whether masks come back, so nothing else about the reque
 | Family | Variants | Weights licence | Runtimes |
 |---|---|---|---|
 | `rfdetr` | `seg-nano` `seg-small` `seg-medium` `seg-large` | Apache-2.0 | torch, onnx, coreml |
-| `yolov11` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch |
-| `yolov26` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch |
+| `yolov11` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch, onnx |
+| `yolov26` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch, onnx |
 
 Returns detections carrying a boolean mask each, at the source image's resolution.
 

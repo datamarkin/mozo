@@ -78,12 +78,15 @@ counterpart on the same photograph. And the mask crop takes a different branch b
 detections, rounding box edges to whole pixels where the other compares against the unrounded
 float — so the mask you get depends slightly on how many objects are in the picture.
 
-**Runtimes differ across the four generations.** YOLOv8 and YOLO12 publish a CoreML artifact,
-which is by far the fastest way to run them on Apple silicon. YOLO11 and YOLO26 do not: the
-`C2PSA` block they share makes Apple's Metal graph compiler abort the process, and the
-configuration that avoids that is slower than torch on MPS. `runtime="auto"` handles this by
-itself — it only ever chooses among what a variant actually publishes, so nothing in mozo carries
-a per-family exception.
+**Runtimes differ across the four generations.** Every variant of all four publishes ONNX,
+segmentation included — a `seg-` graph declares two outputs, `predictions` and the `prototypes`
+its mask coefficients belong to, where a detection graph declares one. YOLOv8 and YOLO12 also
+publish a CoreML artifact, which is by far the fastest way to run them on Apple silicon. YOLO11
+and YOLO26 do not: the `C2PSA` block they share makes Apple's Metal graph compiler abort the
+process, and the configuration that avoids that is slower than torch on MPS. Their `seg-`
+variants are the same backbone with a different head, so they inherit that rather than escaping
+it. `runtime="auto"` handles all of this by itself — it only ever chooses among what a variant
+actually publishes, so nothing in mozo carries a per-family exception.
 
 Class names come from the checkpoint, so a fine-tuned model publishes its own vocabulary.
 
