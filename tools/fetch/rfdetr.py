@@ -48,10 +48,22 @@ CHECKPOINTS: dict[str, tuple[str, str]] = {
         f"{_BUCKET}/rf-detr-keypoint-preview-xlarge.pth", "6de511943ee85a547d4c5cb527daf0eb"),
 }
 
-#: Where the licence's canonical text lives. Not kept in this repository: a licence is part of
-#: what gets published, so it belongs in the weights tree beside the checkpoint it covers, which
-#: is where ``tools/generate_manifest.py`` looks for it.
-LICENCE_SOURCE_URL = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+#: Where the licence text lives. Not kept in this repository: a licence is part of what gets
+#: published, so it belongs in the weights tree beside the checkpoint it covers, which is where
+#: ``tools/generate_manifest.py`` looks for it.
+#:
+#: Roboflow's copy rather than ``apache.org/licenses/LICENSE-2.0.txt``, and the difference is one
+#: line. Apache-2.0's canonical text ends with an appendix the licensor is meant to fill in, so it
+#: ships reading ``Copyright [yyyy] [name of copyright owner]`` where Roboflow's reads
+#: ``Copyright 2025 Roboflow, Inc.``. Placing the generic text would publish a variant whose terms
+#: hash differently from every other variant in the same family, under a licence naming nobody --
+#: and ``NON_PERMISSIVE`` identifies terms by content hash, so a licence file that is nearly right
+#: is a licence file mozo cannot recognise.
+#:
+#: ``_ultralytics.py`` points at gnu.org for exactly the opposite reason: AGPL-3.0 carries no such
+#: template, so its canonical text is byte-identical to what Ultralytics publishes. The rule is to
+#: take the licence from whoever licensed the weights, which for AGPL happens to be the same file.
+LICENCE_SOURCE_URL = "https://raw.githubusercontent.com/roboflow/rf-detr/develop/LICENSE"
 
 def fetch(variant: str, revision: str, weights_dir: Path) -> None:
     """Download one variant's checkpoint and verify it, then check its licence is in place."""
