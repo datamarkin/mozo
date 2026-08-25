@@ -167,9 +167,9 @@ def test_every_registered_task_type_has_a_dispatch_arm():
 
     source = inspect.getsource(server.predict)
     registered = {entry["task_type"] for entry in MODEL_REGISTRY.values()}
-    # PROMPTED is dispatched as a set rather than by name, so its members are served by the
-    # ``task in PROMPTED`` arm and will not appear as string literals.
-    served = set(re.findall(r'task == "([a-z_]+)"', source)) | server.PROMPTED
+    # PROMPTED and BOXED are dispatched as sets rather than by name, so their members are served
+    # by a ``task in ...`` arm and will not appear as string literals.
+    served = set(re.findall(r'task == "([a-z_]+)"', source)) | server.PROMPTED | server.BOXED
 
     assert registered <= served, (
         f"registered but not served: {sorted(registered - served)}. Add an arm to "
