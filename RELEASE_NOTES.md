@@ -1,3 +1,74 @@
+# Mozo v1.0.2: Where the Joints Are
+
+## What's New in v1.0.2
+
+Mozo's fifteenth family, a second way to get joints, and graphs for the ten segmentation
+variants that shipped without them.
+
+### 🕺 ViTPose++
+
+Top-down human pose estimation, Apache-2.0, in four sizes — `small` `base` `large` `huge`.
+
+```python
+people = mozo.get_model("rfdetr/medium").predict("crowd.jpg", threshold=0.5)
+posed = mozo.get_model("vitpose/base").predict("crowd.jpg", detections=people)
+posed[0].keypoints[0]      # KeyPoint(id=0, name='nose', x=..., y=..., confidence=...)
+```
+
+**It is the first family whose `predict` takes detections as input.** ViTPose has no detector:
+it answers a question about a box someone else found. So it takes the full frame *and* the
+boxes, and returns those same detections with seventeen COCO joints attached to each.
+
+The full frame is not a convenience. The crop it works from is deliberately larger than the box
+— widened to 3:4 and then padded by a further 1.25× — so a 50×140 person becomes roughly a
+131×175 crop. A caller who cropped tightly has already thrown away pixels the model wants, and a
+wrist just outside the box goes with them.
+
+**It filters nothing.** Hand it detections and it poses all of them, so filtering to people is
+the caller's call and stays visible in the caller's code. Hand it an empty set and you get an
+empty set back; hand it nothing at all and Python raises, because there is nothing to infer.
+
+Heatmaps are bit-identical to `transformers` on all four variants, and joints land within
+4.3e-04 px end to end. `small` `base` and `large` also publish `onnx-fp32`; `huge` does not,
+because its graph does not fit in one protobuf. There is no CoreML — it converts and is correct,
+but it is not faster than torch on MPS.
+
+### 🤸 RF-DETR keypoint-preview
+
+A second answer to the same question, in one variant, at Roboflow's published operating point of
+576×576. `torch-fp32` only.
+
+Its class-id space is its own — background at 0, person at 1 — where the detection variants emit
+COCO's sparse ids running to 90.
+
+### 📦 A task that says it must be told where to look
+
+`pose_estimation` is a task type whose models cannot be asked to go and find something. The
+registry says so once, and `/predict` grows a repeatable `box` parameter that the test UI offers
+for exactly those families. Nothing carries a per-family exception.
+
+### 🎭 ONNX for the segmentation variants
+
+The ten `seg-` variants YOLO11 and YOLO26 shipped in v1.0.1 published `torch-fp32` only. They
+now publish `onnx-fp32` as well — a graph with two outputs, the rows and the prototypes their
+mask coefficients belong to.
+
+They were held back because the export gate could compare boxes, scores and class ids but not
+masks, and publishing on three quarters of the answer would have reported an agreement it had
+not checked. The gate now compares masks by per-detection overlap. Worst figures across the ten:
+1.83e-03 px on boxes, 2.00e-04 on scores, 0.999779 IoU on masks.
+
+Still no CoreML for those two families, and the mask branch does not change that — the `seg-`
+checkpoints are the same backbone with a different head, so they inherit the same Metal compiler
+abort their detection counterparts hit.
+
+### 📖 Documentation
+
+`docs/models.md` gains a ViTPose section covering the crop geometry, the DARK decoding and the
+mixture-of-experts backbone, and states what each YOLO generation publishes.
+
+---
+
 # Mozo v1.0.1: Run a Graph, Not Just a Model
 
 ## What's New in v1.0.1
