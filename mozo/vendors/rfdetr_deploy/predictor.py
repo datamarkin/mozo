@@ -177,7 +177,8 @@ class Predictor:
 
         Returns:
             One dict per input image with ``scores``, ``labels``, and ``boxes`` in source-image pixel coordinates, plus
-            ``masks`` for segmentation variants and ``keypoints`` / ``keypoint_confidence`` for keypoint variants.
+            ``masks`` for segmentation variants and ``keypoints`` / ``keypoint_precision_cholesky`` for keypoint
+            variants.
 
         Examples:
             >>> predictor = Predictor.from_pretrained("rfdetr-small")  # doctest: +SKIP
