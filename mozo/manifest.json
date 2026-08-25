@@ -1475,6 +1475,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov11/seg-large/2026-08-24/onnx-fp32.onnx",
+              "sha256": "d3c03c06aaa9337cd8e98218169d79cf2795a3038317ae323da9968e83783804",
+              "size": 110897414
+            },
             "torch-fp32": {
               "path": "yolov11/seg-large/2026-08-24/torch-fp32.pth",
               "sha256": "cabe90049795dfc9a370b7934d6dec7f6b9e44a20e573b0ff81b7e205512c872",
@@ -1503,6 +1508,11 @@
               "path": "yolov11/seg-medium/2026-08-24/labels.json",
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/seg-medium/2026-08-24/onnx-fp32.onnx",
+              "sha256": "9b7f242f4adb9491419319408a33c82c3de1c8685ad9dfb183d08a8a160d6807",
+              "size": 89855008
             },
             "torch-fp32": {
               "path": "yolov11/seg-medium/2026-08-24/torch-fp32.pth",
@@ -1533,6 +1543,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov11/seg-nano/2026-08-24/onnx-fp32.onnx",
+              "sha256": "32e0625254bcceb032abc9466b772f4d3d88a6097009d225aba9201dd6d20d45",
+              "size": 11723210
+            },
             "torch-fp32": {
               "path": "yolov11/seg-nano/2026-08-24/torch-fp32.pth",
               "sha256": "55ed65c56c91713d23e8402371c6c49a6fd84f257f7dce452e8d70e41dcbe152",
@@ -1562,6 +1577,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov11/seg-small/2026-08-24/onnx-fp32.onnx",
+              "sha256": "477c5edef01604f1ffc198e750c78b2d9559d8e1dabfce511784aae159ab7f95",
+              "size": 40639793
+            },
             "torch-fp32": {
               "path": "yolov11/seg-small/2026-08-24/torch-fp32.pth",
               "sha256": "1caa81c0195412efa411b632bcfb8c184939dddb6ae41f6a80c41b211ff257c3",
@@ -1590,6 +1610,11 @@
               "path": "yolov11/seg-xlarge/2026-08-24/labels.json",
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov11/seg-xlarge/2026-08-24/onnx-fp32.onnx",
+              "sha256": "cdeb78accf33cb237021cacc64f92c8e88b2169935f84655744e263784543013",
+              "size": 248690470
             },
             "torch-fp32": {
               "path": "yolov11/seg-xlarge/2026-08-24/torch-fp32.pth",
@@ -1985,6 +2010,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov26/seg-large/2026-08-24/onnx-fp32.onnx",
+              "sha256": "55470e6d7f36c95419d5d4046eaf039ad3ca73af0e1f63f93a71596fa9022215",
+              "size": 112190378
+            },
             "torch-fp32": {
               "path": "yolov26/seg-large/2026-08-24/torch-fp32.pth",
               "sha256": "636024306410afa1732692322fba57d22ea2b1c2f07613fcee131a93d7dd380c",
@@ -2013,6 +2043,11 @@
               "path": "yolov26/seg-medium/2026-08-24/labels.json",
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/seg-medium/2026-08-24/onnx-fp32.onnx",
+              "sha256": "32efaba4e1f0c7e2329a6d5221aea45425d78891aa119afe11848a2d2c84d2ce",
+              "size": 94565052
             },
             "torch-fp32": {
               "path": "yolov26/seg-medium/2026-08-24/torch-fp32.pth",
@@ -2043,6 +2078,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov26/seg-nano/2026-08-24/onnx-fp32.onnx",
+              "sha256": "1cd1cbf2ce51baadbd97aff26b2f8eaac90bd3b9e11387c6a94545aa1c936b2c",
+              "size": 11172953
+            },
             "torch-fp32": {
               "path": "yolov26/seg-nano/2026-08-24/torch-fp32.pth",
               "sha256": "361fbfabab285c3237700b6bb91d7ecfa602cd945fffda8dbe1242829b71e73f",
@@ -2072,6 +2112,11 @@
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
             },
+            "onnx-fp32": {
+              "path": "yolov26/seg-small/2026-08-24/onnx-fp32.onnx",
+              "sha256": "baaba152c40f1d311e63e519fbd9879d86c32aab8b2abc696a3e31883eaadee4",
+              "size": 41866412
+            },
             "torch-fp32": {
               "path": "yolov26/seg-small/2026-08-24/torch-fp32.pth",
               "sha256": "3da1d83e31caec96f9300eb4064f4f62882c133c7c264d63dfe61a7c197837a4",
@@ -2100,6 +2145,11 @@
               "path": "yolov26/seg-xlarge/2026-08-24/labels.json",
               "sha256": "94a69cf9b9ba18709862419234bfc9eeabee53bbe79f5b7718c3a32fbe861173",
               "size": 2451
+            },
+            "onnx-fp32": {
+              "path": "yolov26/seg-xlarge/2026-08-24/onnx-fp32.onnx",
+              "sha256": "5e29b43ac2649dc020eaac86748a18928e3abee9ea98c456277339221f6f383d",
+              "size": 251605200
             },
             "torch-fp32": {
               "path": "yolov26/seg-xlarge/2026-08-24/torch-fp32.pth",
