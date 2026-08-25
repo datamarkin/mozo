@@ -45,6 +45,29 @@ COCO_VARIANTS = (
     "seg-nano", "seg-small", "seg-medium", "seg-large",
 )
 
+#: COCO's 17 person keypoints, in the order the dataset defines them. Not read from ``rfdetr``:
+#: the package carries no name list, because it reads names out of whichever annotation file it
+#: is trained on and defers to pycocotools for COCO's sigmas. The names therefore come from the
+#: dataset the checkpoint was trained on, which is the same place upstream would have got them.
+#:
+#: Verified against the weights rather than trusted: on a five-person photograph, and counting
+#: only joints the model marks visible, nose sits above both shoulders and eyes above the nose
+#: for 5 of 5 people, shoulders above elbows for 5 of 5, shoulders above hips for the one person
+#: whose hips are in frame, and every ``left_`` joint sits at greater x than its ``right_``
+#: counterpart for all ten pairs in view. A mis-ordered list fails those.
+KEYPOINT_NAMES = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
+]
+
+#: The keypoint preview's class-id space, which is **not** its siblings'. The detection
+#: checkpoints emit COCO's original sparse ids running to 90; this one carries a two-slot head
+#: -- background at 0, person at 1 -- so it emits 1 and nothing else. Publishing the detection
+#: vocabulary here would name a person "bicycle", which is COCO id 2.
+KEYPOINT_VARIANTS = ("keypoint-preview",)
+
 
 def coco_labels() -> list[dict]:
     """Return COCO's 80 categories keyed by their id in the original space.
@@ -63,6 +86,38 @@ def coco_labels() -> list[dict]:
             f"The id mapping no longer applies and must be revisited."
         )
     return [{"id": i, "name": n} for n, i in zip(COCO_CLASS_NAMES, CONTIGUOUS_TO_COCO)]
+
+
+def keypoint_labels() -> list[dict]:
+    """Return the keypoint preview's single category, with its joint names.
+
+    One entry, because the head has one active class. The ``keypoints`` key is what
+    :func:`pixelflow.detections.from_arrays` reads to name a joint, exactly as ``name`` names a
+    class -- so the joint vocabulary travels with the weights on the same mechanism, and nothing
+    downstream has to know which family it came from.
+
+    Each joint is a ``{"name": ...}`` dict rather than a bare string, which is the shape
+    ``pixelflow.labels.get_label_info`` reads. It carries no ``id``: a keypoint's id *is* its
+    position in this list, assigned by the converter from the array index, and writing the number
+    down a second time would create a second source for one fact and no check that they agree.
+
+    Raises:
+        SystemExit: If the vendored spec no longer declares as many joints as there are names
+            here, which would mean this list has stopped describing the head it names.
+    """
+    # The same guard :func:`coco_labels` puts on the class count, on the fact this file states.
+    # The count is declared in-repo, so checking it costs nothing -- and a names list one entry
+    # out would publish silently and mislabel every joint after the gap.
+    from mozo.vendors.rfdetr_deploy import get_spec
+
+    declared = get_spec("rfdetr-keypoint-preview").num_keypoints_per_class
+    if max(declared, default=0) != len(KEYPOINT_NAMES):
+        raise SystemExit(
+            f"the spec declares {max(declared, default=0)} keypoints and this file names "
+            f"{len(KEYPOINT_NAMES)}. The names no longer describe the head."
+        )
+    return [{"id": 1, "name": "person",
+             "keypoints": [{"name": name} for name in KEYPOINT_NAMES]}]
 
 
 def write(variant: str, labels: list[dict], weights_dir: Path) -> None:
@@ -90,6 +145,10 @@ def main() -> int:
     labels = coco_labels()
     for variant in COCO_VARIANTS:
         write(variant, labels, args.weights_dir)
+
+    keypoints = keypoint_labels()
+    for variant in KEYPOINT_VARIANTS:
+        write(variant, keypoints, args.weights_dir)
 
     print("\nRun tools/generate_manifest.py to pick these up.")
     return 0
