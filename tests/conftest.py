@@ -50,6 +50,36 @@ def require_weights(family: str, variant: str, runtime: str = "torch-fp32") -> N
         pytest.skip(f"{family}/{variant} does not publish {runtime}")
 
 
+def weights_are_here(family: str, variant: str, runtime: str = "torch-fp32") -> bool:
+    """Whether the *bytes* for *runtime* can be obtained, which :func:`published` does not answer.
+
+    A test that builds a predictor itself catches :class:`~mozo.weights.WeightsError` and skips,
+    which is why :func:`require_weights` only has to answer the manifest's question. A test that
+    runs a model *through a workflow* cannot: the engine reports a node's failure as an event
+    carrying the message as a string, so by the time the caller sees it there is no exception left
+    to catch and the run fails instead of skipping. Resolving the artifact here is where that
+    exception still exists.
+
+    Returns a verdict rather than skipping so a caller can record the absence before skipping on
+    it; :func:`require_present` is the plain form.
+    """
+    from mozo.weights import WeightsError, resolve
+
+    if runtime not in published(family, variant):
+        return False
+    try:
+        resolve(family, variant, runtime)
+    except (WeightsError, FileNotFoundError):
+        return False
+    return True
+
+
+def require_present(family: str, variant: str, runtime: str = "torch-fp32") -> None:
+    """Skip unless the bytes are here, not merely published. See :func:`weights_are_here`."""
+    if not weights_are_here(family, variant, runtime):
+        pytest.skip(f"{family}/{variant} weights are not here")
+
+
 def _forget_deployment() -> None:
     """Drop ``mozo.server``'s memo of ``MOZO_ENABLE``, if the module has been imported.
 
