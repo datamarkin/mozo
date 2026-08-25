@@ -35,7 +35,14 @@ BOX_TOLERANCE = 9 * COORD_STEP
 
 DETECTION = ["nano", "small", "medium", "large"]
 SEGMENTATION = ["seg-nano", "seg-small", "seg-medium", "seg-large"]
+#: Deliberately outside ``ALL``. The keypoint preview publishes no graph artifact, and its head
+#: has its own two-slot class space rather than COCO's -- so the sweeps that assert torch/ONNX
+#: agreement and COCO's vocabulary would both be asking it the wrong question.
+KEYPOINT = ["keypoint-preview"]
 ALL = DETECTION + SEGMENTATION
+
+#: COCO's person keypoints, in the order the published ``labels.json`` names them.
+JOINTS = 17
 
 #: The scene in the fixture, as ids in COCO's original space. A model that reads this photograph
 #: as anything else has either regressed or been given the wrong vocabulary.
@@ -103,11 +110,76 @@ class TestDetections:
         detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
         assert detections[0].masks is not None
         assert detections[0].masks[0].shape[:2] == image.shape[:2]
+        assert not detections[0].keypoints
 
     @pytest.mark.parametrize("variant", DETECTION)
     def test_detection_variants_return_no_masks(self, predictor_for, image, variant):
+        """And no joints either -- the uniformity that lets one result type serve the family.
+
+        A variant without a head for something returns that field unset rather than empty or
+        zero-filled, so a caller reads one type and asks what is on it. Asserted here and in the
+        segmentation sweep above rather than in a third sweep of its own: ``predictor_for`` drops
+        its cache whenever the variant changes, so a separate parametrisation over the same eight
+        variants would reload eight checkpoints to assert one more thing about them.
+        """
         require_weights("rfdetr", variant, "torch-fp32")
-        assert predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)[0].masks is None
+        detections = predictor_for(variant, "torch-fp32").predict(image, threshold=THRESHOLD)
+        assert detections[0].masks is None
+        assert not detections[0].keypoints
+
+
+class TestKeypoints:
+    """The one variant that answers where a person's joints are."""
+
+    @pytest.mark.parametrize("variant", KEYPOINT)
+    def test_publishes_torch_only(self, variant):
+        """No graph artifact, and ``EXECUTES`` is not the reason -- the adapter runs ONNX happily
+        for its siblings. The dual-projector graph has simply never been exported, so ``auto``
+        must not be able to offer one. If an export ever lands, this is the reminder that the
+        runtime-agreement sweep should gain this variant at the same time.
+        """
+        keys = published("rfdetr", variant)
+        if not keys:
+            pytest.skip(f"rfdetr/{variant} is not in the manifest")
+        assert sorted(keys) == ["labels", "torch-fp32"]
+
+    def test_returns_seventeen_named_joints(self, predictor_for, image):
+        require_weights("rfdetr", "keypoint-preview", "torch-fp32")
+        detections = predictor_for("keypoint-preview", "torch-fp32").predict(image, threshold=THRESHOLD)
+        assert len(detections) > 0
+        for detection in detections:
+            assert len(detection.keypoints) == JOINTS
+        first = detections[0].keypoints
+        assert [k.id for k in first] == list(range(JOINTS))
+        assert first[0].name == "nose"
+        assert first[-1].name == "right_ankle"
+
+    def test_its_class_space_is_its_own(self, predictor_for, image):
+        """Two slots -- background at 0, person at 1 -- not COCO's sparse ids running to 90.
+
+        The number happens to coincide with COCO's ``person``, which is exactly why it is worth
+        pinning: publishing the detection vocabulary here would still name id 1 "person" and be
+        wrong about every other id it claimed to know.
+        """
+        require_weights("rfdetr", "keypoint-preview", "torch-fp32")
+        detections = predictor_for("keypoint-preview", "torch-fp32").predict(image, threshold=THRESHOLD)
+        assert {d.class_id for d in detections} == {1}
+        assert {d.class_name for d in detections} == {"person"}
+
+    def test_an_unseen_joint_keeps_its_slot(self, predictor_for, image):
+        """Upstream's behaviour, reproduced rather than tidied.
+
+        The fixture crops at the hips, so the lower-body joints are not in the photograph. They
+        come back anyway, at a confidence near zero and at coordinates that mean nothing -- because
+        a joint's index *is* its identity, and dropping the invisible ones would renumber the rest.
+        """
+        require_weights("rfdetr", "keypoint-preview", "torch-fp32")
+        detections = predictor_for("keypoint-preview", "torch-fp32").predict(image, threshold=THRESHOLD)
+        joints = detections[0].keypoints
+        assert len(joints) == JOINTS
+        by_name = {k.name: k for k in joints}
+        assert by_name["nose"].confidence > 0.5
+        assert by_name["left_ankle"].confidence < 0.1
 
 
 class TestRuntimeAgreement:
@@ -197,3 +269,16 @@ class TestRegistry:
         assert entry["adapter_class"] == RFDETRPredictor.__name__
         assert entry["module"] == "mozo.adapters.rfdetr"
         assert set(entry["variants"]) == set(RFDETRPredictor.VARIANTS)
+
+    def test_the_sweeps_between_them_cover_every_variant(self):
+        """``ALL`` is a hand-kept subset now, so something has to notice what falls outside it.
+
+        It used to be the whole family, and a variant added to the adapter was swept by everything
+        in this file for free. ``KEYPOINT`` is deliberately outside it -- the torch/ONNX agreement
+        and COCO-vocabulary sweeps would be asking that variant the wrong question -- but the cost
+        of splitting the list is that a *tenth* variant could now be tested by nothing at all and
+        no test would fail. This is what makes the split safe rather than a hole.
+        """
+        from mozo.adapters.rfdetr import RFDETRPredictor
+
+        assert set(DETECTION + SEGMENTATION + KEYPOINT) == set(RFDETRPredictor.VARIANTS)
