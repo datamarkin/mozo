@@ -29,7 +29,7 @@ from . import __version__, _shared
 from .depth import encode as encode_depth
 from .text import comma_separated
 from .image import load_image
-from .registry import ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
+from .registry import BOXED, ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
 from .workflow.api import router as workflow_router
 
 app = FastAPI(
@@ -302,9 +302,11 @@ def predict(
                     "same order. Required with ?point= -- guessing between include and exclude "
                     "returns a confident mask of the wrong thing.",
     ),
-    box: Optional[str] = Query(
+    box: Optional[List[str]] = Query(
         None,
-        description="A box, as x1,y1,x2,y2 in the image's own pixels, for promptable models.",
+        description="A box, as x1,y1,x2,y2 in the image's own pixels. Repeat it for several. "
+                    "Promptable models segment what each one contains; pose models find the "
+                    "joints of the person inside each one.",
     ),
     name: Optional[str] = Query(
         None,
@@ -337,7 +339,8 @@ def predict(
         point: A click, as ``x,y`` in the image's own pixels, for promptable models. Repeatable.
         label: ``1`` to include the matching *point*, ``0`` to exclude it. One per point, in the
             same order, and required with them.
-        box: A box, as ``x1,y1,x2,y2`` in the image's own pixels, for promptable models.
+        box: A box, as ``x1,y1,x2,y2`` in the image's own pixels. Repeatable. Promptable models
+            segment inside it; pose models find the joints of the person inside it.
         name: What to call what was pointed at. Omitted, detections carry ``class_name=null``.
         multimask: Return three candidate masks ranked by predicted IoU rather than one.
 
@@ -366,9 +369,29 @@ def predict(
     # Same reasoning as above: settled before the image is decoded and the weights are loaded,
     # because a forgotten prompt should not cost a multi-gigabyte load to be told about. Parsed
     # here as well as checked, so the adapter is handed numbers rather than strings.
-    points = marks = corners = None
+    # Both coordinate parameters are parsed once, whatever the task, so their format and the
+    # wording of a bad one are stated in a single place. What each task *requires* differs, and
+    # that is all the branches below carry.
+    marks = None
+    try:
+        points = [_coordinates(p, 2, "point") for p in point] if point else None
+        corners = [_coordinates(one, 4, "box") for one in box] if box else None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if task in BOXED and not corners:
+        # This model is told where the subjects are, so being told nothing is a caller's mistake
+        # rather than an empty frame. An empty result is a different thing and is answered with
+        # one, once the boxes have at least been offered.
+        raise HTTPException(
+            status_code=400,
+            detail=f"{family} works from boxes it is given: pass ?box=x1,y1,x2,y2 for each "
+                   "subject, repeating it for several. It has no detector of its own, so run "
+                   "one first and send its boxes.",
+        )
+
     if task == "promptable_segmentation":
-        if not point and box is None:
+        if not points and not corners:
             raise HTTPException(
                 status_code=400,
                 detail=f"{family} is promptable: point at something. Pass ?point=x,y with a "
@@ -380,11 +403,6 @@ def predict(
                 detail=f"{len(point or [])} point(s) and {len(label or [])} label(s): give one "
                        "?label= per ?point=, 1 to include it and 0 to exclude it.",
             )
-        try:
-            points = [_coordinates(p, 2, "point") for p in point] if point else None
-            corners = _coordinates(box, 4, "box") if box is not None else None
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
         marks = list(label) if label else None
 
     # Decode through the same function the Python API uses, so both entry points agree on
@@ -419,6 +437,20 @@ def predict(
                 image, points=points, labels=marks, boxes=corners,
                 multimask_output=multimask, name=name,
             ).to_dict())
+        if task in BOXED:
+            # The adapter takes detections, not boxes, because the answer is those detections with
+            # joints added -- so over HTTP the boxes become the minimal detections that says so.
+            # A caller who already has a detector's output keeps its class names and tracker ids
+            # by using the Python API; this endpoint carries neither over a query string.
+            #
+            # Built row by row rather than through ``from_arrays``, which requires a score. A box
+            # typed into a URL has no confidence, and 1.0 would be a number nothing predicted.
+            import pixelflow as pf
+
+            subjects = pf.detections.Detections()
+            for one in corners:
+                subjects.add_detection(pf.Detection(bbox=one))
+            return JSONResponse(content=model.predict(image, subjects).to_dict())
         if task == "text_recognition":
             return JSONResponse(content=model.predict(image).to_dict())
         if task == "depth_estimation":
@@ -552,6 +584,9 @@ def list_models():
             # rather than restated: the browser page needs both and cannot import the registry,
             # and a copy it keeps in step by hand is a copy that drifts.
             "prompted": entry["task_type"] in PROMPTED,
+            # Whether this family has to be told where to look. The page draws a box on the
+            # picture for these, and the endpoint refuses without one.
+            "boxed": entry["task_type"] in BOXED,
             # What /encode will accept, if anything. Empty for almost every family, and the only
             # way to discover the second route without calling it and reading a 501 back.
             "encodes": sorted(ENCODES.get(family, ())),

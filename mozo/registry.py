@@ -15,7 +15,7 @@ To add a family: add an entry below, and give its adapter the same ``VARIANTS``.
 
 from __future__ import annotations
 
-__all__ = ["ENCODES", "MODEL_REGISTRY", "PROMPTED", "get_model_info"]
+__all__ = ["BOXED", "ENCODES", "MODEL_REGISTRY", "PROMPTED", "get_model_info"]
 
 from typing import Any
 
@@ -26,6 +26,19 @@ from typing import Any
 #: endpoint and the tests both read it from here rather than keeping copies in step.
 PROMPTED = frozenset({
     "concept_segmentation", "open_vocabulary_detection", "zero_shot_classification"})
+
+#: Task types whose model is told *where* to look and cannot answer without being told. A
+#: top-down pose model has no detector: it is handed a person's box and returns their joints, so
+#: a request with no box is a mistake rather than an empty frame.
+#:
+#: Named here for the same reason PROMPTED is, and it is the same shape of fact: the endpoint has
+#: to refuse before the image decode and the multi-gigabyte load, and the browser page has to know
+#: which families need boxes drawn on the picture before it can offer the control. Neither can be
+#: derived from the task name by a reader who does not already know.
+#:
+#: Distinct from promptable segmentation, which *accepts* a box and equally accepts a click. This
+#: is the set that requires one.
+BOXED = frozenset({"pose_estimation"})
 
 #: What each family can encode, and from what. A family absent from here does not encode at all.
 #:

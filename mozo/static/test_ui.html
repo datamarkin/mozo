@@ -177,6 +177,9 @@ button:focus-visible {
 
 .group { display: none; }
 .group.on { display: block; }
+/* A group that is a row keeps its row when shown. `show()` toggles one class, so the layout
+   a hidden element goes back to has to be stated where the display rule is. */
+.toggle.group.on { display: flex; }
 
 /* --- Buttons ------------------------------------------------------------- */
 
@@ -527,7 +530,7 @@ canvas.picking { cursor: crosshair; }
 
       <div class="field group" id="group-prompt">
         <span class="legend">Prompt</span>
-        <div class="toggle" id="prompt-mode">
+        <div class="toggle group" id="prompt-mode">
           <button type="button" data-mode="include" aria-pressed="true">Include</button>
           <button type="button" data-mode="exclude" aria-pressed="false">Exclude</button>
           <button type="button" data-mode="box" aria-pressed="false">Box</button>
@@ -684,17 +687,25 @@ function onFamily() {
 
   const task = entry.task_type;
   const promptable = task === "promptable_segmentation";
+  // Told where to look rather than asked what to look for. It draws a box like a promptable
+  // model and shares that control, but it takes no clicks and names nothing, so the rest of
+  // the prompt panel stays hidden. Read from the served flag rather than matched on the task
+  // name -- the server decides which families need this, and a copy here would drift.
+  const boxed = entry.boxed;
+  if (boxed) state.mode = "box";
   // A floor is the point for a detector, and wrong for a classifier: dropping a phrase below
   // it drops a class, and a classifier that drops a class has not classified.
   show("group-threshold",
        (task === "object_detection" || entry.prompted) && task !== "zero_shot_classification");
   show("group-text", entry.prompted);
-  show("group-prompt", promptable);
+  show("group-prompt", promptable || boxed);
+  show("prompt-mode", promptable);
   show("group-name", promptable);
   show("group-multimask", promptable);
-  canvas.classList.toggle("picking", promptable);
+  canvas.classList.toggle("picking", promptable || boxed);
 
-  if (!promptable) { state.points = []; state.box = null; drawPromptChips(); }
+  if (!promptable && !boxed) { state.points = []; state.box = null; drawPromptChips(); }
+  if (boxed) { state.points = []; drawPromptChips(); }
 
   // What is on the stage belongs to the model that produced it. Leaving it up
   // while the panel names a different one would credit these boxes to a family
@@ -705,6 +716,8 @@ function onFamily() {
 
 const show = (id, on) => $(id).classList.toggle("on", on);
 const task = () => state.catalogue[$("family").value]?.task_type;
+const boxed = () => Boolean(state.catalogue[$("family").value]?.boxed);
+const placesBox = () => task() === "promptable_segmentation" || boxed();
 // Served by /models rather than listed here: which tasks want ?text= is the
 // registry's to say, and a copy kept in step by hand is a copy that drifts.
 const prompted = () => state.catalogue[$("family").value]?.prompted;
@@ -757,6 +770,16 @@ async function run() {
       return;
     }
     for (const t of state.texts) params.append("text", t);
+  }
+  if (boxed()) {
+    if (!state.box) {
+      showStatus("failed", "This model needs a box",
+        `${family} has no detector of its own — drag a box round the subject and run again.`);
+      return;
+    }
+    const b = state.box;
+    // Appended rather than set: ?box= repeats, one per subject, and the endpoint poses each.
+    params.append("box", [b.x1, b.y1, b.x2, b.y2].map(Math.round).join(","));
   }
   if (current === "promptable_segmentation") {
     if (!state.points.length && !state.box) {
@@ -1362,7 +1385,7 @@ canvas.addEventListener("mousemove", (e) => {
 canvas.addEventListener("mouseleave", () => { if (state.pinned < 0) light(-1, false); });
 
 canvas.addEventListener("mousedown", (e) => {
-  if (task() !== "promptable_segmentation" || state.mode !== "box" || !state.placement) return;
+  if (!placesBox() || state.mode !== "box" || !state.placement) return;
   const box = canvas.getBoundingClientRect();
   const p = state.placement;
   const x = clamp((e.clientX - box.left - p.ox) / p.scale, 0, p.w);
