@@ -601,6 +601,30 @@
         }
       }
     },
+    "rfdetr/keypoint-preview": {
+      "latest": "2026-08-25",
+      "revisions": {
+        "2026-08-25": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "rfdetr/keypoint-preview/2026-08-25/LICENSE",
+              "sha256": "8cabf52c61130fc97a7e5da5e3685ccf44841c0c53d6f881189369b136603cca",
+              "size": 11345
+            },
+            "labels": {
+              "path": "rfdetr/keypoint-preview/2026-08-25/labels.json",
+              "sha256": "29b7eab6ced1f2bf2962052930ede62af683adc4aff8766bc31534ef0b75249f",
+              "size": 847
+            },
+            "torch-fp32": {
+              "path": "rfdetr/keypoint-preview/2026-08-25/torch-fp32.pth",
+              "sha256": "2b70ddf51d2b9e026b340030c7d9bd2cdca2532d081ec16fce8d1695b0ce6d98",
+              "size": 163696618
+            }
+          }
+        }
+      }
+    },
     "rfdetr/large": {
       "latest": "2026-08-18",
       "revisions": {

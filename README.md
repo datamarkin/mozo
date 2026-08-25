@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/mozo)](https://pypi.org/project/mozo/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-### 73 computer vision models, and the workflows that run them.
+### 74 computer vision models, and the workflows that run them.
 
 One `pip install`. No dependency hell. Runs models, executes workflows, and builds them.
 
@@ -15,7 +15,7 @@ few in one environment and something breaks. The usual escape is a container per
 paying for that forever.
 
 Mozo ships none of them. Every model's inference path is vendored into mozo itself and verified
-**bit-identical** to the original implementation — so one environment runs all 73, and gives
+**bit-identical** to the original implementation — so one environment runs all 74, and gives
 you the original's exact numbers rather than something close.
 
 ```bash
@@ -58,6 +58,16 @@ variant is what decides whether masks come back, so nothing else about the reque
 | `yolov26` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch |
 
 Returns detections carrying a boolean mask each, at the source image's resolution.
+
+### Keypoints
+
+| Family | Variants | Weights licence | Runtimes |
+|---|---|---|---|
+| `rfdetr` | `keypoint-preview` | Apache-2.0 | torch |
+
+Returns detections carrying COCO's 17 person joints each, as `(x, y, confidence)` in source-image
+pixels. A joint the model cannot see comes back with a confidence near zero and coordinates that
+mean nothing — read the confidence before the position.
 
 ### Text-prompted
 
@@ -176,7 +186,7 @@ Trimmed for reading. The real response carries every PixelFlow field on every de
 The catalogue is answerable without loading anything:
 
 ```bash
-curl http://localhost:8000/models          # all 73, no torch import, no weights
+curl http://localhost:8000/models          # all 74, no torch import, no weights
 curl http://localhost:8000/models/loaded   # what is resident right now
 ```
 
@@ -225,7 +235,7 @@ mozo start        # then open http://localhost:8000/test-ui
 
 ![The mozo test UI](docs/test-ui.png)
 
-Pick any of the 73, run it on your own image, and see the response two ways at once: drawn on
+Pick any of the 74, run it on your own image, and see the response two ways at once: drawn on
 the image, and as the raw PixelFlow record. Hovering a box lights its row and its JSON, so when
 something lands somewhere surprising its numbers are one click away.
 
@@ -453,7 +463,7 @@ things about it are yours to arrange:
 - **No batching.** One image per forward, which is what keeps results bit-identical.
 - **No model conversion.** ONNX and CoreML artifacts are published where a family exports
   cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
-- **It is not a model hub.** The catalogue is a curated 73, chosen because each one could be
+- **It is not a model hub.** The catalogue is a curated 74, chosen because each one could be
   extracted and verified. Growth is deliberate and slow.
 
 ## Extending
@@ -503,7 +513,7 @@ cd ui && npm install && npm run build   # writes mozo/workflow/static/
 
 Mozo's own code is **Apache-2.0**, and so is every vendored extraction under `mozo/vendors/`.
 
-The weights are separate works travelling with it. Of the 73 published variants, **36 are
+The weights are separate works travelling with it. Of the 74 published variants, **37 are
 Apache-2.0**, 30 are **AGPL-3.0** (every YOLO variant), 4 are **MIT** (CLIP), 2 are
 **CC-BY-NC-4.0** (Depth Anything `base` and `large`), and 1 carries Meta's **SAM License**
 (SAM 3). The full licence and a NOTICE
@@ -522,7 +532,7 @@ depth_anything_v2/indoor-large,depth_anything_v2/outdoor-small,\
 depth_anything_v2/outdoor-base,depth_anything_v2/outdoor-large
 ```
 
-That is the 40 Apache-2.0 and MIT variants, and it stays 40 through an upgrade that adds
+That is the 41 Apache-2.0 and MIT variants, and it stays 41 through an upgrade that adds
 families — which a list of what to *exclude* would not. Depth Anything is named variant by variant
 because it is the one family whose licence is not uniform: seven of its nine are Apache-2.0 and
 two are CC-BY-NC-4.0.

@@ -24,6 +24,31 @@ Class names ship with the weights, so they are the vocabulary the checkpoint was
 rather than an assumption. A checkpoint of your own that carries no names returns `class_id`
 with `class_name` unset — pass `labels=[...]` to name them. Mozo never guesses a name.
 
+**`keypoint-preview` returns person joints.** One variant, because Roboflow published one
+operating point: 576×576, and 71.8 keypoint AP on COCO at 9.8 ms on a T4 under TensorRT FP16 by
+their measurement.
+
+```python
+model = mozo.get_model("rfdetr/keypoint-preview")
+found = model.predict("crowd.jpg", threshold=0.5)
+found[0].keypoints[0]      # KeyPoint(id=0, name='nose', x=..., y=..., confidence=...)
+```
+
+Seventeen joints per detection in COCO's order, each `(x, y, confidence)` in source-image pixels,
+named from the published `labels.json` the same way class names are. **A joint the model cannot see
+still occupies its slot** — it comes back with a confidence near zero and coordinates that mean
+nothing, so filter on the confidence before reading a position. That is upstream's behaviour and it
+is reproduced rather than tidied: dropping the invisible joints would renumber the rest, and the
+index *is* the joint's identity.
+
+Two things differ from its siblings. Its class-id space is its own — a two-slot head, background at
+0 and person at 1 — where the detection variants emit COCO's sparse ids running to 90. And it
+publishes `torch-fp32` only, so `runtime="auto"` gives you torch and asking for ONNX says so.
+
+The head also predicts a per-joint precision-Cholesky, an uncertainty ellipse rather than a score.
+Mozo does not return it: there is nothing in a `Detections` that carries one, and reducing it to a
+single number the model never predicted would be worse than leaving it out.
+
 ## YOLOv8, YOLO11, YOLO12, YOLO26
 
 Real-time detection by Ultralytics. Five sizes each: `nano` `small` `medium` `large` `xlarge`.

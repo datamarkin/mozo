@@ -1,4 +1,4 @@
-"""RF-DETR detection and instance segmentation, on whichever runtime the host can execute.
+"""RF-DETR detection, instance segmentation and keypoints, on whichever runtime the host can execute.
 
 The architecture lives in :mod:`mozo.vendors.rfdetr_deploy`, extracted from Roboflow's research
 repository and reduced to inference. The weights come from :func:`mozo.weights.resolve`. Which of
@@ -52,8 +52,8 @@ class RFDETRPredictor:
     """One loaded RF-DETR variant, ready to run.
 
     Args:
-        variant: A published variant -- ``nano``, ``small``, ``medium``, ``large``, or their
-            ``seg-`` counterparts.
+        variant: A published variant -- ``nano``, ``small``, ``medium``, ``large``, their
+            ``seg-`` counterparts, or ``keypoint-preview``.
         device: Where to run. Defaults to the best device this machine has.
         runtime: Which published artifact to execute -- ``"torch-fp32"``, ``"onnx-fp32"`` or
             ``"coreml-fp32"``. ``"auto"`` takes the best one published for the device.
@@ -77,6 +77,7 @@ class RFDETRPredictor:
     VARIANTS = (
         "nano", "small", "medium", "large",
         "seg-nano", "seg-small", "seg-medium", "seg-large",
+        "keypoint-preview",
     )
 
     def __init__(
@@ -171,7 +172,10 @@ class RFDETRPredictor:
             labels: Class names for this call only, overriding the adapter's.
 
         Returns:
-            A PixelFlow ``Detections``. Segmentation variants carry masks as well as boxes.
+            A PixelFlow ``Detections``. Segmentation variants carry masks as well as boxes, and
+            the keypoint variant carries ``(K, 3)`` joints per detection as ``(x, y, confidence)``.
+            A joint the model cannot see is returned with a confidence near zero and coordinates
+            that mean nothing -- filter on the confidence before reading the position.
         """
         # The vendor wants RGB and mozo's contract already is RGB, so nothing is converted here.
         # This used to flip BGR->RGB with ``np.ascontiguousarray(image[..., ::-1])``, which cost
@@ -191,6 +195,17 @@ class RFDETRPredictor:
             outputs, target_sizes=torch.tensor(sizes, device=batch.device), score_threshold=threshold
         )
         result = results[0]
+        # Dropped before the filter below, not after: the keypoint path ignores the threshold it
+        # was passed -- it rewrites scores after selection, so filtering on the pre-fusion ones
+        # would not match this caller's -- and hands back all ``num_select`` rows. Keeping this
+        # key would gather a (100, 17, 3) tensor down to the handful above threshold on every
+        # call, to discard it two statements later.
+        #
+        # It is a per-joint uncertainty ellipse rather than a score, and nothing downstream can
+        # consume one. Flattening it into a number the model never predicted would be an
+        # invention, so it goes rather than being reshaped into something that looks like data.
+        result.pop("keypoint_precision_cholesky", None)
+
         keep = result["scores"] > threshold
         if not bool(keep.all()):
             # The mask path is already filtered inside postprocess, precisely so masks below
@@ -205,10 +220,13 @@ class RFDETRPredictor:
         if self.device == "mps" and self._runner is None:
             torch.mps.empty_cache()
 
+        # The vendor already emits (N, K, 3) as (x, y, confidence), which is the shape
+        # ``from_arrays`` reads, so this is a hand-over rather than a conversion.
         return pf.detections.from_arrays(
             boxes=result["boxes"],
             scores=result["scores"],
             class_ids=result["labels"],
             masks=masks,
+            keypoints=result.get("keypoints"),
             labels=labels if labels is not None else self._labels,
         )
