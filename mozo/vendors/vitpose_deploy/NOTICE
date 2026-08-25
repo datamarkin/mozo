@@ -1,0 +1,34 @@
+vitpose_deploy
+Copyright 2022 The University of Sydney.
+Copyright 2024 The HuggingFace Inc. team.
+
+This product includes software developed at the University of Sydney, published
+as ViTPose (https://github.com/ViTAE-Transformer/ViTPose) and described in
+"ViTPose: Simple Vision Transformer Baselines for Human Pose Estimation" (Xu,
+Zhang, Zhang, Tao; NeurIPS 2022, arXiv:2204.12484) and its extension "ViTPose++:
+Vision Transformer for Generic Body Pose Estimation" (TPAMI 2023,
+arXiv:2212.04246).
+
+The authors' own release is built on mmpose (OpenMMLab, Apache-2.0). The modules
+here are extracted from the PyTorch implementation that HuggingFace publishes as
+transformers/models/vitpose and transformers/models/vitpose_backbone, which is
+licensed under the Apache License, Version 2.0; see the LICENSE file in this
+directory, which is the Apache-2.0 text those projects publish. HuggingFace
+prepends its own copyright line to that file; the line is reproduced above rather
+than inside the licence text, which is where the other extractions here keep it.
+
+The published checkpoints are Apache-2.0 as well -- all seven of them, code and
+model weights under the same terms. Nothing in this family carries a separate
+weights licence.
+
+The joint names in the published labels.json are COCO's own, from the
+person_keypoints annotations (Creative Commons Attribution 4.0). Seventeen names
+for seventeen channels is not a creative work, and they are reproduced here
+because they are what the checkpoint's head was trained against.
+
+NOT INCLUDED
+------------
+Training, evaluation and the flip-test augmentation are not part of this package.
+Neither is the simple decoder, nor the single-expert MLP that the original
+ViTPose used -- no published variant here takes either branch. See PROVENANCE.md
+for the full list and for why.
