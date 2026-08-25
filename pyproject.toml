@@ -5,7 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mozo"
 dynamic = ["version"]
-description = "Universal computer vision model serving library with dynamic model management and PixelFlow integration"
+# The line PyPI puts in its search results and at the top of the project page. It states no
+# count: this string is baked into every wheel at build time, so a number here would be right
+# on the day of the release and wrong on every page of it afterwards.
+description = "Run several computer vision models or a graph of them from one pip install, with the original's exact numbers."
 readme = "README.md"
 authors = [
     { name = "Emrah NAZIF", email = "emrah@datamarkin.com" },
@@ -13,14 +16,26 @@ authors = [
 ]
 license = { text = "Apache-2.0" }
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+]
+# What someone searching PyPI would type. Tasks first, because that is what a person looks for;
+# then the families and runtimes, because that is what they look for once they know what exists.
+keywords = [
+    "computer-vision", "object-detection", "instance-segmentation", "image-segmentation",
+    "depth-estimation", "ocr", "zero-shot-classification", "embeddings", "image-recognition",
+    "inference", "model-serving", "model-zoo", "workflow",
+    "pytorch", "onnx", "coreml", "yolo", "clip", "sam", "rf-detr", "fastapi",
 ]
 requires-python = ">=3.9"
 dependencies = [
@@ -67,6 +82,8 @@ mozo = "mozo.cli:cli"
 
 [project.urls]
 "Homepage" = "https://github.com/datamarkin/mozo"
+"Documentation" = "https://github.com/datamarkin/mozo/blob/main/docs/README.md"
+"Release Notes" = "https://github.com/datamarkin/mozo/releases"
 "Bug Tracker" = "https://github.com/datamarkin/mozo/issues"
 
 [tool.setuptools.packages.find]
