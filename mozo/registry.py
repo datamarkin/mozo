@@ -142,13 +142,15 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
         'module': 'mozo.adapters.rfdetr',
         'task_type': 'object_detection',
         'description': (
-            'RF-DETR by Roboflow — real-time transformer detection & instance segmentation. '
-            '4 detection variants (nano/small/medium/large) and 4 segmentation variants '
-            '(seg-nano/seg-small/seg-medium/seg-large). All variants Apache 2.0 licensed.'
+            'RF-DETR by Roboflow — real-time transformer detection, instance segmentation & '
+            'keypoints. 4 detection variants (nano/small/medium/large), 4 segmentation variants '
+            '(seg-nano/seg-small/seg-medium/seg-large), and keypoint-preview, which returns '
+            "COCO's 17 person joints. All variants Apache 2.0 licensed."
         ),
         'variants': [
             'nano', 'small', 'medium', 'large',
             'seg-nano', 'seg-small', 'seg-medium', 'seg-large',
+            'keypoint-preview',
         ],
     },
 
