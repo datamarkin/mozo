@@ -7,6 +7,13 @@
 The machinery is ``tools/export/_detection.py``, shared with the other detection families. What is
 specific to YOLO11 is that it publishes **no CoreML**, and why.
 
+A ``seg-`` variant's graph has two outputs -- the raw head with ``nm`` mask coefficient rows
+appended, and the ``(1, nm, 160, 160)`` prototypes those rows are coefficients of. Everything else
+about the export is the same, and so is everything about the CoreML answer below: the segmentation
+checkpoints are the same twenty-three layers with ``Segment`` in place of ``Detect``, ``C2PSA``
+included, so they inherit the abort rather than escaping it. Confirmed rather than assumed --
+``seg-nano`` converts, and aborts on ``ComputeUnit.ALL`` with the identical assertion.
+
 Converting the full network produces a package that aborts the process when it runs::
 
     MPSGraphExecutable.mm:5070: failed assertion 'Error: MLIR pass manager failed'
@@ -21,7 +28,8 @@ area-attention blocks are a different design, converts cleanly.
 
 Restricting compute units to CPU and the Neural Engine does produce a working, accurate package --
 0.0002 px -- but at 23.5 ms against 10.4 ms for torch on MPS, so there is nothing to gain even
-where it is safe. Nothing in ``mozo/runtimes.py`` special-cases this: ``auto`` only ever chooses
+where it is safe. ``seg-nano`` on the same units runs in 37 ms, so the mask branch does not change
+that conclusion either. Nothing in ``mozo/runtimes.py`` special-cases this: ``auto`` only ever chooses
 among what a variant publishes, and this family publishes no CoreML.
 
 **No fp16 either.** Those measurements were taken on the CoreML path this family does not have, so

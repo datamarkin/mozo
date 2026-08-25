@@ -9,7 +9,9 @@ Every export is checked against the torch model it came from before it is writte
 disagrees is not published: a silent numerical divergence between two artifacts of the same model
 is the one failure this whole scheme exists to prevent. The check compares *detections* on real
 photographs rather than raw tensors -- what matters is that the two artifacts find the same
-objects in the same places, and a tensor tolerance measures kernel arithmetic instead.
+objects in the same places, and a tensor tolerance measures kernel arithmetic instead. A
+segmentation checkpoint is compared on its masks too, by overlap: it answers with four things and
+checking three of them would report an agreement it had not looked for.
 
 Shared rather than copied per family, for the same reason ``tools/verify/_detection.py`` is: this
 is a publication gate, and a stale second copy keeps writing artifacts while checking something
@@ -18,15 +20,18 @@ their own exporter, a fix that decoded the fixture photographs once per run inst
 variant was made in one of them and never reached the other two, so two of the three re-decoded
 every photograph five times while carrying a comment saying they did not.
 
-The families differ in two things, both booleans. Whether they publish CoreML -- YOLOv8 and YOLO12
+The families differ in three things, all booleans. Whether they publish CoreML -- YOLOv8 and YOLO12
 do; YOLO11 and YOLO26 do not, both because of the ``C2PSA`` block that makes Apple's Metal graph
-compiler abort the process rather than raise. And whether their head is end-to-end: YOLO26's graph
+compiler abort the process rather than raise. Whether their head is end-to-end: YOLO26's graph
 carries its own decode and top-k and returns a detection list, where the others return a raw head
-that still needs suppression. The reasoning behind each family's answer stays in that family's own
-module, where someone attempting the conversion would look.
+that still needs suppression. And whether the checkpoint has a mask branch, which decides whether
+the graph has one output or two. The reasoning behind each family's answer stays in that family's
+own module, where someone attempting the conversion would look.
 
-The second one is read from the model rather than passed in, because the vendor already validated
-it against the checkpoint and a fact with one source cannot disagree with itself.
+Only the first is passed in. The other two are read off the network -- ``end2end`` and ``nm``,
+which both vendors record -- because the vendor already validated them against the checkpoint and
+a fact with one source cannot disagree with itself. Sampling the mask branch from a detection
+result instead would work today and make the graph's shape depend on when it was asked.
 """
 
 from __future__ import annotations
@@ -40,7 +45,6 @@ from pathlib import Path
 
 import numpy as np
 import onnx
-import onnxruntime
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -49,6 +53,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from common import fixtures, variant_parser  # noqa: E402
 from mozo.image import load_image  # noqa: E402
+from mozo.runtimes import OnnxRunner  # noqa: E402
 
 #: Opset the graphs are written at. A constant rather than a flag: which opset mozo publishes is a
 #: property of the artifact, not something a caller should be able to vary per run.
@@ -73,13 +78,24 @@ OPSET = 17
 CONF = 0.01
 
 #: Names every artifact declares, so nothing downstream needs a per-runtime or per-family table.
+#: Only a segmentation graph carries the second: the prototypes its rows are coefficients of.
 INPUT_NAME = "images"
 OUTPUT_NAME = "predictions"
+PROTOTYPE_NAME = "prototypes"
 
-#: What an export must reproduce. Counts and class ids are exact -- an artifact that finds a
-#: different number of objects, or calls one of them something else, is not the same model.
+#: What an export must reproduce. Counts are exact -- an artifact that finds a different number of
+#: objects is not the same model.
 BOX_TOLERANCE = 1e-2      # pixels, in the source image's coordinates
 SCORE_TOLERANCE = 1e-3
+
+#: Worst per-detection mask overlap an export may have against the torch model it came from.
+#:
+#: Masks are thresholded logits, so a float difference far below any box tolerance still flips
+#: whichever pixels sat on the boundary, and only those. Measured at ``CONF`` on the fixture:
+#: YOLO26 flips none at either size, YOLO11 flips five pixels in 164.8 million on ``seg-nano`` and
+#: one in 59.0 million on ``seg-xlarge``, for a worst single-mask overlap of 0.999896. This leaves
+#: room for that and nothing like room for a mask in the wrong place.
+MASK_IOU = 0.999
 
 
 def _detections(vendor, source: np.ndarray, forward, imgsz: int) -> tuple[np.ndarray, ...]:
@@ -87,79 +103,145 @@ def _detections(vendor, source: np.ndarray, forward, imgsz: int) -> tuple[np.nda
 
     Post-processing is the vendor's own ``detect``, so what is compared is the graph against the
     module and nothing else.
+
+    Returns boxes, scores, class ids and masks, the last being ``None`` from a checkpoint with no
+    mask branch. Carried through rather than dropped, because it is a quarter of the answer and
+    :func:`_compare` checks it.
     """
     with torch.no_grad():
-        # No family publishes a graph carrying masks, so a graph and the torch module it came
-        # from have nothing to disagree about there and this compares boxes, scores and classes.
-        # A checkpoint that *does* produce masks is refused rather than compared on three quarters
-        # of its answer -- unpacking the value into a discard would have read exactly the same and
-        # guarded nothing.
         boxes, scores, class_ids, masks = vendor.detect(source, forward, imgsz, CONF)
-        if masks is not None:
-            raise NotImplementedError(
-                "this checkpoint has a mask branch, and this gate compares boxes, scores and "
-                "class ids only. Comparing a graph against the module on three quarters of the "
-                "answer would report agreement it has not checked."
-            )
-        return boxes.numpy(), scores.numpy(), class_ids.numpy()
+        return (boxes.numpy(), scores.numpy(), class_ids.numpy(),
+                None if masks is None else masks.numpy())
+
+
+def _rows(detections: tuple) -> np.ndarray:
+    """The ``[x1, y1, x2, y2, score, class]`` form :func:`pair_by_content` sorts."""
+    boxes, scores, class_ids = detections[:3]
+    return np.column_stack([boxes, scores, class_ids])
+
+
+def _reindex(detections: tuple, order: np.ndarray) -> tuple:
+    """Put one image's detections into *order*, masks included.
+
+    One place decides what travels with a detection, so re-pairing cannot reorder three of the
+    four things a checkpoint answers with and leave the fourth where it was.
+    """
+    boxes, scores, class_ids, masks = detections
+    return (boxes[order], scores[order], class_ids[order],
+            None if masks is None else masks[order])
+
+
+def _mask_iou(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """Per-detection overlap between two ``(n, h, w)`` boolean mask stacks.
+
+    Overlap rather than a count of disagreeing pixels, because a count scales with the
+    photograph's area: the same tolerance would be strict on a thumbnail and meaningless on a 4K
+    frame. Five pixels in 164 million reads as agreement whichever way it is measured; the same
+    five along one small mask's edge does not.
+
+    A mask empty on both sides cannot arise -- ``detect`` drops a detection whose mask came out
+    empty -- so the union is positive and the division is safe.
+
+    The union is counted rather than built. ``(left | right).sum(...)`` would allocate a second
+    full-resolution stack only to reduce it away, and these are source-resolution masks: 67
+    detections on the fixture is 165 million booleans per operand. Inclusion-exclusion gets the
+    same integer from two reductions over arrays that already exist.
+    """
+    intersection = (left & right).sum((-2, -1))
+    return intersection / (left.sum((-2, -1)) + right.sum((-2, -1)) - intersection)
 
 
 def _compare(image: Path, want: tuple, got: tuple, kind: str) -> str:
     """Return a one-line report, or raise if the two artifacts disagree beyond tolerance.
 
-    Detections are paired by position, which is sound only because both sides are full precision
-    and their ordering -- suppression for a classic head, an in-graph top-k for an end-to-end one
-    -- is therefore identical. ``tools/export/yolov26.py`` records what that costs when it is not:
-    across all 300 rows of an end-to-end graph, position pairing reads 0.54 px where content
-    pairing reads 0.001, because two executors of the same top-k may break ties differently. It would not be sound for a reduced
-    precision artifact: perturbing scores reorders near-tied boxes, and pairing by position then
-    subtracts unrelated boxes and reports an error in the hundreds of pixels that is an artefact
-    of the pairing rather than of the model. That mistake is recorded in ``tools/export/yolov8.py``,
-    which is where fp16 was measured. Any future fp16 artifact needs IoU matching here.
-    """
-    (want_boxes, want_scores, want_ids), (got_boxes, got_scores, got_ids) = want, got
-    if len(want_boxes) != len(got_boxes):
-        raise SystemExit(
-            f"{image.name}: torch found {len(want_boxes)} detections, {kind} found {len(got_boxes)}")
-    if not np.array_equal(want_ids, got_ids):
-        raise SystemExit(f"{image.name}: {kind} assigns different class ids to the same detections")
+    Detections are paired by position first, which is what two full-precision artifacts of the
+    same model normally earn: their ordering -- suppression for a classic head, an in-graph top-k
+    for an end-to-end one -- is identical, and position pairing is then both cheaper and stricter
+    than matching on content.
 
+    Normally, not always. Two executors of the same top-k are free to break a tie differently, and
+    at ``CONF`` an end-to-end graph emits rows close enough together for that to happen: YOLO26's
+    ``seg-xlarge`` transposes two detections scoring 0.08235180 and 0.08234713, a gap of 4.7e-06,
+    which is the agreement floor two faithful artifacts have anyway. Position pairing then
+    subtracts unrelated boxes and reports an error that is an artefact of the pairing rather than
+    of the model. So a class-id disagreement is not the failure -- it is the signal to re-pair on
+    content and ask again, and only a set that still disagrees is a divergence. The report says
+    which pairing it used, so a family that has started needing the fallback shows up in the
+    export output rather than being discovered later.
+
+    Neither pairing would be sound for a reduced-precision artifact. Perturbing scores reorders
+    near-tied boxes wholesale, and :func:`pair_by_content` sorts on coordinates that have
+    themselves moved. That mistake is recorded in ``tools/export/yolov8.py``, which is where fp16
+    was measured. Any future fp16 artifact needs IoU matching here.
+    """
+    if len(want[0]) != len(got[0]):
+        raise SystemExit(
+            f"{image.name}: torch found {len(want[0])} detections, {kind} found {len(got[0])}")
+
+    pairing = ""
+    if not np.array_equal(want[2], got[2]):
+        try:
+            left, right = pair_by_content(_rows(want), _rows(got))
+        except ValueError as error:
+            raise SystemExit(f"{image.name}: {kind} {error}") from error
+        want, got = _reindex(want, left), _reindex(got, right)
+        pairing = ", content-paired"
+
+    (want_boxes, want_scores, _, want_masks) = want
+    (got_boxes, got_scores, _, got_masks) = got
     box_error = float(np.abs(want_boxes - got_boxes).max()) if len(want_boxes) else 0.0
     score_error = float(np.abs(want_scores - got_scores).max()) if len(want_scores) else 0.0
     if box_error > BOX_TOLERANCE or score_error > SCORE_TOLERANCE:
         raise SystemExit(
             f"{image.name}: exported {kind} differs from the torch model -- "
             f"boxes {box_error:g} px, scores {score_error:g}. Not published.")
-    return (f"    {kind:<7} {image.name:<20} {len(want_boxes):>4} detections, "
-            f"boxes {box_error:.2e} px, scores {score_error:.2e}")
+
+    report = (f"    {kind:<7} {image.name:<20} {len(want_boxes):>4} detections, "
+              f"boxes {box_error:.2e} px, scores {score_error:.2e}")
+    if want_masks is None:
+        return report + pairing
+
+    # ``not worst >= MASK_IOU`` rather than ``worst < MASK_IOU``, so a NaN overlap fails rather
+    # than passing on a comparison that is False either way.
+    overlap = _mask_iou(want_masks, got_masks)
+    worst = float(overlap.min()) if len(overlap) else 1.0
+    if not worst >= MASK_IOU:
+        raise SystemExit(
+            f"{image.name}: exported {kind}'s masks differ from the torch model's -- worst "
+            f"overlap {worst:g} IoU, against {MASK_IOU} required. Not published.")
+    return f"{report}, masks {worst:.6f} IoU{pairing}"
 
 
-def compare_by_content(left: np.ndarray, right: np.ndarray) -> tuple[float, float]:
-    """Pair two ``[x1, y1, x2, y2, score, class]`` sets one-to-one; report the worst box and score gap.
+def pair_by_content(left: np.ndarray, right: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Order two ``[x1, y1, x2, y2, score, class]`` sets so that row *i* of each is one detection.
 
     Rows are matched by class and geometry, never by position. Two implementations that rank
     equally scoring detections differently have not found different things, and comparing them
     index by index would say they had.
 
-    Not on any path today: above ``CONF`` every family's two artifacts rank identically and
-    :func:`_compare` pairs by position, which is cheaper and stricter. This is what that becomes
-    when the assumption breaks -- a reduced-precision artifact, or a threshold low enough to admit
-    the noise rows an end-to-end graph pads its output with. Measured on YOLO26's full 300-row
-    output, position pairing reports 0.54 px where this reports 0.001.
+    Returns the two orderings rather than the errors themselves, so that whatever else travels
+    with a detection -- its mask -- can be reordered alongside it, and so that one place decides
+    what "agrees" means. :func:`_compare` reaches for this only after position pairing has found a
+    class-id disagreement; it is the fallback, not the norm.
 
-    It lives here rather than in the vendor that first needed it: no shipping code path compares
-    detection sets, and a comparison the wheel carries but never runs is a tool in the wrong layer.
+    Sorting on coordinates the two sides agree on only to within their own error is exactly what
+    makes it a fallback. Two same-class boxes closer together than that error could sort
+    differently on each side, and the pairing would then be wrong without saying so. At full
+    precision the gap between distinct detections is orders of magnitude larger than the gap
+    between two renderings of one; for a reduced-precision artifact it would not be.
+
+    Raises:
+        ValueError: If the two sets differ in size, or do not hold the same classes.
     """
     if left.shape != right.shape:
         raise ValueError(f"detection sets differ in size: {left.shape} against {right.shape}")
     order = [np.lexsort((rows[:, 1], rows[:, 0], rows[:, 5])) for rows in (left, right)]
-    left, right = left[order[0]], right[order[1]]
-    if not np.array_equal(left[:, 5], right[:, 5]):
+    if not np.array_equal(left[order[0], 5], right[order[1], 5]):
         raise ValueError("detection sets disagree on which classes were found")
-    return float(np.abs(left[:, :4] - right[:, :4]).max()), float(np.abs(left[:, 4] - right[:, 4]).max())
+    return order[0], order[1]
 
 
-def _export_onnx(detector, destination: Path) -> None:
+def _export_onnx(detector, destination: Path, segments: bool) -> None:
     """Write the graph, then record what a consumer outside mozo would otherwise have to guess."""
     imgsz = detector.imgsz
     # Whether the graph returns a detection list or a raw head. A family whose network records no
@@ -167,13 +249,19 @@ def _export_onnx(detector, destination: Path) -> None:
     # does not. Stamping a constant here would tell a consumer of an end-to-end graph to suppress
     # an already-suppressed list, and mozo reads none of this metadata, so nothing would notice.
     end2end = bool(getattr(detector.network, "end2end", False))
+    # A mask branch answers with a pair -- the rows, and the prototypes those rows carry
+    # coefficients of -- so the graph declares a second output. Naming only the first would leave
+    # the second called whatever the tracer happened to number it, which is what a consumer
+    # outside mozo would then have to guess. The order is the model's own and is what
+    # ``mozo/adapters/_yolo.py`` reads them back in.
+    outputs = [OUTPUT_NAME, PROTOTYPE_NAME] if segments else [OUTPUT_NAME]
     with torch.no_grad():
         torch.onnx.export(
             detector.network,
             torch.zeros(1, 3, imgsz, imgsz),
             str(destination),
             input_names=[INPUT_NAME],
-            output_names=[OUTPUT_NAME],
+            output_names=outputs,
             opset_version=OPSET,
             dynamo=False,
         )
@@ -185,7 +273,8 @@ def _export_onnx(detector, destination: Path) -> None:
         key="names", value=json.dumps({int(i): name for i, name in detector.names.items()})))
     graph.metadata_props.append(onnx.StringStringEntryProto(
         key="imgsz", value=json.dumps([imgsz, imgsz])))
-    graph.metadata_props.append(onnx.StringStringEntryProto(key="task", value="detect"))
+    graph.metadata_props.append(onnx.StringStringEntryProto(
+        key="task", value="segment" if segments else "detect"))
     graph.metadata_props.append(onnx.StringStringEntryProto(key="end2end", value=str(end2end)))
     onnx.save(graph, destination)
 
@@ -228,14 +317,34 @@ def export_variant(family: str, vendor, variant: str, revision: str,
 
     print(f"  {variant}")
     detector = vendor.Detector(checkpoint, device="cpu")
+
+    # Mask coefficients per anchor, zero for a head with no mask branch -- which is the same fact
+    # as whether the graph declares one output or two. Read off the network exactly as ``end2end``
+    # is, and for the same reason: the vendor validated it against the checkpoint, so it cannot
+    # disagree with what the model does. Sampling it from a detection result instead would make
+    # the graph's shape depend on when the question was asked.
+    segments = bool(getattr(detector.network, "nm", 0))
+
     destination = revision_dir / "onnx-fp32.onnx"
-    _export_onnx(detector, destination)
+    _export_onnx(detector, destination, segments)
 
     reference = {image: _detections(vendor, pixels, detector.forward, detector.imgsz)
                  for image, pixels in sources.items()}
 
-    session = onnxruntime.InferenceSession(str(destination), providers=["CPUExecutionProvider"])
-    onnx_forward = lambda b: torch.from_numpy(session.run(None, {INPUT_NAME: b.numpy()})[0])  # noqa: E731
+    runner = OnnxRunner(destination, device="cpu")
+
+    def onnx_forward(batch: torch.Tensor):
+        """A pair from a segmentation graph, a lone tensor from a detection one.
+
+        The vendor's ``detect`` tells the two apart by type rather than by length, so a
+        single-output graph must not be handed back wrapped -- that hands ``detect`` rows with
+        their batch axis still attached, which is plausible, wrong and silent. Branching on what
+        came back rather than on ``segments`` keeps this reading the graph itself, the same way
+        ``mozo/adapters/_yolo.py`` does at serving time.
+        """
+        outputs = tuple(torch.from_numpy(output) for output in runner(batch.numpy()))
+        return outputs if len(outputs) > 1 else outputs[0]
+
     for image, pixels in sources.items():
         print(_compare(image, reference[image],
                        _detections(vendor, pixels, onnx_forward, detector.imgsz), "onnx"))
@@ -243,6 +352,12 @@ def export_variant(family: str, vendor, variant: str, revision: str,
 
     if not coreml:
         return
+    if segments:
+        raise SystemExit(
+            f"{family}/{variant} has a mask branch, and the CoreML path below takes one output "
+            "and would silently drop the prototypes. No family publishes both today, so the "
+            "pairing has never been needed. Wire it here before one does."
+        )
 
     from mozo.runtimes import CoreMLRunner
 
