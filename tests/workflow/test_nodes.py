@@ -39,7 +39,14 @@ PRODUCES = {
     "text_recognition": PortType.DETECTIONS,
     "zero_shot_classification": PortType.CLASSIFICATIONS,
     "depth_estimation": PortType.DEPTH,
+    "pose_estimation": PortType.DETECTIONS,
 }
+
+#: What to wire into a model node's inputs other than its image, and what produces it. Most
+#: families take a photograph and nothing else; a top-down pose model is told where the people are,
+#: so running it means running a detector first. Derived from the port type rather than from the
+#: family, so a second family that consumes detections needs no entry.
+FEEDS = {PortType.DETECTIONS: ("rfdetr", "nano")}
 
 #: Families that have a node, in registry order. Derived, so a new family is covered by being
 #: published -- or by being listed above as deliberately skipped.
@@ -66,8 +73,15 @@ class TestTheCatalogue:
 
     @pytest.mark.parametrize("family", MODELLED)
     def test_a_model_node_takes_an_image_and_says_what_its_task_produces(self, family):
+        """Every model node reads a photograph first, and declares one output matching its task.
+
+        A node may take more than the image -- ViTPose is told where the people are -- but anything
+        further has to be something another node can produce, or the editor would offer an input
+        nothing could ever be wired into.
+        """
         spec = get(family)
-        assert [port.type for port in spec.inputs] == [PortType.IMAGE]
+        assert spec.inputs[0].type == PortType.IMAGE
+        assert all(port.type in FEEDS for port in spec.inputs[1:])
         assert [port.type for port in spec.outputs] == [PRODUCES[MODEL_REGISTRY[family]["task_type"]]]
 
     @pytest.mark.parametrize("name", SHIPPED)
@@ -119,9 +133,11 @@ class TestWhatTheModelsActuallyReturn:
     def test_a_model_node_returns_what_its_output_port_claims(self, family, ran, absent):
         spec = get(family)
         variant = next(p for p in spec.parameters if p.name == "variant").default
-        if not weights_are_here(family, variant):
+        needed = [(family, variant)] + [FEEDS[port.type] for port in spec.inputs[1:]]
+        missing = [f"{f}/{v}" for f, v in needed if not weights_are_here(f, v)]
+        if missing:
             absent.append(family)
-            pytest.skip(f"{family}/{variant} weights are not here")
+            pytest.skip(f"weights are not here: {', '.join(missing)}")
 
         produced = _run_one(family)
         ran.append(family)
@@ -172,9 +188,18 @@ def _run_one(name: str):
     fails reports why. ``run`` drops a failed node from its results, which turns a model error into
     a ``KeyError`` naming nothing -- one confusing debugging session was enough.
     """
-    workflow = Workflow.from_dict(document(
-        {"load": ("load_image", {"image": str(FIXTURE)}), "model": (name, {})},
-        [("load", "image", "model", "image")]))
+    nodes = {"load": ("load_image", {"image": str(FIXTURE)}), "model": (name, {})}
+    edges = [("load", "image", "model", "image")]
+    # Anything the node needs beyond the photograph is produced by another node, wired up here.
+    # Feeding it a hand-built value instead would test the node against a fixture rather than
+    # against what the editor can actually connect to it.
+    for port in get(name).inputs[1:]:
+        feeder, variant = FEEDS[port.type]
+        nodes[feeder] = (feeder, {"variant": variant})
+        edges += [("load", "image", feeder, "image"),
+                  (feeder, get(feeder).outputs[0].name, "model", port.name)]
+
+    workflow = Workflow.from_dict(document(nodes, edges))
 
     outputs = {}
     for event in workflow.stream():

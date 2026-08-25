@@ -22,6 +22,8 @@
     Detect: '<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>',
     // Segment — a shape cut from the background
     Segment: '<path d="M4 20c2-8 6-12 14-16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 20h7a9 9 0 0 0 9-9V4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 3"/>',
+    // Pose — a figure with its joints marked
+    Pose: '<circle cx="12" cy="4" r="2" stroke="currentColor" stroke-width="2"/><path d="M12 6v7M6 9h12M12 13l-3 8M12 13l3 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="9" r="1.2" fill="currentColor"/><circle cx="18" cy="9" r="1.2" fill="currentColor"/>',
     // Classify — naming, without locating
     Classify: '<path d="M20.6 13.4L12 4.8V2H5a3 3 0 0 0-3 3v7l8.6 8.6a2 2 0 0 0 2.8 0l7.2-7.2a2 2 0 0 0 0-2.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/>',
     // Read — text
