@@ -1,0 +1,69 @@
+moebius_deploy
+Copyright 2026 Huazhong University of Science and Technology (HUST Vision Lab).
+Copyright 2026 vivo AI Lab.
+Copyright 2024 NVIDIA CORPORATION & AFFILIATES.
+Copyright 2019 Ross Wightman.
+Copyright 2022 The HuggingFace Inc. team.
+
+This product includes software developed at Huazhong University of Science and
+Technology and vivo AI Lab, published as Moebius
+(https://github.com/hustvl/Moebius) and described in "Moebius: 0.2B Lightweight
+Image Inpainting Framework with 10B-Level Performance" (ECCV 2026,
+arXiv:2606.19195).
+
+The modules here are extracted from that repository's inference path. Three
+other projects contribute code to that path, all under the Apache License,
+Version 2.0; see the LICENSE file in this directory, which is the Apache-2.0
+text every one of them publishes:
+
+  - NVIDIA's SANA (https://github.com/NVlabs/Sana) supplies GLUMBConv, used here
+    as the MixFFN. The Apache-2.0 header is reproduced verbatim in upstream's
+    copy of the file.
+  - Ross Wightman's timm (https://github.com/huggingface/pytorch-image-models)
+    supplies DepthwiseSeparableConv, which upstream vendors with the source URL
+    recorded in the file.
+  - HuggingFace's diffusers supplies the UNet, transformer and residual-block
+    scaffolding that upstream's model subclasses.
+
+WEIGHTS
+
+The published Moebius checkpoints carry terms stated by the authors in two
+places, and the two differ. Both are reproduced here, and neither is preferred
+over the other:
+
+  - The project README states: "Both the code and the pretrained model weights
+    of Moebius are released under the Apache License 2.0, the same license used
+    by the Qwen model family. Commercial use of the weights and the images
+    produced with them is permitted."
+  - The Hugging Face model card metadata for hustvl/Moebius states: license: mit
+
+Both are permissive, both permit commercial use, and the discrepancy is a
+documentation inconsistency rather than an unresolved question about rights.
+
+THE AUTOENCODER IS A SEPARATE WORK
+
+Moebius denoises inside a latent space it does not itself define. The
+autoencoder is published separately, at hustvl/PixelHacker, under the MIT
+licence stated on that model card, and described in "PixelHacker: Image
+Inpainting with Structural and Semantic Consistency" (arXiv:2504.20438).
+
+The configuration that autoencoder ships with is Stability AI's SDXL VAE
+configuration with sample_size changed from 1024 to 512; every other value
+matches, including scaling_factor 0.13025 to five digits. It is therefore SDXL's
+autoencoder, whether or not it was subsequently fine-tuned. That affects only
+which terms apply, and it does not change them: stabilityai/sdxl-vae is
+published as its own MIT repository, separate from SDXL base's OpenRAIL++
+licence. The chain terminates in MIT whichever link is followed.
+
+mozo publishes the two as separate artifacts -- torch-fp32-unet and
+torch-fp32-vae -- each with its own NOTICE beside it, rather than folding one
+into the other, because a reader handed a single file cannot tell that two sets
+of terms apply to it.
+
+NOT EXTRACTED
+
+Upstream's repository also contains the PixelHacker teacher used for
+distillation (model_lib/nets/unet_gla.py) and an optional MI-GAN pre-fill stage.
+Neither reaches Moebius's forward path and neither is extracted here. The
+teacher is the only importer of flash-linear-attention, which is why this
+package has no CUDA-only dependency to work around.
