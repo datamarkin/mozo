@@ -34,6 +34,9 @@
     Transform: '<path d="M21 2v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 22v-6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
     // Adjust — sliders
     Adjust: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    // Edit — replacing part of the image with something that was never there
+    Edit: '<path d="M3 21l6-1 11-11a2.83 2.83 0 0 0-4-4L5 16l-2 5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 4l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 4l1.5 1.5M8 3l.8.8M3 9l.8.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
+
     // Annotate — drawing on the image
     Annotate: '<path d="M12 19l7-7 3 3-7 7-3-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M2 2l7.586 7.586" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   };

@@ -242,6 +242,40 @@ def _coordinates(value: str, count: int, what: str) -> List[float]:
     return numbers
 
 
+def _subjects(corners: List[tuple]) -> Any:
+    """The boxes a caller typed into a URL, as the detections both boxed adapters expect.
+
+    Neither adapter takes boxes: the pose model answers with the detections it was given plus
+    joints, and the inpainter unions their regions into a mask. So over HTTP the boxes become the
+    minimal detections that say where to look, and each adapter interprets them its own way --
+    rather than this endpoint holding a second opinion about what a rectangle means. A caller who
+    already has a detector's output keeps its class names and tracker ids by using the Python API;
+    this endpoint carries neither over a query string.
+
+    Built row by row rather than through ``from_arrays``, which requires a score. A box typed into
+    a URL has no confidence, and 1.0 would be a number nothing predicted.
+    """
+    import pixelflow as pf
+
+    subjects = pf.detections.Detections()
+    for one in corners:
+        subjects.add_detection(pf.Detection(bbox=one))
+    return subjects
+
+
+def _image_response(frame: np.ndarray) -> Response:
+    """Send an image back, as an ordinary 8-bit PNG.
+
+    Lossless on purpose, and through the workflow runtime's own encoder so that a frame returned
+    by this endpoint and one returned by a workflow are the same bytes. This is the output of a
+    generative model and a caller may well run it again with another seed and compare, which JPEG
+    would quietly make impossible to do honestly.
+    """
+    from .workflow.api import _png
+
+    return Response(content=_png(frame), media_type="image/png")
+
+
 def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
     """Send a depth map, with what is needed to read it back in the headers.
 
@@ -314,6 +348,9 @@ def predict(
                     "detections carry class_name=null -- the model does not know what it "
                     "segmented and mozo will not invent it.",
     ),
+    seed: int = Query(
+        0, description="Which sample to draw, for generative models. The same seed gives the "
+                       "same picture; a different one gives a different, equally valid result."),
     multimask: bool = Query(
         True,
         description="For promptable models, return three candidate masks ranked by the model's "
@@ -342,6 +379,8 @@ def predict(
         box: A box, as ``x1,y1,x2,y2`` in the image's own pixels. Repeatable. Promptable models
             segment inside it; pose models find the joints of the person inside it.
         name: What to call what was pointed at. Omitted, detections carry ``class_name=null``.
+        seed: Which sample to draw, for generative models. Ignored by the rest -- they
+            are deterministic functions of their input and have nothing to vary.
         multimask: Return three candidate masks ranked by predicted IoU rather than one.
 
     Returns:
@@ -380,15 +419,23 @@ def predict(
         raise HTTPException(status_code=400, detail=str(e))
 
     if task in BOXED and not corners:
-        # This model is told where the subjects are, so being told nothing is a caller's mistake
-        # rather than an empty frame. An empty result is a different thing and is answered with
-        # one, once the boxes have at least been offered.
-        raise HTTPException(
-            status_code=400,
-            detail=f"{family} works from boxes it is given: pass ?box=x1,y1,x2,y2 for each "
-                   "subject, repeating it for several. It has no detector of its own, so run "
-                   "one first and send its boxes.",
+        # These models are told where to look, so being told nothing is a caller's mistake rather
+        # than an empty frame. An empty result is a different thing and is answered with one, once
+        # the boxes have at least been offered.
+        #
+        # One guard, two wordings: a pose model wants the subject and an inpainter wants the thing
+        # to delete, and a caller who is told the wrong one goes looking for a detector they do
+        # not need.
+        detail = (
+            f"{family} removes what you select: pass ?box=x1,y1,x2,y2 around the thing to remove, "
+            "repeating it for several. Over HTTP the selection is a rectangle; for a mask that "
+            "follows an object's outline, run a segmenter and use the Python API."
+            if task == "image_inpainting" else
+            f"{family} works from boxes it is given: pass ?box=x1,y1,x2,y2 for each subject, "
+            "repeating it for several. It has no detector of its own, so run one first and send "
+            "its boxes."
         )
+        raise HTTPException(status_code=400, detail=detail)
 
     if task == "promptable_segmentation":
         if not points and not corners:
@@ -437,20 +484,10 @@ def predict(
                 image, points=points, labels=marks, boxes=corners,
                 multimask_output=multimask, name=name,
             ).to_dict())
-        if task in BOXED:
-            # The adapter takes detections, not boxes, because the answer is those detections with
-            # joints added -- so over HTTP the boxes become the minimal detections that says so.
-            # A caller who already has a detector's output keeps its class names and tracker ids
-            # by using the Python API; this endpoint carries neither over a query string.
-            #
-            # Built row by row rather than through ``from_arrays``, which requires a score. A box
-            # typed into a URL has no confidence, and 1.0 would be a number nothing predicted.
-            import pixelflow as pf
-
-            subjects = pf.detections.Detections()
-            for one in corners:
-                subjects.add_detection(pf.Detection(bbox=one))
-            return JSONResponse(content=model.predict(image, subjects).to_dict())
+        if task == "pose_estimation":
+            return JSONResponse(content=model.predict(image, _subjects(corners)).to_dict())
+        if task == "image_inpainting":
+            return _image_response(model.predict(image, _subjects(corners), seed=seed))
         if task == "text_recognition":
             return JSONResponse(content=model.predict(image).to_dict())
         if task == "depth_estimation":

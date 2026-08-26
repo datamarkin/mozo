@@ -387,6 +387,69 @@ outside the frame rather than blending toward it, and its `mode="reflect"` repea
 where `torch`'s skips it. Both are pinned against SciPy in `tests/families/test_vitpose.py`. See
 `mozo/vendors/vitpose_deploy/PROVENANCE.md`.
 
+## Moebius
+
+Object removal. Give it a frame and a mask, and it repaints the masked region so the thing was
+never there.
+
+```python
+car   = mozo.get_model("sam3").predict(frame, text="the red car")
+clean = mozo.get_model("moebius", "general").predict(frame, car, seed=0, dilate=8)
+
+clean.shape == frame.shape        # True -- same size, and outside the mask, the same bytes
+```
+
+### It answers with a picture, and it is the only family that does
+
+Every other model here describes an image. This one rewrites one, so there is no `Detections`, no
+`Classifications` and **no confidence number** — the model does not estimate anything. It draws a
+sample. Run it again with `seed=1` and you get a different, equally valid removal; neither is more
+correct than the other, and that is why `seed` is a first-class argument rather than a hidden
+constant.
+
+### Everything the seam does not reach comes back byte-identical
+
+Upstream returns the decoder's reconstruction of the whole frame, which changes every pixel
+including the ones nobody selected. mozo composites: the hole is the model's, everything else is
+your own array, unchanged. That is what makes it safe to point at a photograph you care about.
+
+Precisely, because the difference matters at the border: the seam is feathered with a 3-pixel blur
+so it reads as a gradient rather than a cut-out, and that blend spreads about **8 px past** your
+selection. Beyond that band the bytes are yours untouched. Pass `feather=0` and the untouched
+region is exactly the mask's own edge -- at the cost of a visible cut-out.
+
+### If the thing is still faintly there
+
+Raise `dilate`. An object's shadow and its antialiased edge sit *outside* the mask that found it,
+and removing the object without them leaves an outline. This is the single most common surprise,
+and 8–16 pixels usually settles it.
+
+The same knob fixes the other cause: on a mask only a few pixels across, the feather pulls the
+blend below full strength even at the centre, so a little of the original survives everywhere.
+Growing the mask fixes that; shrinking the feather just makes the seam obvious.
+
+### It runs at 512×512 and nothing else
+
+Not a setting — a property of the weights. The cross-attention's positional table is stored with a
+row per latent cell, so there is nowhere to put the positions of a larger image. `predict` resizes
+for you and composites back at your own resolution, which means detail inside the hole is capped at
+512. On a large photograph that is visible if you go looking for it.
+
+### Two variants
+
+`general` for arbitrary photographs, `places2` for scenes and backgrounds. Upstream also publishes
+two face-specific checkpoints; mozo does not carry them, and `PROVENANCE.md` says why.
+
+Over HTTP the selection is a rectangle:
+
+```bash
+curl -X POST "http://localhost:8000/predict/moebius/general?box=100,200,340,560&seed=0" \
+  -F file=@photo.jpg -o clean.png
+```
+
+For a mask that follows an object's outline rather than a rectangle, run a segmenter and use the
+Python API.
+
 ## EasyOCR
 
 Text recognition. Finds every line of text on a page and reads it.

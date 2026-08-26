@@ -11,7 +11,7 @@ Each node is its family's ``predict`` with the arguments the editor can offer. N
 how a model works; :func:`mozo.get_model` does, and it caches, so a node that runs over fifty
 images loads the checkpoint once.
 
-Thirteen of the fifteen families are here. SAM 2 and EdgeTAM are not: they are prompted with points
+Fourteen of the sixteen families are here. SAM 2 and EdgeTAM are not: they are prompted with points
 and boxes -- pixel coordinates picked on the image -- and there is no widget for that yet. Adding
 one before anything asks for it would be inventing a requirement, so they wait until the editor can
 express a click. Everything else about them already works through :func:`mozo.get_model`.
@@ -115,6 +115,22 @@ def sam3(image: Image, text: str = "person", variant: variants("sam3") = "sam3",
     """SAM 3 by Meta -- masks for every instance of a concept you name."""
     return mozo.get_model("sam3", variant).predict(
         image, text=comma_separated(text), threshold=threshold)
+
+
+# --- Edit ------------------------------------------------------------------------------------------
+
+@node(category="Edit")
+def moebius(image: Image, detections: Detections,
+            variant: variants("moebius") = "general",
+            seed: int = 0, dilate: int = 0) -> Image:
+    """Moebius -- remove what you point it at and repaint the gap. Wire a segmenter into ``detections``.
+
+    The only node here that answers with a new picture rather than a description of one, and the
+    only one where running it twice is meant to give two different answers: ``seed`` picks which.
+    Raise ``dilate`` when the thing is still faintly there -- an object's shadow and its soft edge
+    usually sit outside the mask that found it.
+    """
+    return mozo.get_model("moebius", variant).predict(image, detections, seed=seed, dilate=dilate)
 
 
 # --- Pose ------------------------------------------------------------------------------------------

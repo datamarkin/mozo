@@ -27,9 +27,12 @@ from typing import Any
 PROMPTED = frozenset({
     "concept_segmentation", "open_vocabulary_detection", "zero_shot_classification"})
 
-#: Task types whose model is told *where* to look and cannot answer without being told. A
-#: top-down pose model has no detector: it is handed a person's box and returns their joints, so
-#: a request with no box is a mistake rather than an empty frame.
+#: Task types whose model is told *where* to look and cannot answer without being told. Two of
+#: them, needing a box for opposite reasons: a top-down pose model has no detector and is handed
+#: the subject's box, while an inpainter is handed the thing to delete. What they share is all
+#: this set encodes -- a request with no box is a mistake rather than an empty frame, and the
+#: editor has to offer a rectangle before the request can be made at all. The refusals read
+#: differently, and ``mozo.server`` branches on the task to get each one right.
 #:
 #: Named here for the same reason PROMPTED is, and it is the same shape of fact: the endpoint has
 #: to refuse before the image decode and the multi-gigabyte load, and the browser page has to know
@@ -38,7 +41,7 @@ PROMPTED = frozenset({
 #:
 #: Distinct from promptable segmentation, which *accepts* a box and equally accepts a click. This
 #: is the set that requires one.
-BOXED = frozenset({"pose_estimation"})
+BOXED = frozenset({"pose_estimation", "image_inpainting"})
 
 #: What each family can encode, and from what. A family absent from here does not encode at all.
 #:
@@ -134,6 +137,25 @@ MODEL_REGISTRY: dict[str, dict[str, Any]] = {
             'for those. Code is Apache 2.0, and the authors publish the weights under it too.'
         ),
         'variants': ['tiny', 'base'],
+    },
+
+    'moebius': {
+        'adapter_class': 'MoebiusPredictor',
+        'module': 'mozo.adapters.moebius',
+        'task_type': 'image_inpainting',
+        'description': (
+            'Moebius by HUST and vivo AI Lab — object removal. Hand it an image and a mask and '
+            'it repaints the hole so the thing was never there. 226M parameters matching '
+            'FLUX.1-Fill-dev at 11.9B across six benchmarks, which is what makes it small '
+            'enough to be worth deploying. 2 variants: general and places2 (scenes and '
+            'backgrounds). Pair the mask with SAM 3 or EdgeTAM. Unlike every other family here '
+            'it answers with an image rather than a description of one, and it answers with a '
+            'sample rather than an estimate — change the seed and you get a different, equally '
+            'valid removal. Runs at 512x512 and nothing else. Apache 2.0 code; the authors '
+            'state the weights as Apache 2.0 on GitHub and MIT on the model card, both '
+            'permissive and both permitting commercial use.'
+        ),
+        'variants': ['general', 'places2'],
     },
 
     'owlv2': {
