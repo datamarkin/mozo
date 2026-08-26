@@ -35,35 +35,79 @@ from ..weights import parts
 def _mask_from(source: Any, shape: tuple[int, int]) -> np.ndarray:
     """A binary ``(H, W)`` mask from whatever the caller passed.
 
-    Three things are accepted, in order of how much they say:
+    An array is taken as the mask itself. Otherwise *source* is a PixelFlow ``Detections``, which
+    is a **collection**: iterate it and each ``Detection`` carries what it found, in descending
+    order of how exactly it says where the thing is.
 
-    *An array* is the mask, thresholded.
+    *``masks``* -- a list of ``(H, W)`` rasters, what a segmenter produces. Unioned across every
+    detection, because several regions are removed in one pass over their union: that is what the
+    9-channel conditioning expects, and one pass each would cost n times as much and do it worse,
+    since each pass would be blind to the others' holes.
 
-    *Detections carrying segments* are unioned -- several regions are removed in one pass, which is
-    what the model's conditioning expects and is cheaper and better than one pass each.
+    *``segments``* -- a list of ``(N, 2)`` polygons, what OCR produces as the four corners it read.
+    Filled.
 
-    *Detections carrying only boxes* become filled rectangles, and the result looks like it: the
-    model removes the rectangle it was given. That is the caller's instruction being followed
-    rather than a failure, but it is worth knowing before wondering why the sky has a corner in it.
+    *``bbox``* -- ``[x1, y1, x2, y2]``. The fallback, and the result looks like it: the model
+    removes the rectangle it was given. That is the caller's instruction being followed rather than
+    a failure, but it is worth knowing before wondering why the sky has a corner in it.
+
+    A detection may carry all three; the most exact one available wins, per detection rather than
+    for the whole set, so a mixed result loses nothing.
     """
     if isinstance(source, np.ndarray):
         return source
 
-    mask = np.zeros(shape, dtype=np.uint8)
-    segments = getattr(source, "masks", None)
-    if segments is not None and len(segments) and segments[0] is not None:
-        for segment in segments:
-            mask |= np.asarray(segment).astype(np.uint8)
-        return mask
-
-    boxes = getattr(source, "xyxy", None)
-    if boxes is None:
+    try:
+        found = list(source)
+    except TypeError:
         raise TypeError(
-            "Pass a mask array, or detections carrying segments or boxes. Got "
-            f"{type(source).__name__}, which offers neither.")
-    for x1, y1, x2, y2 in np.asarray(boxes).astype(int):
-        mask[max(y1, 0):max(y2, 0), max(x1, 0):max(x2, 0)] = 1
+            f"Pass a mask array, or a Detections. Got {type(source).__name__}, which is neither "
+            "an array nor iterable.") from None
+
+    mask = np.zeros(shape, dtype=np.uint8)
+    for detection in found:
+        rasters = getattr(detection, "masks", None)
+        polygons = getattr(detection, "segments", None)
+        box = getattr(detection, "bbox", None)
+
+        if rasters is not None and len(rasters):
+            for raster in rasters:
+                mask |= _fit(np.asarray(raster), shape)
+        elif polygons is not None and len(polygons):
+            import cv2
+
+            # ``segments`` on a detection is *the* polygon -- an ``(N, 2)`` array of points, which
+            # is EasyOCR's four read corners -- not a list of polygons. Iterating it yields points,
+            # and filling those fills four single pixels. A 3-D array is several polygons for the
+            # one detection, so both are accepted and only the rank tells them apart.
+            outlines = np.asarray(polygons, dtype=np.float32)
+            if outlines.ndim == 2:
+                outlines = outlines[None]
+            cv2.fillPoly(mask, [o.round().astype(np.int32) for o in outlines], 1)
+        elif box is not None and len(box) == 4:
+            x1, y1, x2, y2 = (int(round(v)) for v in box)
+            mask[max(y1, 0):max(y2, 0), max(x1, 0):max(x2, 0)] = 1
+        else:
+            raise TypeError(
+                f"a detection carries no masks, no segments and no bbox, so there is nothing to "
+                f"remove: {detection!r}")
     return mask
+
+
+def _fit(raster: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """One raster mask as ``(H, W)`` uint8 at *shape*.
+
+    Resized nearest when it arrives at the model's own resolution rather than the frame's, which
+    some segmenters do. Nearest because a smooth filter turns a hard edge into a ramp, and this is
+    about to be treated as ``{0, 1}``.
+    """
+    binary = (raster.astype(bool)).astype(np.uint8)
+    if binary.shape == shape:
+        return binary
+
+    import cv2
+
+    return cv2.resize(binary, (shape[1], shape[0]), interpolation=cv2.INTER_NEAREST)
 
 
 class MoebiusPredictor:

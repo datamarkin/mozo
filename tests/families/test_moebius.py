@@ -180,6 +180,73 @@ class TestExportRewrite:
             SelfLambda(320, 40, 8, kernel=14)
 
 
+class TestWhatCountsAsASelection:
+    """``_mask_from``, against real PixelFlow detections rather than a stand-in.
+
+    The stand-in is the point. An earlier version of this suite built a little class with
+    ``masks`` and ``xyxy`` attributes and asserted against that -- so it tested the names the
+    adapter had guessed, agreed with itself, and passed while the adapter could not read a single
+    real ``Detections``. PixelFlow's is a collection: iterate it, and each ``Detection`` carries
+    ``bbox``, ``masks`` and ``segments``.
+    """
+
+    @staticmethod
+    def _detections(**kwargs):
+        import pixelflow as pf
+
+        boxes = kwargs.pop("boxes")
+        return pf.detections.from_arrays(
+            boxes=np.asarray(boxes, dtype=float),
+            scores=np.full(len(boxes), 0.9),
+            class_ids=np.zeros(len(boxes), dtype=int), **kwargs)
+
+    def test_segment_rasters_are_unioned_across_detections(self):
+        # Several regions go in one pass over their union: that is what the 9-channel
+        # conditioning expects, and one pass each would be n times the cost, done worse.
+        from mozo.adapters.moebius import _mask_from
+
+        rasters = np.zeros((2, 64, 64), bool)
+        rasters[0, 10:20, 10:20] = True
+        rasters[1, 40:50, 40:50] = True
+        found = self._detections(boxes=[[10, 10, 20, 20], [40, 40, 50, 50]], masks=rasters)
+        assert int(_mask_from(found, (64, 64)).sum()) == 200
+
+    def test_polygons_are_filled_not_traced(self):
+        # ``segments`` on a detection is the polygon, an (N, 2) array -- EasyOCR's four read
+        # corners. Iterating it yields *points*, and filling those fills four single pixels.
+        from mozo.adapters.moebius import _mask_from
+
+        quad = np.array([[[2, 2], [30, 2], [30, 30], [2, 30]]], dtype=np.float32)
+        found = self._detections(boxes=[[2, 2, 30, 30]], segments=quad)
+        assert int(_mask_from(found, (64, 64)).sum()) > 700
+
+    def test_boxes_alone_become_rectangles(self):
+        from mozo.adapters.moebius import _mask_from
+
+        found = self._detections(boxes=[[10, 10, 20, 20]])
+        assert int(_mask_from(found, (64, 64)).sum()) == 100
+
+    def test_a_mask_at_the_model_s_resolution_is_fitted_to_the_frame(self):
+        from mozo.adapters.moebius import _mask_from
+
+        rasters = np.zeros((1, 32, 32), bool)
+        rasters[0, 5:15, 5:15] = True
+        found = self._detections(boxes=[[10, 10, 30, 30]], masks=rasters)
+        assert int(_mask_from(found, (64, 64)).sum()) == 400
+
+    def test_an_array_is_taken_as_the_mask(self):
+        from mozo.adapters.moebius import _mask_from
+
+        given = np.ones((8, 8), np.uint8)
+        assert _mask_from(given, (8, 8)) is given
+
+    def test_something_that_is_not_a_selection_says_so(self):
+        from mozo.adapters.moebius import _mask_from
+
+        with pytest.raises(TypeError, match="neither an array nor iterable"):
+            _mask_from(object(), (8, 8))
+
+
 class TestSampling:
     """The draw, and the one property that makes a seed worth exposing."""
 
