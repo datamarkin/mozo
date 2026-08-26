@@ -96,6 +96,21 @@ class Event:
     error: Optional[str] = None
 
 
+def deliver(item, outcome, failure: Optional[Event], on_error: Optional[Any]) -> Iterator:
+    """Hand one finished item to the caller, the one way both engines hand it over.
+
+    Serial and pipelined must agree here or ``workers`` would change what a failure looks like.
+    It lives beside :class:`Event` rather than in either engine, so the serial path does not have
+    to import the concurrent one to give an answer back.
+    """
+    if failure is None:
+        yield item, outcome
+    elif on_error is None:
+        raise RuntimeError(f"{item!r}: {failure.error}")
+    else:
+        on_error(item, failure)
+
+
 class Workflow:
     """A directed acyclic graph of nodes.
 
@@ -193,20 +208,21 @@ class Workflow:
         """
         return self._drain(self._resolve(overrides))[0]
 
-    def run_many(self, items, *, over: str = "image", on_error=None,
+    def run_many(self, items, *, over: str = "image", on_error=None, workers: int = 1,
+                 model_workers: int = 1, stats: Optional[dict] = None,
                  **overrides) -> Iterator[tuple]:
         """Run the workflow once per item, yielding ``(item, results)`` as each finishes.
 
-        A generator rather than a list, which is the whole reason this works at any size: nothing
-        holds more than one item's results at a time, so a directory of a million costs the same
-        memory as one photograph. ``items`` is consumed lazily, so it may be a generator itself
-        and may never end.
+        A generator rather than a list, which is the whole reason this works at any size: what a
+        run holds is bounded by how many items may be alive at once, not by how many there are, so
+        a directory of a million costs what a handful costs. ``items`` is consumed lazily, so it
+        may be a generator itself and may never end -- though above ``workers=1`` it is read ahead
+        of the results by a bounded amount, since a stage with nothing queued has nothing to
+        overlap.
 
         The overrides are settled **once**, before the first item, because their shape does not
         change -- only the one value does. Resolving per item would rebuild :attr:`parameters` a
         million times for a million items, which measured at a tenth of the whole run.
-
-        Runs serially, one item at a time.
 
         Args:
             items: What to run on, one at a time. Anything :meth:`run` accepts for *over* -- paths,
@@ -218,8 +234,25 @@ class Workflow:
                 skips that item and continues. Left unset, a failure raises and the run stops.
                 A corrupt file in a million should not end a six-hour run, but silently dropping
                 it is worse than stopping, so the caller says where the failure goes. Raising from
-                inside the callback stops the run, which is how a budget is spelled while this
-                runs serially.
+                inside the callback stops the run, whatever *workers* is.
+            workers: How many items may be in flight at once. One -- the default -- runs the
+                serial loop below, unchanged. More than one runs the workflow as a staged
+                pipeline: every node gets its own queue and its own workers, so the model works on
+                one item while decoding is already on the next and drawing is still finishing the
+                last. See :mod:`mozo.workflow.pipeline`.
+
+                The threads are made per call, so ``run_many`` over a single item pays for a pool
+                it cannot use -- measured at 18 us serial against 436 us at two workers on a
+                three-node graph of trivial nodes. Against real node work that is noise; against a
+                camera loop calling ``run_many([frame])`` per frame it is the whole cost, and such
+                a caller wants one ``run_many`` over the frames instead.
+
+                **A node holding a model is pinned to one item regardless**, because a second
+                concurrent inference doubles activation memory, and running out of memory ends a
+                run rather than slowing it.
+
+                This changes how long a run takes and nothing else: same items, same results, same
+                order, and failures reach *on_error* the same way.
 
         Yields:
             ``(item, results)`` in the order *items* arrived, where *results* is exactly what
@@ -244,19 +277,31 @@ class Workflow:
                 f"item would run on {overrides[over]!r} rather than on itself. Pass one or "
                 f"the other.")
         settings = self._resolve({over: None, **overrides})
+
+        if workers > 1:
+            # A staged pipeline: one queue and one worker set per node. Serial below is unchanged,
+            # so asking for no workers runs exactly the code that ran before this existed. Imported
+            # here rather than at module scope because ``pipeline`` imports from this module --
+            # deferring the one arrow back is what keeps the pair acyclic.
+            from .pipeline import run_pipelined
+            yield from run_pipelined(self, items, over, settings, workers, on_error,
+                                     model_workers, stats)
+            return
+        if stats is not None:
+            raise ValueError(
+                "stats needs workers > 1: there are no stages to report on a serial run, and "
+                "filling it with nothing would read as a run that did no work.")
+
         # The one leaf that changes per item. Everything else in ``settings`` is already final,
-        # and ``_steps`` only reads it, so one dict is safe to carry across the whole run.
+        # and ``_steps`` only reads it, so one dict is safe to carry across the whole run. This is
+        # also why it cannot be shared by two items at once, and why the pipeline above binds the
+        # value to each item's parcel instead.
         bound = next(values for values in settings.values() if over in values)
 
         for item in items:
             bound[over] = item
             results, failure = self._drain(settings)
-            if failure is None:
-                yield item, results
-            elif on_error is None:
-                raise RuntimeError(f"{item!r}: {failure.error}")
-            else:
-                on_error(item, failure)
+            yield from deliver(item, results, failure, on_error)
 
     def stream(self, **overrides) -> Iterator[Event]:
         """Run the workflow, reporting each node as it starts and as it finishes.

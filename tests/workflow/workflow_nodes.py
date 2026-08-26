@@ -16,12 +16,21 @@ The collision is silent and order-dependent -- it cost one confusing failure to 
 
 from __future__ import annotations
 
+import random
+import time
+
 import numpy as np
 import pixelflow as pf
 
 from mozo.workflow import Classifications, Depth, Detections, Embedding, Image, node
 
 RECORD: list = []
+
+#: What an ordered sink was handed, in the order it was handed it.
+SEQUENCE: list = []
+
+#: Every item that reached ``hesitate``, so a test can count what is alive.
+STARTED: list = []
 
 
 @node(category="Test")
@@ -126,3 +135,39 @@ def shipped(*, without: tuple = ()) -> tuple:
     return tuple(name for name in names()
                  if (module := get(name).run.__module__).startswith("mozo.workflow.nodes.")
                  and module not in excluded)
+
+
+@node(category="Test")
+def dawdle(image: Image, ms: int = 0) -> Image:
+    """Pass an image through after an unpredictable pause.
+
+    Exists so a two-branch graph actually races. A join that pairs values by the order they turned
+    up rather than by the port they arrived on is correct whenever the branches happen to finish in
+    declaration order, so a test whose branches are steady agrees with the bug.
+    """
+    time.sleep(random.uniform(0.0, ms / 1000.0))
+    return image
+
+
+@node(category="Test", ordered=True)
+def append_ordered(image: Image) -> None:
+    """A sink whose calls are a sequence, the way a video writer's are.
+
+    Records the value it was handed. The order of this list *is* what the node produced, which is
+    why the node declares itself ordered: a video file assembled out of order is not a slower
+    video, it is a wrong one.
+    """
+    SEQUENCE.append(int(image[0, 0, 0]))
+
+
+@node(category="Test")
+def hesitate(image: Image, slow: int = -1) -> Image:
+    """Record that this item started, in :data:`STARTED`, and dawdle on one of them.
+
+    One slow item among fast ones is what tells an admission cap from bounded queues: without a
+    cap, everything behind the straggler runs to completion and waits, finished, for its turn.
+    """
+    STARTED.append(int(image[0, 0, 0]))
+    if int(image[0, 0, 0]) == slow:
+        time.sleep(0.4)
+    return image
