@@ -13,6 +13,10 @@ use ``dawdle`` to make sure they do not.
 
 from __future__ import annotations
 
+import itertools
+import threading
+import time
+
 import pytest
 
 import workflow_nodes  # noqa: F401  -- importing it is what registers make/brighten/dawdle
@@ -238,6 +242,47 @@ class TestFailure:
                                      on_error=lambda item, event: seen.append(item)))
         assert [item for item, _ in out] == [2, 4]
         assert seen == [None]
+
+
+class TestLettingGo:
+    """A run the caller walked away from leaves nothing behind.
+
+    ``run_many`` is documented for sources that never end, which makes stopping part way the
+    ordinary case rather than the exceptional one. Every thread a run starts is a daemon, so a
+    leak is invisible in a script that exits and unbounded in a process that does not.
+    """
+
+    def settled(self, deadline: float = 5.0) -> list:
+        """The pipeline's own threads still alive, once they have had time to notice."""
+        limit = time.monotonic() + deadline
+        names = lambda: [thread.name for thread in threading.enumerate()
+                         if thread.name.startswith(("pipeline-feed", "stage-"))]
+        while time.monotonic() < limit and names():
+            time.sleep(0.05)
+        return names()
+
+    def test_stopping_part_way_leaves_no_threads_behind(self):
+        run = chain().run_many(itertools.count(2), over="width", workers=2)
+        next(run), next(run)
+        run.close()
+        assert self.settled() == []
+
+    def test_a_failure_that_raises_leaves_no_threads_behind(self):
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("explode", {})}, [("a", "image", "b", "image")]))
+        with pytest.raises(RuntimeError, match="as promised"):
+            list(workflow.run_many(itertools.count(2), over="width", workers=2))
+        assert self.settled() == []
+
+    def test_an_on_error_that_raises_leaves_no_threads_behind(self):
+        def angry(item, event):
+            raise RuntimeError("the caller's budget ran out")
+
+        workflow = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("explode", {})}, [("a", "image", "b", "image")]))
+        with pytest.raises(RuntimeError, match="budget"):
+            list(workflow.run_many(itertools.count(2), over="width", workers=2, on_error=angry))
+        assert self.settled() == []
 
 
 class TestWidth:

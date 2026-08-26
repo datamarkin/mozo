@@ -307,6 +307,11 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     results: Queue = Queue()
     #: How many items may exist at once, which is the ceiling this module's header quotes.
     inflight = threading.Semaphore(len(workflow.order) * DEPTH * max(1, workers))
+    #: Set when the caller is done with this run -- because it stopped iterating, because a
+    #: failure raised, or because ``on_error`` did. The feed thread is the one part of a run that
+    #: outlives the generator otherwise: it waits on a permit that a run nobody is draining will
+    #: never return, and it holds the source and every item it has read open while it waits.
+    abandoned = threading.Event()
     measure = stats is not None
     stages, entries = _build(workflow, settings, over, workers, model_workers, results, measure)
     began = time.perf_counter()
@@ -324,7 +329,13 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
         count = 0
         try:
             for index, item in enumerate(items):
-                inflight.acquire()
+                # Polled rather than waited on, because the permit that would wake this thread is
+                # returned by the caller draining results, and an abandoned run has no caller.
+                while not inflight.acquire(timeout=0.05):
+                    if abandoned.is_set():
+                        return
+                if abandoned.is_set():
+                    return
                 sources[index] = item
                 for stage, port in entries:
                     stage.offer(Parcel(index, port, item))
@@ -363,6 +374,7 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
             if expected is not None and emit == expected:
                 break
     finally:
+        abandoned.set()
         for stage in stages.values():
             stage.stop()
         if stats is not None:
