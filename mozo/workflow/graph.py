@@ -208,7 +208,7 @@ class Workflow:
         """
         return self._drain(self._resolve(overrides))[0]
 
-    def run_many(self, items, *, over: str = "image", on_error=None, workers: int = 1,
+    def run_many(self, items, *, over: str = "image", on_error=None, workers: int = 2,
                  model_workers: int = 1, stats: Optional[dict] = None,
                  **overrides) -> Iterator[tuple]:
         """Run the workflow once per item, yielding ``(item, results)`` as each finishes.
@@ -235,11 +235,16 @@ class Workflow:
                 A corrupt file in a million should not end a six-hour run, but silently dropping
                 it is worse than stopping, so the caller says where the failure goes. Raising from
                 inside the callback stops the run, whatever *workers* is.
-            workers: How many items may be in flight at once. One -- the default -- runs the
-                serial loop below, unchanged. More than one runs the workflow as a staged
-                pipeline: every node gets its own queue and its own workers, so the model works on
-                one item while decoding is already on the next and drawing is still finishing the
-                last. See :mod:`mozo.workflow.pipeline`.
+            workers: How many items may be in flight at once. **Two by default**, which runs the
+                workflow as a staged pipeline: every node gets its own queue and its own workers,
+                so the model works on one item while decoding is already on the next and drawing is
+                still finishing the last. See :mod:`mozo.workflow.pipeline`.
+
+                Two rather than more because two was the peak on every real workflow measured --
+                four was equal or slower, and on a graph with two model stages it fell from 1.91x
+                to 1.40x. Two rather than one because one leaves the bottleneck waiting for its
+                own inputs. ``workers=1`` still runs the plain serial loop, unchanged, for a
+                caller who wants no threads at all.
 
                 The threads are made per call, so ``run_many`` over a single item pays for a pool
                 it cannot use -- measured at 18 us serial against 436 us at two workers on a

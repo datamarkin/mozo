@@ -89,6 +89,75 @@ class TestSameAnswer:
         assert seen == [2, 3, 4]
 
 
+class TestTheDefault:
+    """``run_many`` pipelines unless told otherwise, and what that costs."""
+
+    def test_it_pipelines_without_being_asked(self):
+        seen: dict = {}
+        workflow = chain()
+        list(workflow.run_many([2, 3, 4], over="width", stats=seen))
+        assert seen["stages"]["a"]["width"] == 2, "the default should be two workers"
+
+    def test_the_source_is_read_ahead_but_only_by_a_bounded_amount(self):
+        """Not zero any more -- bounded, which is what keeps a million items affordable.
+
+        Serial read nothing ahead; a pipeline must read ahead or its stages would have nothing to
+        overlap. What matters is that the amount cannot grow with the source, so an endless one
+        costs what is in flight and nothing that accumulates.
+        """
+        reached = []
+
+        def counted():
+            for width in range(2, 500):
+                reached.append(width)
+                yield width
+
+        workflow, workers = chain(), 2
+        answers = workflow.run_many(counted(), over="width", workers=workers)
+        next(answers)
+        # Every stage can hold a full queue *and* have one item per worker in hand -- the second
+        # term is easy to forget and is half the total. Measured max on this graph is exactly this.
+        ceiling = len(workflow.order) * (DEPTH * workers + workers) + 1
+        assert len(reached) <= ceiling, f"read {len(reached)} ahead, bound is {ceiling}"
+
+
+class TestOrderedNodes:
+    """A node that says its calls are a sequence is given one, whatever the worker count."""
+
+    def sink(self, kind: str) -> Workflow:
+        return Workflow.from_dict(document(
+            {"a": ("make", {}), "j": ("dawdle", {"ms": 5}), "w": (kind, {})},
+            [("a", "image", "j", "image"), ("j", "image", "w", "image")]))
+
+    def test_an_ordered_sink_sees_every_item_in_order(self):
+        SEQUENCE = workflow_nodes.SEQUENCE
+        SEQUENCE.clear()
+        widths = list(range(2, 42))
+        list(self.sink("append_ordered").run_many(widths, over="width", workers=4))
+        assert SEQUENCE == widths
+
+    def test_an_unordered_sink_does_not(self):
+        """The falsification: without the flag the same graph scrambles, so the flag is doing it."""
+        RECORD = workflow_nodes.RECORD
+        RECORD.clear()
+        widths = list(range(2, 42))
+        list(self.sink("measure").run_many(widths, over="width", workers=4))
+        seen = [width for _, width in RECORD if _ == "measure"]
+        assert seen and seen != sorted(seen), "expected disorder without ordered=True"
+
+    def test_a_failed_item_still_takes_its_turn(self):
+        """Otherwise the counter waits on a number never coming and the node stops for good."""
+        SEQUENCE = workflow_nodes.SEQUENCE
+        SEQUENCE.clear()
+        workflow = self.sink("append_ordered")
+        items = [w if w % 4 else None for w in range(2, 30)]
+        failures: list = []
+        list(workflow.run_many(items, over="width", workers=4,
+                               on_error=lambda item, event: failures.append(item)))
+        assert failures, "the None items should have failed"
+        assert SEQUENCE == [w for w in items if w is not None], "order survived the failures"
+
+
 class TestAdmission:
     """How many items may be alive at once, which bounded queues alone do not settle."""
 

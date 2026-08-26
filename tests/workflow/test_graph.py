@@ -301,7 +301,8 @@ class TestRunningOverManyItems:
             {"a": ("make", {}), "x": ("explode", {})}, [("a", "image", "x", "image")]))
 
     def test_each_item_gets_its_own_run(self, counting, record):
-        answers = list(counting.run_many([1, 2, 3], over="width"))
+        """Serial only: at the default two workers, item 2 starts before item 1 has finished."""
+        answers = list(counting.run_many([1, 2, 3], over="width", workers=1))
         assert [item for item, _ in answers] == [1, 2, 3]
         assert [int(results["b"][0, 0, 0]) for _, results in answers] == [2, 3, 4]
         assert record == [("make", 1), ("brighten", 1), ("make", 2), ("brighten", 2),
@@ -315,7 +316,12 @@ class TestRunningOverManyItems:
         assert answers[0][1]["a"].shape == answers[1][1]["a"].shape
 
     def test_the_source_is_not_read_further_ahead_than_the_run_has_got(self):
-        """The property the whole method exists for: a million items cost no more than one."""
+        """The property the whole method exists for: a million items cost no more than one.
+
+        Serial reads nothing ahead at all. The pipelined default reads ahead by a bounded amount
+        instead -- bounded, so a million items still cost what the items in flight cost, but not
+        zero. ``tests/workflow/test_pipeline.py`` states that bound.
+        """
         reached = []
 
         def counted():
@@ -324,7 +330,7 @@ class TestRunningOverManyItems:
                 yield width
 
         workflow = Workflow.from_dict(document({"a": ("make", {})}))
-        answers = workflow.run_many(counted(), over="width")
+        answers = workflow.run_many(counted(), over="width", workers=1)
         next(answers)
         assert len(reached) <= 1 + READ_AHEAD, "the source was drained ahead of the run"
         next(answers)
