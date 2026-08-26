@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from conftest import document
+from conftest import FIXTURE, document
 from workflow_nodes import RECORD
 from mozo.workflow import Workflow
 
@@ -277,6 +277,100 @@ class TestStreaming:
         workflow = Workflow.from_dict(document(
             {"a": ("make", {}), "x": ("explode", {})}, [("a", "image", "x", "image")]))
         assert set(workflow.run()) == {"a"}
+
+
+#: How far ahead of what it has yielded ``run_many`` may read its source. Nothing today, and the
+#: bound rather than the constant because a pooled executor reads ``K`` items ahead by definition
+#: -- the property worth holding is that read-ahead stays bounded, not that it stays zero.
+READ_AHEAD = 0
+
+
+class TestRunningOverManyItems:
+    """One run per item, at any size, and what happens when one of them fails."""
+
+    @pytest.fixture
+    def counting(self):
+        """A chain whose answer says which item produced it."""
+        return Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {})}, [("a", "image", "b", "image")]))
+
+    @pytest.fixture
+    def failing(self):
+        """A chain whose second node always raises."""
+        return Workflow.from_dict(document(
+            {"a": ("make", {}), "x": ("explode", {})}, [("a", "image", "x", "image")]))
+
+    def test_each_item_gets_its_own_run(self, counting, record):
+        answers = list(counting.run_many([1, 2, 3], over="width"))
+        assert [item for item, _ in answers] == [1, 2, 3]
+        assert [int(results["b"][0, 0, 0]) for _, results in answers] == [2, 3, 4]
+        assert record == [("make", 1), ("brighten", 1), ("make", 2), ("brighten", 2),
+                          ("make", 3), ("brighten", 3)]
+
+    def test_the_default_binds_each_item_to_the_node_that_reads_a_file(self):
+        """The documented default, on the one shipped node that has an ``image`` parameter."""
+        workflow = Workflow.from_dict(document({"a": ("load_image", {})}))
+        answers = list(workflow.run_many([str(FIXTURE), str(FIXTURE)]))
+        assert [item for item, _ in answers] == [str(FIXTURE), str(FIXTURE)]
+        assert answers[0][1]["a"].shape == answers[1][1]["a"].shape
+
+    def test_the_source_is_not_read_further_ahead_than_the_run_has_got(self):
+        """The property the whole method exists for: a million items cost no more than one."""
+        reached = []
+
+        def counted():
+            for width in range(1, 5):
+                reached.append(width)
+                yield width
+
+        workflow = Workflow.from_dict(document({"a": ("make", {})}))
+        answers = workflow.run_many(counted(), over="width")
+        next(answers)
+        assert len(reached) <= 1 + READ_AHEAD, "the source was drained ahead of the run"
+        next(answers)
+        assert len(reached) <= 2 + READ_AHEAD
+
+    def test_other_overrides_are_passed_through_to_every_item(self, counting):
+        answers = list(counting.run_many([1, 2], over="width", by=10))
+        assert [int(results["b"][0, 0, 0]) for _, results in answers] == [11, 12]
+
+    def test_a_failing_item_stops_the_run_when_nothing_is_there_to_catch_it(self, failing):
+        with pytest.raises(RuntimeError, match="as promised"):
+            list(failing.run_many([1, 2], over="width"))
+
+    def test_a_failing_item_is_handed_over_and_the_rest_continue(self, failing):
+        failures = []
+        answers = list(failing.run_many(
+            [1, 2, 3], over="width", on_error=lambda item, event: failures.append((item, event))))
+
+        assert answers == [], "an item whose graph failed must not come back as a partial answer"
+        assert [item for item, _ in failures] == [1, 2, 3]
+        assert failures[0][1].node == "x"
+        assert "as promised" in failures[0][1].error
+
+    def test_raising_from_the_callback_is_how_a_failure_budget_is_spelled(self, failing):
+        seen = []
+
+        def give_up(item, event):
+            seen.append(item)
+            if len(seen) == 2:
+                raise RuntimeError("too many failures")
+
+        with pytest.raises(RuntimeError, match="too many failures"):
+            list(failing.run_many(range(1, 100), over="width", on_error=give_up))
+        assert seen == [1, 2]
+
+    def test_a_workflow_that_cannot_be_run_says_so_before_the_first_item(self):
+        workflow = Workflow.from_dict(document({"a": ("make", {})}))
+        answers = workflow.run_many([1, 2], over="nonesuch")
+        with pytest.raises(KeyError, match="no parameter"):
+            next(answers)
+
+    def test_binding_the_items_to_a_parameter_that_is_also_fixed_is_refused(self, counting):
+        """Every item would run on the fixed value, which is a silent no-op rather than an error."""
+        answers = counting.run_many([1, 2], over="width", width=9)
+        with pytest.raises(KeyError, match="rather than on itself"):
+            next(answers)
 
 
 class TestTheFileFormat:

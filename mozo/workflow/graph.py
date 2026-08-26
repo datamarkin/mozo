@@ -167,11 +167,72 @@ class Workflow:
             A node that failed is absent, along with everything downstream of it. Use
             :meth:`stream` where the reason matters: it reports the failure and names the node.
         """
-        results = {}
-        for event in self.stream(**overrides):
-            if event.status == "completed":
-                results[event.node] = event.output
-        return results
+        return self._drain(self._resolve(overrides))[0]
+
+    def run_many(self, items, *, over: str = "image", on_error=None,
+                 **overrides) -> Iterator[tuple]:
+        """Run the workflow once per item, yielding ``(item, results)`` as each finishes.
+
+        A generator rather than a list, which is the whole reason this works at any size: nothing
+        holds more than one item's results at a time, so a directory of a million costs the same
+        memory as one photograph. ``items`` is consumed lazily, so it may be a generator itself
+        and may never end.
+
+        The overrides are settled **once**, before the first item, because their shape does not
+        change -- only the one value does. Resolving per item would rebuild :attr:`parameters` a
+        million times for a million items, which measured at a tenth of the whole run.
+
+        Runs serially, one item at a time.
+
+        Args:
+            items: What to run on, one at a time. Anything :meth:`run` accepts for *over* -- paths,
+                bytes, arrays -- and any iterable of them.
+            over: The parameter each item is bound to. ``"image"`` because that is what
+                :func:`~mozo.workflow.nodes.io.load_image` calls its own, so a workflow reads the
+                way it should.
+            on_error: Called as ``on_error(item, event)`` with the failing :class:`Event`, which
+                skips that item and continues. Left unset, a failure raises and the run stops.
+                A corrupt file in a million should not end a six-hour run, but silently dropping
+                it is worse than stopping, so the caller says where the failure goes. Raising from
+                inside the callback stops the run, which is how a budget is spelled while this
+                runs serially.
+
+        Yields:
+            ``(item, results)`` in the order *items* arrived, where *results* is exactly what
+            :meth:`run` returns. An item whose graph failed part way is not yielded at all, rather
+            than yielded with the nodes that did complete: a caller iterating results would have
+            no way to tell a partial answer from a whole one, and half a workflow's output is the
+            kind of wrong that looks right.
+
+        Raises:
+            KeyError: On the first item, if *over* or an override names no parameter or an
+                ambiguous one, or if *over* is also given as an override -- every item would then
+                run on that fixed value instead of itself. A workflow that cannot be run does not
+                become a million failed items.
+
+        Examples:
+            >>> for path, results in workflow.run_many(paths):   # doctest: +SKIP
+            ...     save(results["annotate"], path)
+        """
+        if over in overrides:
+            raise KeyError(
+                f"{over!r} is both the parameter each item binds to and an override, so every "
+                f"item would run on {overrides[over]!r} rather than on itself. Pass one or "
+                f"the other.")
+        settings = self._resolve({over: None, **overrides})
+        # The one leaf that changes per item. Everything else in ``settings`` is already final,
+        # and ``_steps`` only reads it, so one dict is safe to carry across the whole run.
+        bound = next(values for values in settings.values() if over in values)
+
+        for item in items:
+            bound[over] = item
+            results, failure = self._drain(settings)
+            if failure is None:
+                yield item, results
+            elif on_error is None:
+                raise RuntimeError(f"{item!r}: {failure.error}")
+            else:
+                on_error(item, failure)
 
     def stream(self, **overrides) -> Iterator[Event]:
         """Run the workflow, reporting each node as it starts and as it finishes.
@@ -187,6 +248,21 @@ class Workflow:
                 -- the same reason construction is what validates the document.
         """
         return self._steps(self._resolve(overrides))
+
+    def _drain(self, settings: dict) -> tuple:
+        """One run, as ``(what completed, the failure that stopped it or None)``.
+
+        The one place a run is turned into an answer. :meth:`run` wants the first half and
+        :meth:`run_many` wants both, which is one loop with two callers rather than the two loops
+        this module's docstring describes having already had to merge once.
+        """
+        results, failure = {}, None
+        for event in self._steps(settings):
+            if event.status == "completed":
+                results[event.node] = event.output
+            elif event.status == "failed":
+                failure = event
+        return results, failure
 
     def _steps(self, settings: dict) -> Iterator[Event]:
         """Run each node in order, reporting as it goes."""
