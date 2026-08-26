@@ -53,35 +53,35 @@ def variants(family: str) -> Any:
 
 # --- Detection ---------------------------------------------------------------------------------
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def yolov8(image: Image, variant: variants("yolov8") = "nano",
            threshold: float = 0.5) -> Detections:
     """YOLOv8 by Ultralytics -- real-time object detection."""
     return mozo.get_model("yolov8", variant).predict(image, threshold=threshold)
 
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def yolov11(image: Image, variant: variants("yolov11") = "nano",
             threshold: float = 0.5) -> Detections:
     """YOLO11 by Ultralytics -- real-time object detection."""
     return mozo.get_model("yolov11", variant).predict(image, threshold=threshold)
 
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def yolov12(image: Image, variant: variants("yolov12") = "nano",
             threshold: float = 0.5) -> Detections:
     """YOLO12 by Ultralytics -- attention-centric real-time object detection."""
     return mozo.get_model("yolov12", variant).predict(image, threshold=threshold)
 
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def yolov26(image: Image, variant: variants("yolov26") = "nano",
             threshold: float = 0.5) -> Detections:
     """YOLO26 by Ultralytics -- NMS-free detection, and instance masks on the seg variants."""
     return mozo.get_model("yolov26", variant).predict(image, threshold=threshold)
 
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def rfdetr(image: Image, variant: variants("rfdetr") = "nano",
            threshold: float = 0.5) -> Detections:
     """RF-DETR by Roboflow -- NMS-free transformer detection, under a permissive licence."""
@@ -90,7 +90,7 @@ def rfdetr(image: Image, variant: variants("rfdetr") = "nano",
 
 # --- Detection from a description ----------------------------------------------------------------
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def owlv2(image: Image, text: str = "a person, a car, a dog",
           variant: variants("owlv2") = "base-ensemble", threshold: float = 0.1) -> Detections:
     """OWLv2 by Google -- find anything you can name, with no training."""
@@ -98,7 +98,7 @@ def owlv2(image: Image, text: str = "a person, a car, a dog",
         image, text=comma_separated(text), threshold=threshold)
 
 
-@node(category="Detect")
+@node(category="Detect", exclusive=True)
 def grounding_dino(image: Image, text: str = "person, car, dog",
                    variant: variants("grounding_dino") = "tiny",
                    threshold: float = 0.3) -> Detections:
@@ -109,7 +109,7 @@ def grounding_dino(image: Image, text: str = "person, car, dog",
 
 # --- Segmentation --------------------------------------------------------------------------------
 
-@node(category="Segment")
+@node(category="Segment", exclusive=True)
 def sam3(image: Image, text: str = "person", variant: variants("sam3") = "sam3",
          threshold: float = 0.5) -> Detections:
     """SAM 3 by Meta -- masks for every instance of a concept you name."""
@@ -119,7 +119,7 @@ def sam3(image: Image, text: str = "person", variant: variants("sam3") = "sam3",
 
 # --- Edit ------------------------------------------------------------------------------------------
 
-@node(category="Edit")
+@node(category="Edit", exclusive=True)
 def moebius(image: Image, detections: Detections,
             variant: variants("moebius") = "general",
             seed: int = 0, dilate: int = 0) -> Image:
@@ -135,7 +135,7 @@ def moebius(image: Image, detections: Detections,
 
 # --- Pose ------------------------------------------------------------------------------------------
 
-@node(category="Pose")
+@node(category="Pose", exclusive=True)
 def vitpose(image: Image, detections: Detections,
             variant: variants("vitpose") = "small") -> Detections:
     """ViTPose++ -- the joints of everyone you point it at. Wire a detector into ``detections``."""
@@ -144,14 +144,14 @@ def vitpose(image: Image, detections: Detections,
 
 # --- Classification ------------------------------------------------------------------------------
 
-@node(category="Classify")
+@node(category="Classify", exclusive=True)
 def clip(image: Image, text: str = "a photo of a cat, a photo of a dog",
          variant: variants("clip") = "base") -> Classifications:
     """CLIP by OpenAI -- score an image against phrases you make up."""
     return mozo.get_model("clip", variant).predict(image, text=comma_separated(text))
 
 
-@node(category="Classify")
+@node(category="Classify", exclusive=True)
 def siglip2(image: Image, text: str = "a photo of a cat, a photo of a dog",
             variant: variants("siglip2") = "base-224") -> Classifications:
     """SigLIP 2 by Google -- zero-shot classification against phrases you make up."""
@@ -160,7 +160,7 @@ def siglip2(image: Image, text: str = "a photo of a cat, a photo of a dog",
 
 # --- Reading -------------------------------------------------------------------------------------
 
-@node(category="Read")
+@node(category="Read", exclusive=True)
 def easyocr(image: Image, variant: variants("easyocr") = "english") -> Detections:
     """EasyOCR by JaidedAI -- find text in an image and read it."""
     return mozo.get_model("easyocr", variant).predict(image)
@@ -168,7 +168,7 @@ def easyocr(image: Image, variant: variants("easyocr") = "english") -> Detection
 
 # --- Depth ---------------------------------------------------------------------------------------
 
-@node(category="Depth")
+@node(category="Depth", exclusive=True)
 def depth_anything_v2(image: Image, variant: variants("depth_anything_v2") = "small") -> Depth:
     """Depth Anything V2 -- how far away everything is, from one photograph."""
     return mozo.get_model("depth_anything_v2", variant).predict(image)

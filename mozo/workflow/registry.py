@@ -21,20 +21,26 @@ __all__ = ["catalogue", "get", "names", "node"]
 _NODES: dict[str, NodeSpec] = {}
 
 
-def node(*, category: str, outputs: Sequence[str] | None = None) -> Callable:
+def node(*, category: str, outputs: Sequence[str] | None = None,
+         ordered: bool = False, exclusive: bool = False) -> Callable:
     """Register the decorated function as a node.
 
     Args:
         category: How the editor groups this node -- ``"Annotate"``, ``"Transform"``, ``"Model"``.
         outputs: Names for the output ports, in order, where the port types' own names are not
             specific enough -- two images out of one node, say.
+        ordered: Set it where the node's calls are a sequence rather than a set -- a video writer,
+            a tracker, a running total. See :attr:`~mozo.workflow.node.NodeSpec.ordered`; the node
+            then runs one item at a time, in arrival order, however many workers were asked for.
+        exclusive: Set it where the node holds a model, a device, or any other single resource, so
+            only one item may be inside it at a time. Implied by *ordered*.
 
     Returns:
         The function, unchanged. A node is an ordinary function and stays callable as one, which
         is what lets it be tested without a graph around it.
     """
     def register(function: Callable) -> Callable:
-        spec = NodeSpec.from_function(function, category, outputs)
+        spec = NodeSpec.from_function(function, category, outputs, ordered, exclusive)
         if spec.name in _NODES:
             raise ValueError(
                 f"a node called {spec.name!r} is already registered, from "

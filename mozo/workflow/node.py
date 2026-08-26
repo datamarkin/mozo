@@ -184,10 +184,38 @@ class NodeSpec:
     outputs: tuple
     parameters: tuple
     run: Callable
+    #: May only one item be inside this node at a time?
+    #:
+    #: True for a node holding a model -- a second concurrent inference doubles activation memory,
+    #: and running out of memory ends a run where being slow only delays it. Also true for a node
+    #: holding any single resource: one device, one connection, one open file.
+    #:
+    #: Declared here rather than worked out by the executor, because only the node knows. The
+    #: alternative -- an executor recognising models by which module they were declared in -- is a
+    #: second statement of the same fact, and it is wrong for every node declared anywhere else:
+    #: a node in a user's own file would quietly widen and run several inferences at once.
+    exclusive: bool = False
+    #: Must this node see items one at a time, in the order they arrived?
+    #:
+    #: False for almost everything: a node that turns one image into another has no memory
+    #: between calls, so which frame it gets first cannot matter. It is True for a node that
+    #: appends to something -- a video writer holds one open stream, and the order it is called
+    #: in **is** the content of the file it produces. Concurrency reorders freely (measured: 36 of
+    #: 40 frames arrive out of order at a node behind a jittery stage), so such a node is wrong
+    #: without saying so.
+    #:
+    #: Saying so costs it its parallelism -- an ordered node runs one item at a time, whatever
+    #: the caller asked for -- which is the honest price and not a limitation of the engine: a
+    #: single open file handle cannot be written by four threads either way.
+    #: Ordering implies exclusivity: four threads taking turns through a sequence is the same
+    #: one-at-a-time with more machinery. The two are separate flags because the converse does
+    #: not hold -- a model is exclusive and does not care in which order frames arrive.
+    ordered: bool = False
 
     @classmethod
     def from_function(cls, function: Callable, category: str,
-                      outputs: Sequence[str] | None = None) -> NodeSpec:
+                      outputs: Sequence[str] | None = None,
+                      ordered: bool = False, exclusive: bool = False) -> NodeSpec:
         """Describe *function* as a node.
 
         Args:
@@ -198,6 +226,10 @@ class NodeSpec:
             outputs: Names for the output ports, in order. Each defaults to its port type's own
                 name, which reads correctly for the common cases (``image``, ``detections``) and
                 needs overriding only where that would be ambiguous or vague.
+            ordered: See :attr:`ordered`. Set it on a node whose calls are a sequence rather than
+                a set -- a video writer, a running total, a tracker.
+            exclusive: See :attr:`exclusive`. Set it on a node that holds a model or any other
+                single resource. Implied by *ordered*.
 
         Returns:
             The spec. Building it is the only validation a node gets, and it happens at import.
@@ -236,6 +268,8 @@ class NodeSpec:
             outputs=produced,
             parameters=tuple(parameters),
             run=function,
+            ordered=ordered,
+            exclusive=exclusive or ordered,
         )
 
     def __call__(self, **arguments) -> dict:
