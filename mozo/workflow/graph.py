@@ -35,6 +35,30 @@ class Step:
     #: workflow does not silently rearrange someone's canvas.
     position: dict = field(default_factory=dict)
 
+    def arguments(self, settings: dict) -> dict:
+        """This node's saved parameters, with the run's overrides on top.
+
+        The one statement of how a parameter is settled, because both engines settle them: the
+        serial loop calls this per item and the pipeline calls it once at build time. Written twice
+        it would be a rule that can differ by worker count, which is the single thing running
+        concurrently is not allowed to change -- and this module has already paid for two loops
+        that drifted apart once.
+        """
+        return {**self.parameters, **settings.get(self.id, {})}
+
+    def call(self, arguments: dict) -> tuple:
+        """Run the node, as ``(what it produced, the Event that says why it did not)``.
+
+        The failure message is what a caller finally reads -- ``deliver`` puts it in the
+        ``RuntimeError`` -- so it is built once here rather than once per engine. Written twice,
+        a run's failures would read differently depending on how many workers were asked for,
+        which is the single thing ``workers`` is not allowed to change.
+        """
+        try:
+            return self.spec(**arguments), None
+        except Exception as error:      # noqa: BLE001 -- one item's failure, not the run's
+            return None, Event(self.id, "failed", error=f"{self.spec.name}: {error}")
+
     def to_dict(self) -> dict:
         """Serialise to the editor's node format."""
         return {
@@ -279,18 +303,16 @@ class Workflow:
             step = self.steps[step_id]
             yield Event(step_id, "running")
 
-            arguments = dict(step.parameters)
-            arguments.update(settings.get(step_id, {}))
+            arguments = step.arguments(settings)
             for port, wire in self.incoming[step_id].items():
                 arguments[port] = produced[wire]
                 waiting[wire] -= 1
                 if not waiting[wire]:
                     del produced[wire]
 
-            try:
-                wires = step.spec(**arguments)
-            except Exception as error:
-                yield Event(step_id, "failed", error=f"{step.spec.name}: {error}")
+            wires, failure = step.call(arguments)
+            if failure is not None:
+                yield failure
                 return
 
             produced.update({(step_id, port): value for port, value in wires.items()})
