@@ -40,6 +40,9 @@ PRODUCES = {
     "zero_shot_classification": PortType.CLASSIFICATIONS,
     "depth_estimation": PortType.DEPTH,
     "pose_estimation": PortType.DETECTIONS,
+    # The one task whose answer is a picture. Every other entry here describes an image; this
+    # one replaces it, which is why IMAGE appears on both sides of the node.
+    "image_inpainting": PortType.IMAGE,
 }
 
 #: What to wire into a model node's inputs other than its image, and what produces it. Most

@@ -611,6 +611,7 @@ const state = {
   detections: [],       // pixelflow records, verbatim
   raw: "",              // the response body as text, untouched
   depth: null,          // {image, unit, min, max} when a depth map came back
+  edited: null,         // {image, bytes} when a model rewrote the frame instead of describing it
   masks: new Map(),     // detection index -> tinted offscreen canvases
   lit: -1,              // record under the pointer
   pinned: -1,           // record clicked
@@ -774,7 +775,9 @@ async function run() {
   if (boxed()) {
     if (!state.box) {
       showStatus("failed", "This model needs a box",
-        `${family} has no detector of its own — drag a box round the subject and run again.`);
+        task() === "image_inpainting"
+          ? `${family} removes what you select — drag a box round the thing to remove and run again.`
+          : `${family} has no detector of its own — drag a box round the subject and run again.`);
       return;
     }
     const b = state.box;
@@ -820,7 +823,11 @@ async function run() {
     }
 
     if ((response.headers.get("content-type") || "").startsWith("image/")) {
-      await takeDepth(response);
+      // Which of them it is comes from the catalogue, not from sniffing a header. Discriminating
+      // on X-Depth-Unit would make takeImage the "not depth" branch, so a third image-returning
+      // task would silently render an inpainting story about itself.
+      if (task() === "depth_estimation") await takeDepth(response);
+      else await takeImage(response);
     } else {
       takeDetections(await response.text());
     }
@@ -855,7 +862,7 @@ async function exampleAsFile() {
 
 function takeDetections(text) {
   state.raw = text;
-  state.depth = null;
+  state.depth = state.edited = null;
   state.detections = JSON.parse(text);
   state.masks.clear();
   state.lit = state.pinned = -1;
@@ -878,6 +885,7 @@ async function takeDepth(response) {
     image.src = URL.createObjectURL(blob);
   });
 
+  state.edited = null;
   state.depth = { image, unit, low, high, bytes: blob.size };
   state.detections = [];
   state.masks.clear();
@@ -888,9 +896,50 @@ async function takeDepth(response) {
   draw();
 }
 
+async function takeImage(response) {
+  const blob = await response.blob();
+  const image = new Image();
+  await new Promise((done, fail) => {
+    image.onload = done; image.onerror = fail;
+    image.src = URL.createObjectURL(blob);
+  });
+
+  state.edited = { image, bytes: blob.size };
+  state.depth = null;
+  state.detections = [];
+  state.masks.clear();
+  state.raw = "";
+  tally.count = "edited image";
+  showTally();
+  renderEdited();
+  draw();
+}
+
+function renderEdited() {
+  const e = state.edited;
+  $("pane-list").innerHTML = `
+    <div class="status">
+      <div class="headline">Edited image</div>
+      The model rewrote what you selected and left the rest of the frame alone. There is no score
+      here and no ranking: this is one sample, not an estimate. Run it again with another seed and
+      you get a different, equally valid answer.
+      <dl>
+        <dt>size</dt><dd>${e.image.naturalWidth} &times; ${e.image.naturalHeight}</dd>
+        <dt>png</dt><dd>${byteSize(e.bytes)}, 8-bit</dd>
+      </dl>
+    </div>`;
+  $("pane-json").innerHTML = `
+    <div class="status">
+      <div class="headline">Not JSON</div>
+      This family answers with an 8-bit PNG, not detections. There is nothing to read back out of
+      the headers either: the response is the picture, and the only things that decide it are the
+      seed and the box you drew.
+    </div>`;
+}
+
 function clearResult() {
   state.detections = [];
-  state.depth = null;
+  state.depth = state.edited = null;
   state.raw = "";
   state.masks.clear();
   state.lit = state.pinned = -1;
@@ -957,7 +1006,8 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, box.width, box.height);
 
-  const source = state.depth ? state.depth.image : state.image;
+  const source = state.edited ? state.edited.image
+    : state.depth ? state.depth.image : state.image;
   if (!source) return;
 
   const w = source.naturalWidth, h = source.naturalHeight;
@@ -967,7 +1017,7 @@ function draw() {
   state.placement = { scale, ox, oy, w, h };
 
   ctx.drawImage(source, ox, oy, dw, dh);
-  if (state.depth) return;
+  if (state.depth || state.edited) return;
 
   const active = state.pinned >= 0 ? state.pinned : state.lit;
 

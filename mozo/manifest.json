@@ -505,6 +505,74 @@
         }
       }
     },
+    "moebius/general": {
+      "latest": "2026-08-26",
+      "revisions": {
+        "2026-08-26": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "moebius/general/2026-08-26/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "moebius/general/2026-08-26/NOTICE",
+              "sha256": "a8bdba5892d0ecb0e5e126d65edfabdee18e129f661470ce14974a3c75f87ba5",
+              "size": 1459
+            },
+            "NOTICE-vae": {
+              "path": "moebius/general/2026-08-26/NOTICE-vae",
+              "sha256": "890d0f27e5a24349b1cf3c6b4863d63d2726a40d7fda888adead686c842f5646",
+              "size": 1175
+            },
+            "torch-fp32-unet": {
+              "path": "moebius/general/2026-08-26/torch-fp32-unet.pth",
+              "sha256": "6c9ee08ce467af48767b74416646d82f8a0c1dcfb558c478e635cef0ca8b2ad2",
+              "size": 905297927
+            },
+            "torch-fp32-vae": {
+              "path": "moebius/general/2026-08-26/torch-fp32-vae.pth",
+              "sha256": "a59d7ea697f2942d22002dc3469e8c53db807a6b78f7f5ec03bd4c1f70f98efe",
+              "size": 167394306
+            }
+          }
+        }
+      }
+    },
+    "moebius/places2": {
+      "latest": "2026-08-26",
+      "revisions": {
+        "2026-08-26": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "moebius/places2/2026-08-26/LICENSE",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+              "size": 11358
+            },
+            "NOTICE": {
+              "path": "moebius/places2/2026-08-26/NOTICE",
+              "sha256": "390a48edfdc101ab02bcb38c6b31df24f1436561c17266517d1ac3905b06f83d",
+              "size": 1459
+            },
+            "NOTICE-vae": {
+              "path": "moebius/places2/2026-08-26/NOTICE-vae",
+              "sha256": "890d0f27e5a24349b1cf3c6b4863d63d2726a40d7fda888adead686c842f5646",
+              "size": 1175
+            },
+            "torch-fp32-unet": {
+              "path": "moebius/places2/2026-08-26/torch-fp32-unet.pth",
+              "sha256": "6525afb888e55f9b5c74fa0a5d19ca0762d720d6c716fb0f8422fbeb6868a09a",
+              "size": 905298356
+            },
+            "torch-fp32-vae": {
+              "path": "moebius/places2/2026-08-26/torch-fp32-vae.pth",
+              "sha256": "a59d7ea697f2942d22002dc3469e8c53db807a6b78f7f5ec03bd4c1f70f98efe",
+              "size": 167394306
+            }
+          }
+        }
+      }
+    },
     "owlv2/base": {
       "latest": "2026-08-21",
       "revisions": {
