@@ -149,6 +149,37 @@ def dawdle(image: Image, ms: int = 0) -> Image:
     return image
 
 
+@node(category="Test")
+def explode_on(image: Image, on: int = -1) -> Image:
+    """Fail for one item and pass the rest through.
+
+    :func:`explode` fails on every item, which ends the whole run at once -- and a run that has
+    ended stops its stages, so a sink on another branch never runs for a reason that has nothing
+    to do with what is being tested. One failure among many keeps the run alive around it.
+
+    The parameter is ``on`` rather than ``width`` because ``make`` already has a ``width``, and a
+    run binds its items to a parameter by name: two nodes with the same one is an ambiguity
+    ``run_many`` refuses rather than guesses at.
+    """
+    if int(image[0, 0, 0]) == on:
+        raise RuntimeError(f"item {on}, as promised")
+    return image
+
+
+@node(category="Test")
+def linger(image: Image, ms: int = 0) -> Image:
+    """Pass an image through after a pause of a stated length.
+
+    The steady counterpart to :func:`dawdle`, which pauses for a *random* fraction of its argument
+    because the join tests need branches that finish in an unpredictable order. A test about what
+    happens to an item after one of its branches fails needs the opposite: the other branch still
+    inside this node when the failure lands, every time, or the test passes for the wrong reason
+    on a fast machine.
+    """
+    time.sleep(ms / 1000.0)
+    return image
+
+
 @node(category="Test", ordered=True)
 def append_ordered(image: Image) -> None:
     """A sink whose calls are a sequence, the way a video writer's are.

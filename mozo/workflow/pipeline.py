@@ -73,8 +73,8 @@ def _failed(value: Any) -> bool:
 class Stage:
     """One node, its inbound queue, and the workers that drain it."""
 
-    def __init__(self, step, ports: frozenset, width: int, settings: dict,
-                 results: Queue, measure: bool = False) -> None:
+    def __init__(self, step, ports: frozenset, width: int, settings: dict, results: Queue,
+                 stopped: dict, stopped_lock: threading.Lock, measure: bool = False) -> None:
         self.step = step
         #: Every argument that must arrive before this node can run. Input ports, plus the
         #: parameter the run binds each item to when this is the node the items enter by.
@@ -94,6 +94,14 @@ class Stage:
         self.held: dict[int, dict] = {}
         self.turn = 0
         self.stopping = False
+        #: ``{seq: the Event that ended it}``, one record shared by every stage of one run. A node
+        #: fails one branch of an item; the branches beside it have no wire from the failure and
+        #: would otherwise run on. Shared rather than propagated because there is no edge to
+        #: propagate along -- that is precisely what makes them independent. Required rather than
+        #: defaulted: a stage holding a private one is not a stage with less to do, it is the bug
+        #: this exists to fix, and a default would make that constructible.
+        self.stopped = stopped
+        self.stopped_lock = stopped_lock
         self.queue_peak = 0
         #: Nanoseconds spent inside the node itself, summed over every worker. Against the run's
         #: wall time this says whether the stage was kept fed -- which is the only way to tell a
@@ -112,10 +120,15 @@ class Stage:
 
     def _fail(self, seq: int, event: Event) -> None:
         """Send *event* on to everything downstream, so no stage waits for a value never coming."""
+        with self.stopped_lock:
+            self.stopped.setdefault(seq, event)
+        self._pass_on(seq, event)
+        self.results.put((seq, None, event))
+
+    def _pass_on(self, seq: int, event: Event) -> None:
         for targets in self.sends.values():
             for stage, target_port in targets:
                 stage.offer(Parcel(seq, target_port, event))
-        self.results.put((seq, None, event))
 
     def _work(self) -> None:
         while True:
@@ -164,6 +177,16 @@ class Stage:
         broken = next((v for v in arguments.values() if _failed(v)), None)
         if broken is not None:
             self._fail(seq, broken)                      # already broken upstream; do not run
+            return
+
+        # Broken elsewhere in the graph rather than upstream. The item will not be handed to the
+        # caller whatever this node produces, so running it is work nobody reads -- and where the
+        # node writes a file or posts a row, a side effect for an item reported as failed. The
+        # serial engine stops the whole item at its first failure; this is that, concurrently.
+        with self.stopped_lock:
+            elsewhere = self.stopped.get(seq)
+        if elsewhere is not None:
+            self._pass_on(seq, elsewhere)                # so no stage behind this one waits
             return
 
         arguments.pop(_TRIGGER, None)
@@ -249,7 +272,8 @@ def _report(stages: dict, elapsed: float) -> dict:
 
 
 def _build(workflow, settings: dict, over: str, workers: int, model_workers: int,
-           results: Queue, measure: bool) -> tuple:
+           results: Queue, measure: bool, stopped: dict,
+           stopped_lock: threading.Lock) -> tuple:
     """Wire one stage per node. Returns ``(stages, the stages each item is fed into)``.
 
     Every node with no inputs is a source and must be woken once per item, not only the one the
@@ -272,7 +296,7 @@ def _build(workflow, settings: dict, over: str, workers: int, model_workers: int
         arguments = step.arguments(settings)
         arguments.pop(over, None)                        # supplied per item, not once
         stages[node_id] = Stage(step, frozenset(ports), _width(step.spec, workers, model_workers),
-                                arguments, results, measure)
+                                arguments, results, stopped, stopped_lock, measure)
 
     for node_id, wires in workflow.incoming.items():
         for target_port, (source_id, source_port) in wires.items():
@@ -312,8 +336,13 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     #: outlives the generator otherwise: it waits on a permit that a run nobody is draining will
     #: never return, and it holds the source and every item it has read open while it waits.
     abandoned = threading.Event()
+    #: ``{seq: the Event that ended it}`` for items that failed somewhere. Belongs to the run
+    #: rather than to any stage: what it exists to stop is the branches a failure has no wire to.
+    stopped: dict = {}
+    stopped_lock = threading.Lock()
     measure = stats is not None
-    stages, entries = _build(workflow, settings, over, workers, model_workers, results, measure)
+    stages, entries = _build(workflow, settings, over, workers, model_workers, results, measure,
+                             stopped, stopped_lock)
     began = time.perf_counter()
     for stage in stages.values():
         stage.start()
@@ -350,6 +379,8 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
         nonlocal emit
         while emit in ready:
             outcome, item = ready.pop(emit), sources.pop(emit)
+            with stopped_lock:
+                stopped.pop(emit, None)                  # handed over; nothing left to stop
             emit += 1
             inflight.release()
             failure = outcome if _failed(outcome) else None

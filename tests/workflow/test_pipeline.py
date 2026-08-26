@@ -244,6 +244,50 @@ class TestFailure:
         assert seen == [None]
 
 
+class TestFailureStopsTheWholeItem:
+    """A failure ends the item, not merely the branches downstream of it.
+
+    The serial engine returns at the first failure, so nothing after it in topological order runs
+    -- including nodes on branches that never depended on it. A pipeline has no such moment: the
+    failure travels along wires, and a branch beside the failure has no wire from it. Left alone,
+    a node with a side effect runs for an item the caller is told failed, and *which* nodes run
+    depends on ``workers``.
+    """
+
+    #: The one item that fails. The others keep the run alive around it, which is what makes the
+    #: question askable: a run that has ended stops its stages, and then no sink runs anywhere.
+    BAD = 4
+    ITEMS = [2, 3, BAD, 5, 6, 7]
+
+    def graph(self) -> Workflow:
+        """``make`` into two branches: one fails on a single item, the other reaches a sink.
+
+        The sink sits behind a steady pause so that the failure has landed while the other branch
+        is still inside a node -- the window the fix closes. ``sink`` is declared after ``boom``,
+        so the serial engine's topological order reaches the failure first and never gets to it.
+        """
+        return Workflow.from_dict(document(
+            {"a": ("make", {}), "boom": ("explode_on", {"on": self.BAD}),
+             "slow": ("linger", {"ms": 40}), "sink": ("measure", {})},
+            [("a", "image", "boom", "image"), ("a", "image", "slow", "image"),
+             ("slow", "image", "sink", "image")]))
+
+    def test_a_branch_beside_the_failure_does_not_run(self):
+        workflow = self.graph()
+        survivors = [item for item in self.ITEMS if item != self.BAD]
+        for workers in (1, 2, 4):
+            workflow_nodes.RECORD.clear()
+            failures: list = []
+            out = list(workflow.run_many(self.ITEMS, over="width", workers=workers,
+                                         on_error=lambda item, event: failures.append(item)))
+            reached = sorted(width for what, width in workflow_nodes.RECORD if what == "measure")
+            assert failures == [self.BAD], f"only {self.BAD} should fail at workers={workers}"
+            assert [item for item, _ in out] == survivors
+            assert reached == survivors, (
+                f"at workers={workers} the sink ran for {sorted(set(reached) - set(survivors))}, "
+                f"an item the caller was told had failed")
+
+
 class TestLettingGo:
     """A run the caller walked away from leaves nothing behind.
 
