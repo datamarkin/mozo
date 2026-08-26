@@ -1,3 +1,75 @@
+# Mozo v1.1.0: Answers in Pixels
+
+## What's New in v1.1.0
+
+Fifteen families describe an image. The sixteenth rewrites it.
+
+### 🩹 Moebius
+
+Image inpainting — an image and a mask in, the masked thing gone. Two variants, `general` and
+`places2`, at 226M parameters each.
+
+```python
+model = mozo.get_model("moebius/general")
+clean = model.predict("street.jpg", mask=selection)          # or detections=found
+```
+
+It is the first family here whose `predict` returns an array of pixels rather than a PixelFlow
+container, and **the first with no confidence number**, because it does not estimate anything:
+it draws a sample. Run it again with another seed and you get a different, equally valid answer.
+The paper reports it matching FLUX.1-Fill-dev — 11.9B parameters — across six benchmarks.
+
+**Only the seam moves.** The adapter returns an array the same size as the input, with every
+pixel the feathered edge does not reach identical to it byte for byte: about 8 px past the
+selection at the default radius, and exactly the mask's edge at `feather=0`. Upstream returns
+the decoder's reconstruction of the whole frame, which changes every pixel including the ones
+nobody selected.
+
+**It runs at 512×512 and cannot run at anything else.** That is a property of the weights rather
+than a setting — the cross-attention's positional table is stored with a row per latent cell, so
+a larger image has nowhere to put its positions. The frame is fitted and the answer composited
+back at full resolution. A selection too thin to survive the fit is refused rather than returned
+unchanged.
+
+Bit-exact against upstream at every stage, under `torch.equal` with no tolerance: the
+autoencoder's eight stages, both λ layers, the whole 1203-tensor UNet forward, and all nineteen
+DDIM steps including the branch that fires once. The gate is falsifiable and has been falsified —
+four perturbations, each caught at the stage its constant reaches. The most instructive is a
+`GroupNorm` epsilon of 1e-6 against PyTorch's 1e-5, which moves the encoder trunk by 1.9e-03 and
+would have been swallowed by any tolerance a reasonable person would have picked.
+
+`torch-fp32` only, in two artifacts per variant — a denoiser and an autoencoder, with a `NOTICE`
+each, because the autoencoder is a separate work under separate terms.
+
+### ✏️ A task that returns a picture
+
+`image_inpainting` is a new task type. `/predict` gains an arm that answers with a PNG and takes
+a `seed`, the test UI gains a second pane showing the edited frame, and the workflow catalogue
+gains an `Edit` category with a `moebius` node.
+
+It also carried a fix the pose arm needed already: dispatch was on `task in BOXED`, which was
+only ever "pose" by accident of that set having one member. With two members it would have
+answered inpainting requests with pose JSON — and the coverage test could not have seen it,
+because that test counted every `BOXED` member as served whether an arm existed or not. Both
+dispatch by name now.
+
+### ♾️ Workflows over a source of any size
+
+`Workflow` runs once per item over anything iterable — a directory of a million photographs, or
+a camera that never ends. Measured at ten million items from an infinite source with resident
+memory identical at the first item and the last: 78.5 MiB throughout.
+
+A failure goes to `on_error` rather than being swallowed or made fatal; one corrupt file in a
+million should not end a six-hour run. An item whose graph failed part way is not yielded at all,
+because a caller iterating results has no way to tell a partial answer from a whole one.
+
+### 📈 The catalogue
+
+80 variants across 16 families, 47 of them under permissive terms, and thirteen verification
+gates.
+
+---
+
 # Mozo v1.0.2: Where the Joints Are
 
 ## What's New in v1.0.2
