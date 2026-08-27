@@ -34,14 +34,14 @@ import types
 import typing
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, NewType, Sequence
+from typing import Any, Callable, NewType, Optional, Sequence
 
 import numpy as np
 import pixelflow as pf
 
 __all__ = [
     "Classifications", "Color", "Connection", "Depth", "Detections", "Embedding", "Image",
-    "NodeSpec", "Parameter", "Port", "PortType", "Source",
+    "Context", "NodeSpec", "Parameter", "Port", "PortType", "Source", "State",
 ]
 
 
@@ -102,6 +102,194 @@ Color = NewType("Color", str)
 #: server's. So the editor offers a file picker beside the box, and what it uploads arrives as this
 #: parameter's value. From Python or the command line nothing changes: it is a path.
 Source = NewType("Source", str)
+
+class Context:
+    """What a node may know about the run it is in, and about this item's place in it.
+
+    Some facts belong to no node and to every node. A video's frame rate is the plainest: it is
+    not in the pixels -- an array carries a shape and no time at all -- so a sink that writes a
+    video has no way to recover it, and before this it was typed into that node by hand. Typed by
+    hand it is a number that goes stale the moment anything upstream changes: read the same file at
+    ``stride=5`` and the file still says 25, so the result plays five times too fast and nothing
+    reports it.
+
+    So the source says it instead, once, and every node can read it::
+
+        @node(category="Output", ordered=True)
+        def save_video(image: Image, run: Context, state: State, path: str = "out.mp4") -> None:
+            ...cv2.VideoWriter(path, fourcc, run.fps, (run.width, run.height))
+
+    ``read_video(stride=5)`` declares ``fps = 25 / 5``, and the sink is right without anyone
+    knowing to make it right. That is the point: not the typing it saves, but that the wrong answer
+    stops being expressible.
+
+    **It is read-only, and it carries facts about the run, not values between nodes.** Anything one
+    node puts here for another node to read is an edge that is not on the canvas, and a graph whose
+    edges are not all drawn has stopped describing what happens. Values between nodes travel on
+    wires. This is the one rule that keeps it from becoming somewhere to put anything.
+
+    Two kinds of fact live here, and the difference matters:
+
+    * **Constants of the run**, declared by the source before the first item: :attr:`fps`,
+      :attr:`width`, :attr:`height`, :attr:`frames`, :attr:`is_live`, :attr:`name`. A live camera
+      declares ``None`` for the rate and the count, honestly -- a stream has timestamps, not a
+      frame rate, and a sink that needs one is then made to have a policy rather than to guess.
+
+      The names are PixelFlow's, deliberately. A reader reports ``fps``, ``width``, ``height``,
+      ``frames`` and ``is_live``, and a source declaring them copies rather than translates --
+      which is the difference between a fact travelling and a fact being restated, and restating
+      is where names drift apart.
+    * **This item's place**, which the engine knows because it already numbers items:
+      :attr:`index`, and :attr:`time` derived from it. A tracker or a counter needs these, and they
+      cannot be constants of the run because they are what changes.
+    """
+
+    __slots__ = ("_facts", "_sealed", "_index")
+
+    def __init__(self, **facts: Any) -> None:
+        self._facts: dict = dict(facts)
+        self._sealed = False
+        self._index = 0
+
+    def declare(self, **facts: Any) -> None:
+        """Say what this run is, from the source that is the only thing that knows.
+
+        Callable until the source yields its first item, and refused after: a fact that could
+        change part way through a run is not a constant of it, and a node that read the old value
+        would have no way to learn it had been replaced.
+        """
+        if self._sealed:
+            raise RuntimeError(
+                "the run's facts were settled when the source yielded its first item; a node "
+                "cannot change them, because the nodes that already read them cannot be told.")
+        self._facts.update(facts)
+
+    def seal(self) -> "Context":
+        """Settle the facts. Returns self, so a source can be sealed where it is read."""
+        self._sealed = True
+        return self
+
+    def at(self, index: int) -> "Context":
+        """This run, seen from item *index*. The facts are shared; only the place differs."""
+        view = Context()
+        view._facts = self._facts          # shared, not copied -- it is sealed and read-only
+        view._sealed = True
+        view._index = index
+        return view
+
+    @property
+    def index(self) -> int:
+        """Which item this is, counted from zero in the order the source produced them."""
+        return self._index
+
+    @property
+    def fps(self) -> Optional[float]:
+        """Items per second, where the source has a rate. None for a live stream."""
+        return self._facts.get("fps")
+
+    @property
+    def width(self) -> Optional[int]:
+        """The source's width in pixels, where it has one fixed size."""
+        return self._facts.get("width")
+
+    @property
+    def height(self) -> Optional[int]:
+        """The source's height in pixels, where it has one fixed size."""
+        return self._facts.get("height")
+
+    @property
+    def frames(self) -> Optional[int]:
+        """How many items the source expects to produce. None where it cannot know.
+
+        An estimate, not a count. Several container formats derive it from duration times rate, so
+        it is the right thing to draw a progress bar from and the wrong thing to decide when to
+        stop with. A live source declares None, which is the only honest answer.
+        """
+        return self._facts.get("frames")
+
+    @property
+    def is_live(self) -> bool:
+        """Is this run reading something that cannot be rewound?
+
+        The fact a sink needs before any other. A file has a rate and an end; a stream has neither,
+        and a sink that assumed otherwise writes a file that plays at the wrong speed or never
+        finishes. False where nothing said -- a run with no source is not a live one.
+        """
+        return bool(self._facts.get("is_live", False))
+
+    @property
+    def name(self) -> Optional[str]:
+        """What the source is, for a message or a file name. A path, a URL, a camera."""
+        return self._facts.get("name")
+
+    @property
+    def time(self) -> Optional[float]:
+        """Seconds from the start of the run to this item, where the rate is known."""
+        fps = self.fps
+        return None if not fps else self._index / fps
+
+    def __repr__(self) -> str:
+        return f"Context(index={self._index}, {', '.join(f'{k}={v!r}' for k, v in self._facts.items())})"
+
+
+class State(dict):
+    """What one node remembers for as long as one run lasts.
+
+    A node is a function called once per item, which is the whole reason a catalogue can be read
+    off a signature. Three kinds of node cannot be written that way. A video writer holds one open
+    stream. A tracker carries identities between frames. A running total is a total. All three need
+    somewhere to put a thing that outlives the call, and a module-level variable is not it: two runs
+    of the same workflow would share it, and a second camera would be written into the first one's
+    file.
+
+    So it is asked for the way an input is, by annotation::
+
+        @node(category="Output", ordered=True)
+        def save_video(image: Image, state: State, path: str = "out.mp4") -> None:
+            ...
+
+    That is not a second rule beside the one this module opens with, it is one more clause of it:
+    an annotation naming a port type is an input, an annotation naming this is a place to remember,
+    and anything else is a parameter. The editor never shows it -- there is nothing here for a
+    person to type, which is exactly why it cannot be a parameter.
+
+    One is made per node per run and dropped after, so a workflow run twice remembers nothing the
+    second time and two runs at once cannot see each other. It is an ordinary dict.
+
+    **Opening the resource is the node's job, and it happens on the first item rather than before
+    it.** This is not laziness for its own sake: a video writer needs a frame size, and the only
+    thing that knows the frame size is the first frame. A setup step that ran before any item
+    arrived could not open the one resource this exists to hold. Whatever is opened says how to
+    release it with :meth:`on_close`, at the point it was opened -- the one place that knows it
+    succeeded.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._closers: list = []
+
+    def on_close(self, closer: Callable[[], Any]) -> None:
+        """Call *closer* when the run ends, however it ends."""
+        self._closers.append(closer)
+
+    def close(self) -> None:
+        """End the run for this node: release what it opened, newest first.
+
+        Newest first because a later resource may have been opened out of an earlier one. Every
+        closer runs even where one raises, and the first failure is re-raised afterwards: a video
+        left unfinalised because some other sink timed out is a file nobody can play, which is a
+        worse answer than the error that caused it.
+        """
+        failures = []
+        while self._closers:
+            try:
+                self._closers.pop()()
+            except Exception as error:  # noqa: BLE001 -- this closer's failure, not the rest's
+                failures.append(error)
+        self.clear()
+        if failures:
+            raise failures[0]
+
 
 #: Annotation -> port type. The membership test that splits inputs from parameters.
 _PORTS = {
@@ -211,11 +399,26 @@ class NodeSpec:
     #: one-at-a-time with more machinery. The two are separate flags because the converse does
     #: not hold -- a model is exclusive and does not care in which order frames arrive.
     ordered: bool = False
+    #: Does one call of this node produce many items rather than one value?
+    #:
+    #: True for a source: a video file is one node and two hundred thousand items. What it changes
+    #: is who drives the run -- a source is asked once for an iterator and its yields become the
+    #: items, where an ordinary node is called once per item that already exists.
+    produces_many: bool = False
+    #: The argument this node is handed its :class:`Context` on, or None where it asks for none.
+    context: Optional[str] = None
+    #: The argument this node is handed its :class:`State` on, or None where it keeps nothing.
+    #:
+    #: A name rather than a flag, because the engine has to pass it and only the signature says
+    #: what it is called. Read at import with everything else, so a node that remembers something
+    #: is not a kind of node the executor has to recognise -- it is a node with one more argument.
+    state: Optional[str] = None
 
     @classmethod
     def from_function(cls, function: Callable, category: str,
                       outputs: Sequence[str] | None = None,
-                      ordered: bool = False, exclusive: bool = False) -> NodeSpec:
+                      ordered: bool = False, exclusive: bool = False,
+                      produces_many: bool = False) -> NodeSpec:
         """Describe *function* as a node.
 
         Args:
@@ -237,12 +440,24 @@ class NodeSpec:
         hints = typing.get_type_hints(function)
         signature = inspect.signature(function)
 
-        inputs, parameters = [], []
+        inputs, parameters, state, context = [], [], None, None
         for name, argument in signature.parameters.items():
             if name not in hints:
                 raise TypeError(f"{function.__name__}: argument {name!r} has no annotation")
             annotation = _stated(hints[name], argument.default)
-            if annotation in _PORTS:
+            if annotation is Context:
+                if argument.default is not inspect.Parameter.empty:
+                    raise TypeError(
+                        f"{function.__name__}: {name!r} is what the run tells this node about "
+                        f"itself, which the run supplies, so a default would never be read.")
+                context = name
+            elif annotation is State:
+                if argument.default is not inspect.Parameter.empty:
+                    raise TypeError(
+                        f"{function.__name__}: {name!r} is where this node remembers things, and "
+                        f"the run supplies it, so a default would be a value nothing ever reads.")
+                state = name
+            elif annotation in _PORTS:
                 if argument.default is not inspect.Parameter.empty:
                     raise TypeError(
                         f"{function.__name__}: input {name!r} has a default. An input arrives over "
@@ -260,6 +475,22 @@ class NodeSpec:
 
         produced = _produced(function.__name__, hints["return"], outputs)
 
+        if produces_many:
+            if inputs:
+                raise TypeError(
+                    f"{function.__name__}: a source has no inputs -- it is where items come from, "
+                    f"so there is nothing upstream of it to wait for. It declares "
+                    f"{[port.name for port in inputs]}.")
+            if len(produced) != 1:
+                raise TypeError(
+                    f"{function.__name__}: a source produces one thing, {len(produced)} declared. "
+                    f"What it yields is the item, and an item is one value.")
+            if not inspect.isgeneratorfunction(function):
+                raise TypeError(
+                    f"{function.__name__}: a source yields its items, so it must be a generator. "
+                    f"Returning a list would read the whole source into memory, which is the one "
+                    f"thing a source exists not to do.")
+
         return cls(
             name=function.__name__,
             category=category,
@@ -269,7 +500,15 @@ class NodeSpec:
             parameters=tuple(parameters),
             run=function,
             ordered=ordered,
-            exclusive=exclusive or ordered,
+            # State implies exclusivity. A node holding something across calls is holding one of
+            # it, and four threads inside it are four threads on one resource: measured, a video
+            # writer at width four did not merely shuffle its frames, it lost 17 of 120 and still
+            # produced a file that plays. Declaring `state` is declaring that, so the flag follows
+            # from it rather than waiting to be remembered separately.
+            exclusive=exclusive or ordered or state is not None,
+            state=state,
+            context=context,
+            produces_many=produces_many,
         )
 
     def __call__(self, **arguments) -> dict:

@@ -14,15 +14,40 @@ from typing import Callable, Sequence
 
 from .node import NodeSpec
 
-__all__ = ["catalogue", "get", "names", "node"]
+__all__ = ["catalogue", "get", "names", "node", "source"]
 
 #: Node name -> spec, in registration order. Insertion order is the editor's palette order, so it
 #: follows the order node modules declare their nodes in rather than an alphabetical accident.
 _NODES: dict[str, NodeSpec] = {}
 
 
+def source(*, category: str = "Input", outputs: Sequence[str] | None = None) -> Callable:
+    """Register the decorated generator as a source: the node a run's items come from.
+
+    A source is the one node that is not called once per item, because it is where the items come
+    from. It is asked once for an iterator, and what it yields becomes the run -- one image for a
+    file, two hundred thousand for a video, an unbounded stream for a camera. So a run is one pass
+    over whatever the source yields, and how many items there are stops being something the caller
+    has to know and starts being something the workflow says.
+
+    It yields rather than returning a list, and that is not a style: a list of a video's frames is
+    the video in memory, which is the one thing a source exists not to do.
+
+    Where it declares :class:`~mozo.workflow.node.Context` in its signature, it should say what the
+    run is -- rate, size, how many to expect -- before it yields the first item. That is the only
+    moment those facts can be settled, and the only place that knows them.
+
+    Args:
+        category: How the editor groups this node. ``"Input"`` unless there is a reason.
+        outputs: A name for the output port, where the port type's own name is not specific
+            enough. A source has exactly one, since what it yields is the item.
+    """
+    return node(category=category, outputs=outputs, produces_many=True)
+
+
 def node(*, category: str, outputs: Sequence[str] | None = None,
-         ordered: bool = False, exclusive: bool = False) -> Callable:
+         ordered: bool = False, exclusive: bool = False,
+         produces_many: bool = False) -> Callable:
     """Register the decorated function as a node.
 
     Args:
@@ -33,14 +58,18 @@ def node(*, category: str, outputs: Sequence[str] | None = None,
             a tracker, a running total. See :attr:`~mozo.workflow.node.NodeSpec.ordered`; the node
             then runs one item at a time, in arrival order, however many workers were asked for.
         exclusive: Set it where the node holds a model, a device, or any other single resource, so
-            only one item may be inside it at a time. Implied by *ordered*.
+            only one item may be inside it at a time. Implied by *ordered*, and by asking for a
+            :class:`~mozo.workflow.node.State`.
+        produces_many: Set by :func:`source` rather than by hand. Says the node is asked once for
+            an iterator whose yields are the run's items, instead of being called once per item.
 
     Returns:
         The function, unchanged. A node is an ordinary function and stays callable as one, which
         is what lets it be tested without a graph around it.
     """
     def register(function: Callable) -> Callable:
-        spec = NodeSpec.from_function(function, category, outputs, ordered, exclusive)
+        spec = NodeSpec.from_function(function, category, outputs, ordered, exclusive,
+                                      produces_many)
         if spec.name in _NODES:
             raise ValueError(
                 f"a node called {spec.name!r} is already registered, from "
