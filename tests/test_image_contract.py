@@ -69,10 +69,27 @@ class TestLoadImage:
         assert np.array_equal(load_image(payload), load_image(FIXTURE))
 
     def test_an_array_is_taken_at_its_word(self):
-        # There is nothing in an ndarray to inspect, so it is returned untouched rather than
-        # guessed at. Anything else would be inventing a fact about the caller's data.
+        # Channel order is the one thing an ndarray cannot be asked about, so an RGB uint8 array
+        # is returned untouched rather than guessed at. Anything else would be inventing a fact
+        # about the caller's data.
         array = np.zeros((4, 4, 3), dtype=np.uint8)
         assert load_image(array) is array
+
+    @pytest.mark.parametrize("array, why", [
+        (np.zeros((4, 4), np.uint8), "grayscale"),
+        (np.zeros((4, 4, 4), np.uint8), "RGBA"),
+        (np.zeros((4, 4, 3), np.float32), "float"),
+        (np.zeros((1, 4, 4, 3), np.uint8), "four dimensions"),
+    ])
+    def test_an_array_of_the_wrong_kind_is_refused(self, array, why):
+        """Trusted on channel order is not trusted on everything else.
+
+        Order cannot be recovered from pixels, so it is taken on the caller's word. Shape and
+        dtype can, so they are checked -- and a grayscale or float array stops here rather than
+        reaching a model that will read it as something it is not.
+        """
+        with pytest.raises(ValueError):
+            load_image(array)
 
     def test_a_missing_path_is_an_error_not_a_none(self):
         with pytest.raises(FileNotFoundError):
@@ -83,7 +100,13 @@ class TestLoadImage:
             load_image(b"not an image")
 
     def test_an_unsupported_type_names_what_is_accepted(self):
-        with pytest.raises(ValueError, match="path .str or Path., encoded bytes, or numpy array"):
+        """``TypeError``, because 42 is the wrong kind of thing rather than a bad value of the
+        right kind -- which is the distinction undecodable bytes are on the other side of.
+
+        Matched on what the message has to say, not on how it says it: the wording belongs to
+        PixelFlow now, and rewording it there should not fail a test here.
+        """
+        with pytest.raises(TypeError, match=r"path.*buffer.*array"):
             load_image(42)
 
 
