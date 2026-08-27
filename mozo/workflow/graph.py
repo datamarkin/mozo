@@ -15,13 +15,42 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from . import registry
-from .node import Connection, NodeSpec
+from .node import Connection, Context, NodeSpec, State
 
 __all__ = ["Event", "Workflow"]
+
+#: A source that yielded nothing is not a source that yielded None.
+_NOTHING = object()
+
+
+def _forget(states: list) -> None:
+    """End the run for every node that kept something, releasing what each of them opened.
+
+    Every node is closed even where one of them raises, and the first failure is re-raised after:
+    a run whose video writer was never released because an unrelated sink threw has produced a file
+    that will not play, which is a worse answer than the error that caused it.
+    """
+    failures = []
+    for state in states:
+        try:
+            state.close()
+        except Exception as error:  # noqa: BLE001 -- this node's failure, not the other nodes'
+            failures.append(error)
+    if failures:
+        raise failures[0]
+
+
+def _closing(events: Iterator, states: list) -> Iterator:
+    """*events*, with the run's state released when it ends -- or when the caller walks away."""
+    try:
+        yield from events
+    finally:
+        _forget(states)
 
 
 @dataclass(frozen=True)
@@ -58,6 +87,32 @@ class Step:
             return self.spec(**arguments), None
         except Exception as error:      # noqa: BLE001 -- one item's failure, not the run's
             return None, Event(self.id, "failed", error=f"{self.spec.name}: {error}")
+
+    def first(self, arguments: dict) -> tuple:
+        """A source's first item, as this node's output, for a run of one item.
+
+        :meth:`Workflow.run` and :meth:`Workflow.stream` are one pass over one item, so a source
+        that would yield two hundred thousand frames is asked for one and closed. That is what
+        makes a workflow with a video in it something the editor can show: without it the source
+        returned its generator, the generator travelled down the graph as though it were an image,
+        and the failure surfaced two nodes later reading ``OpenCV(-5:Bad argument)`` -- an error
+        naming the wrong node and blaming the wrong library.
+
+        Closed in a ``finally`` rather than left to be collected, because the thing it holds is an
+        open file handle on a video, and a preview must not keep one.
+        """
+        produced = None
+        try:
+            produced = self.spec.run(**arguments)
+            item = next(produced, _NOTHING)
+            if item is _NOTHING:
+                raise ValueError("produced nothing to run on")
+            return {self.spec.outputs[0].name: item}, None
+        except Exception as error:      # noqa: BLE001 -- this node's failure, reported as one
+            return None, Event(self.id, "failed", error=f"{self.spec.name}: {error}")
+        finally:
+            if produced is not None:
+                produced.close()
 
     def to_dict(self) -> dict:
         """Serialise to the editor's node format."""
@@ -177,6 +232,22 @@ class Workflow:
         return tuple(step_id for step_id in self.order if step_id not in feeding)
 
     @property
+    def source(self) -> Optional[str]:
+        """The node this run's items come from, or None where the caller supplies them.
+
+        One at most, for now. Two sources is two runs interleaved -- each with its own rate, its
+        own size, its own count -- and :class:`~mozo.workflow.node.Context` would have to answer
+        "which one" before it could answer anything. That is the multi-camera design, and refusing
+        it here says so plainly rather than picking one source's facts and calling them the run's.
+        """
+        found = [step_id for step_id, step in self.steps.items() if step.spec.produces_many]
+        if len(found) > 1:
+            raise ValueError(
+                f"{len(found)} sources in one workflow: {found}. A run is one pass over one "
+                f"source, so two would be two runs and the facts of neither.")
+        return found[0] if found else None
+
+    @property
     def parameters(self) -> dict:
         """Every parameter in the workflow, as ``name -> [node id, ...]``.
 
@@ -206,7 +277,12 @@ class Workflow:
             A node that failed is absent, along with everything downstream of it. Use
             :meth:`stream` where the reason matters: it reports the failure and names the node.
         """
-        return self._drain(self._resolve(overrides))[0]
+        settings = self._resolve(overrides)
+        states = self._remember(settings)
+        try:
+            return self._drain(settings)[0]
+        finally:
+            _forget(states)
 
     def run_many(self, items, *, over: str = "image", on_error=None, workers: int = 2,
                  model_workers: int = 1, stats: Optional[dict] = None,
@@ -282,7 +358,26 @@ class Workflow:
                 f"item would run on {overrides[over]!r} rather than on itself. Pass one or "
                 f"the other.")
         settings = self._resolve({over: None, **overrides})
+        states = self._remember(settings)
+        try:
+            yield from self._many(items, over, settings, on_error, workers, model_workers, stats)
+        finally:
+            # Reached however the run ended: the last item, an exception, or a caller who stopped
+            # iterating -- the case that matters most, because that is the one where a half-written
+            # video would otherwise be left with no moov atom and no way to play it.
+            _forget(states)
 
+    def _many(self, items, over: Optional[str], settings: dict, on_error, workers: int,
+              model_workers: int, stats: Optional[dict], driving: Optional[str] = None,
+              run: Optional[Context] = None) -> Iterator[tuple]:
+        """One pass over *items*, however they were come by.
+
+        The two ways in meet here. :meth:`run_many` brings the items and binds each to a parameter
+        named by *over*; :meth:`process` asks the source for them and names it in *driving*. From
+        this point down there is no difference worth keeping: an item is a value that has to reach
+        the graph, and the only question is which port it arrives on.
+        """
+        folded, folded_results = self._fold(settings, over)
         if workers > 1:
             # A staged pipeline: one queue and one worker set per node. Serial below is unchanged,
             # so asking for no workers runs exactly the code that ran before this existed. Imported
@@ -290,7 +385,7 @@ class Workflow:
             # deferring the one arrow back is what keeps the pair acyclic.
             from .pipeline import run_pipelined
             yield from run_pipelined(self, items, over, settings, workers, on_error,
-                                     model_workers, stats)
+                                     model_workers, stats, folded, folded_results, driving, run)
             return
         if stats is not None:
             raise ValueError(
@@ -301,12 +396,84 @@ class Workflow:
         # and ``_steps`` only reads it, so one dict is safe to carry across the whole run. This is
         # also why it cannot be shared by two items at once, and why the pipeline above binds the
         # value to each item's parcel instead.
-        bound = next(values for values in settings.values() if over in values)
+        bound = next((values for values in settings.values() if over in values), None) \
+            if over is not None else None
+        port = self.steps[driving].spec.outputs[0].name if driving else None
 
-        for item in items:
-            bound[over] = item
-            results, failure = self._drain(settings)
+        for index, item in enumerate(items):
+            if bound is not None:
+                bound[over] = item
+            # The driving source is folded too, only per item rather than once: what it produced
+            # is settled for this item exactly as a constant is settled for the run, so both reach
+            # the graph by the same road and ``_steps`` does not have to know which is which.
+            settled = {**folded, driving: {port: item}} if driving else folded
+            reported = {**folded_results, driving: item} if driving else folded_results
+            results, failure = {}, None
+            for event in self._steps(settings, settled, reported,
+                                     run.at(index) if run is not None else None):
+                if event.status == "completed":
+                    results[event.node] = event.output
+                elif event.status == "failed":
+                    failure = event
             yield from deliver(item, results, failure, on_error)
+
+    def process(self, *, workers: int = 2, on_error=None, model_workers: int = 1,
+                stats: Optional[dict] = None, **overrides) -> Iterator[tuple]:
+        """Run once per item the source yields, yielding ``(item, results)`` as each finishes.
+
+        A run is one pass over whatever the workflow's source produces: one image from
+        :func:`~mozo.workflow.nodes.io.load_image`, every frame from
+        :func:`~mozo.workflow.nodes.io.read_video`, an unbounded stream from a camera. How many
+        items there are stops being something the caller has to know and becomes something the
+        workflow says -- which is the difference between this and :meth:`run_many`, where the
+        caller brings the items and the workflow is only told what to do with each.
+
+        The source is asked for its facts before its first item, and they are settled from then on:
+        every node that asked for a :class:`~mozo.workflow.node.Context` reads the same rate, size
+        and count, and reads this item's index off the one the engine already assigned.
+
+        Args:
+            workers: As :meth:`run_many` means it.
+            on_error: As :meth:`run_many` means it.
+
+        Yields:
+            ``(item, results)`` in the order the source produced them.
+
+        Raises:
+            ValueError: If the workflow has no source, naming what it would need. A workflow whose
+                items come from the caller is run with :meth:`run_many` instead.
+        """
+        source_id = self.source
+        if source_id is None:
+            raise ValueError(
+                "this workflow has no source, so there is nothing for a run to be a pass over. "
+                "Give it one -- read_video, load_image -- or bring the items yourself with "
+                "run_many(items, over=...).")
+
+        settings = self._resolve(overrides)
+        states = self._remember(settings)
+        try:
+            step = self.steps[source_id]
+            arguments = step.arguments(settings)
+            # Empty: the source names the run, on the next line but one. Seeding this from the
+            # first parameter guessed at which one was the name from dictionary order, and the
+            # declare overwrote it anyway.
+            run = Context()
+            if step.spec.context:
+                arguments[step.spec.context] = run
+            # ``spec.run`` rather than the spec itself: a source is not called per item, so the
+            # batching that ``NodeSpec.__call__`` exists for has nothing to fan out over.
+            produced = step.spec.run(**arguments)
+            first = next(produced, _NOTHING)
+            # Settled here, after the source has had its chance to declare and before any node can
+            # read: everything before this point is the source describing the run, everything
+            # after is the run.
+            run.seal()
+            items = () if first is _NOTHING else chain((first,), produced)
+            yield from self._many(items, None, settings, on_error, workers, model_workers, stats,
+                                  driving=source_id, run=run)
+        finally:
+            _forget(states)
 
     def stream(self, **overrides) -> Iterator[Event]:
         """Run the workflow, reporting each node as it starts and as it finishes.
@@ -321,7 +488,73 @@ class Workflow:
                 than on the first step, so that a caller who got a workflow back knows it will run
                 -- the same reason construction is what validates the document.
         """
-        return self._steps(self._resolve(overrides))
+        settings = self._resolve(overrides)
+        states = self._remember(settings)
+        # Not a generator function: the overrides are refused here, before the caller has an
+        # iterator, and a generator would defer that to the first ``next``. The wrapper is what
+        # releases what the nodes opened -- including when the caller stops reading part way,
+        # which reaches the generator as GeneratorExit and runs its ``finally`` all the same.
+        return _closing(self._steps(settings), states)
+
+    def _remember(self, settings: dict) -> list:
+        """Give every node that keeps something a place to keep it, for this run and no other.
+
+        Written into *settings* rather than handed to the executor, because that is already the
+        one channel by which a node's arguments are settled once and read per item -- both engines
+        go through :meth:`Step.arguments`, so neither has to learn what a state is. The pipeline
+        reads it once at build time and the serial loop reads it per item, and they get the same
+        object either way, which is the whole requirement.
+
+        Returns:
+            What was made, for the caller to :func:`_forget` when the run ends.
+        """
+        states = []
+        for step_id, step in self.steps.items():
+            if step.spec.state:
+                state = State()
+                settings.setdefault(step_id, {})[step.spec.state] = state
+                states.append(state)
+        return states
+
+    def _fold(self, settings: dict, over: Optional[str] = None) -> tuple:
+        """Run the nodes whose value cannot change, once, before the run begins.
+
+        A node with no inputs and settled parameters answers the same thing every time it is
+        asked. Asked per item it is asked once per item: a workflow matching every frame of a
+        two-hour video against one reference image decoded that reference two hundred thousand
+        times, which is not a slow run, it is the same run with a file read into it repeatedly.
+        Measured on a fifty-item run before this existed: fifty calls, forty-nine of them for a
+        value already held.
+
+        Two no-input nodes are **not** constant, and both exclusions are the whole subtlety here:
+
+        * the node the items bind to, named by *over*. Its parameter is what changes per item, so
+          folding it would run the whole workflow on whichever item happened to be first.
+        * a source, which is not one value but many, and drives the run rather than feeding it.
+
+        A node that raises is left in the graph rather than folded, so that it fails where the
+        engines already know how to report it -- naming the node, stopping the item, reaching
+        ``on_error``. Folding its failure would turn a workflow's own error into this method's.
+
+        Returns:
+            ``({node id: {port: value}}, {node id: result})`` -- the wires for the engines to read
+            instead of running the node, and the results to report as though it had run, because
+            from the outside it did.
+        """
+        wires_by_node, results_by_node = {}, {}
+        for step_id in self.order:
+            step = self.steps[step_id]
+            if self.incoming[step_id] or step.spec.produces_many:
+                continue
+            values = step.arguments(settings)
+            if over is not None and over in values:
+                continue
+            wires, failure = step.call(values)
+            if failure is not None:
+                continue
+            wires_by_node[step_id] = wires
+            results_by_node[step_id] = step.spec.result(wires)
+        return wires_by_node, results_by_node
 
     def _drain(self, settings: dict) -> tuple:
         """One run, as ``(what completed, the failure that stopped it or None)``.
@@ -338,8 +571,23 @@ class Workflow:
                 failure = event
         return results, failure
 
-    def _steps(self, settings: dict) -> Iterator[Event]:
-        """Run each node in order, reporting as it goes."""
+    def _steps(self, settings: dict, folded: Optional[dict] = None,
+               folded_results: Optional[dict] = None,
+               context: Optional[Context] = None) -> Iterator[Event]:
+        """Run each node in order, reporting as it goes.
+
+        *folded* is what :meth:`_fold` already ran, as ``{node id: {port: value}}``. Those nodes
+        are reported as completed and then skipped: a caller reads a run's results and has no
+        business knowing which values were computed for it and which were computed once for every
+        item, only that every node it drew produced what it produced.
+
+        Left unset by :meth:`run` and :meth:`stream`, and set only by :meth:`run_many`. A constant
+        is constant *across items*, so a run of one item has nothing to save and nothing to fold:
+        folding there would buy nothing and would report the node as finishing without having been
+        seen to start, which is the one thing a progress stream promises not to do.
+        """
+        folded = folded or {}
+        folded_results = folded_results or {}
         #: ``(node id, output port) -> value``. Keyed by port because a node may produce several
         #: things, and a connection already says which one it wants.
         produced: dict = {}
@@ -349,12 +597,43 @@ class Workflow:
         #: is the difference between 182 MB and 70 MB of peak resident memory.
         waiting = dict(self.readers)
 
+        for step_id, result in folded_results.items():
+            yield Event(step_id, "completed", output=result)
+
         for step_id in self.order:
+            if step_id in folded:
+                continue
             step = self.steps[step_id]
             yield Event(step_id, "running")
 
             arguments = step.arguments(settings)
+
+            if step.spec.produces_many:
+                # A source in a one-item run. It gets an unsealed context to declare into and is
+                # then asked for a single item, so the nodes after it read the real rate and size
+                # of the video rather than nothing -- a preview of a workflow is still that
+                # workflow, and a sink in it must open itself the way it would on the whole run.
+                context = Context()
+                if step.spec.context:
+                    arguments[step.spec.context] = context
+                wires, failure = step.first(arguments)
+                context.seal()
+                if failure is not None:
+                    yield failure
+                    return
+                produced.update({(step_id, port): value for port, value in wires.items()})
+                yield Event(step_id, "completed", output=step.spec.result(wires))
+                continue
+
+            if step.spec.context:
+                arguments[step.spec.context] = context if context is not None else Context().seal()
             for port, wire in self.incoming[step_id].items():
+                if wire[0] in folded:
+                    # Held for the whole run rather than dropped when its last reader has taken
+                    # it: the readers counted in ``self.readers`` are this item's, and a constant
+                    # has every later item still to feed.
+                    arguments[port] = folded[wire[0]][wire[1]]
+                    continue
                 arguments[port] = produced[wire]
                 waiting[wire] -= 1
                 if not waiting[wire]:

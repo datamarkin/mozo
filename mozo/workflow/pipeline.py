@@ -35,6 +35,7 @@ from queue import Queue
 from typing import Any, Callable, Iterator, Optional
 
 from .graph import Event, deliver
+from .node import Context
 
 __all__ = ["run_pipelined"]
 
@@ -79,7 +80,8 @@ class Stage:
     """One node, its inbound queue, and the workers that drain it."""
 
     def __init__(self, step, ports: frozenset, width: int, settings: dict, results: Queue,
-                 stopped: dict, stopped_lock: threading.Lock, measure: bool = False) -> None:
+                 stopped: dict, stopped_lock: threading.Lock, measure: bool = False,
+                 context=None) -> None:
         self.step = step
         #: Every argument that must arrive before this node can run. Input ports, plus the
         #: parameter the run binds each item to when this is the node the items enter by.
@@ -107,6 +109,14 @@ class Stage:
         #: this exists to fix, and a default would make that constructible.
         self.stopped = stopped
         self.stopped_lock = stopped_lock
+        #: The run's sealed facts, or None where no node here asked for them. Sealed once and
+        #: read per item -- ``at(seq)`` is a view, not a copy, so a hundred thousand items cost a
+        #: hundred thousand small objects and one dict.
+        #: Never None: a run with no source still has nodes that asked for a context, and a
+        #: stage with nothing to hand them would fail on the item rather than on the wiring.
+        #: An empty sealed one answers None to every fact, which is what "nothing declared this"
+        #: means everywhere else.
+        self.context = context if context is not None else Context().seal()
         self.queue_peak = 0
         #: Nanoseconds spent inside the node itself, summed over every worker. Against the run's
         #: wall time this says whether the stage was kept fed -- which is the only way to tell a
@@ -215,6 +225,8 @@ class Stage:
             return
 
         arguments.pop(_TRIGGER, None)
+        if self.step.spec.context:
+            arguments[self.step.spec.context] = self.context.at(seq)
         started = time.perf_counter_ns() if self.measure else 0
         outputs, failure = self.step.call({**self.settings, **arguments})
         if self.measure:
@@ -298,7 +310,7 @@ def _report(stages: dict, elapsed: float) -> dict:
 
 def _build(workflow, settings: dict, over: str, workers: int, model_workers: int,
            results: Queue, measure: bool, stopped: dict,
-           stopped_lock: threading.Lock) -> tuple:
+           stopped_lock: threading.Lock, folded: dict, driving=None, run=None) -> tuple:
     """Wire one stage per node. Returns ``(stages, the stages each item is fed into)``.
 
     Every node with no inputs is a source and must be woken once per item, not only the one the
@@ -306,34 +318,66 @@ def _build(workflow, settings: dict, over: str, workers: int, model_workers: int
     declared input ports be fed and ``_sorted`` seeds on all zero-indegree nodes. The node that
     takes *over* is found the way the serial path finds it, by asking which settings entry holds
     it, rather than by assuming it is the topological root.
+
+    A node in *folded* was already run once by :meth:`~mozo.workflow.graph.Workflow._fold` and
+    gets no stage at all: what it produced is settled, so its readers take it from their own
+    arguments the way they take a parameter. That is what a constant is -- a value that does not
+    change per item is a parameter that happened to be computed rather than typed.
     """
-    sources = [node for node in workflow.order if not workflow.incoming[node]]
-    bound = next((node for node, values in settings.items() if over in values), sources[0])
-    #: Which port each source is woken on -- the one the items bind to, or a bare trigger.
-    entry = {node: (over if node == bound else _TRIGGER) for node in sources}
+    sources = [node for node in workflow.order
+               if not workflow.incoming[node] and node not in folded and node != driving]
+    if driving is not None:
+        # A source node gets no stage: it is not called per item, it is where the items came from.
+        # What it yielded is delivered straight to whatever it feeds, on those nodes' own ports --
+        # the same road a folded constant takes, travelled once per item instead of once.
+        entry = {}
+    else:
+        bound = next((node for node, values in settings.items() if over in values), sources[0])
+        #: Which port each source is woken on -- the one the items bind to, or a bare trigger.
+        entry = {node: (over if node == bound else _TRIGGER) for node in sources}
 
     stages = {}
     for node_id in workflow.order:
+        if node_id in folded or node_id == driving:
+            continue
         step = workflow.steps[node_id]
-        ports = set(workflow.incoming[node_id])
+        arguments = step.arguments(settings)
+        if over is not None:
+            arguments.pop(over, None)                    # supplied per item, not once
+        ports = set()
+        for target_port, (source_id, _) in workflow.incoming[node_id].items():
+            if source_id in folded:
+                arguments[target_port] = folded[source_id][workflow.incoming[node_id][target_port][1]]
+            else:
+                ports.add(target_port)                   # still has to arrive, per item
         if node_id in entry:
             ports.add(entry[node_id])
-        arguments = step.arguments(settings)
-        arguments.pop(over, None)                        # supplied per item, not once
         stages[node_id] = Stage(step, frozenset(ports), _width(step.spec, workers, model_workers),
-                                arguments, results, stopped, stopped_lock, measure)
+                                arguments, results, stopped, stopped_lock, measure, run)
 
     for node_id, wires in workflow.incoming.items():
+        if node_id in folded or node_id == driving:
+            continue
         for target_port, (source_id, source_port) in wires.items():
+            if source_id in folded or source_id == driving:
+                continue
             stages[source_id].sends.setdefault(source_port, []).append(
                 (stages[node_id], target_port))
 
-    return stages, [(stages[node], port) for node, port in entry.items()]
+    if driving is not None:
+        entries = [(stages[node_id], target_port)
+                   for node_id, wires in workflow.incoming.items() if node_id not in folded
+                   for target_port, (source_id, _) in wires.items() if source_id == driving]
+    else:
+        entries = [(stages[node], port) for node, port in entry.items()]
+    return stages, entries
 
 
 def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
                   on_error: Optional[Callable] = None, model_workers: int = 1,
-                  stats: Optional[dict] = None) -> Iterator[tuple]:
+                  stats: Optional[dict] = None, folded: Optional[dict] = None,
+                  folded_results: Optional[dict] = None, driving: Optional[str] = None,
+                  run=None) -> Iterator[tuple]:
     """Run *items* through *workflow* as a staged pipeline, yielding ``(item, results)`` in order.
 
     Ordering is not a convenience here. Wide stages finish out of order by construction -- with two
@@ -355,7 +399,9 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     """
     results: Queue = Queue()
     #: How many items may exist at once, which is the ceiling this module's header quotes.
-    inflight = threading.Semaphore(len(workflow.order) * DEPTH * max(1, workers))
+    inflight = threading.Semaphore(
+        max(1, len(workflow.order) - len(folded or {}) - (1 if driving else 0))
+        * DEPTH * max(1, workers))
     #: Set when the caller is done with this run -- because it stopped iterating, because a
     #: failure raised, or because ``on_error`` did. The feed thread is the one part of a run that
     #: outlives the generator otherwise: it waits on a permit that a run nobody is draining will
@@ -366,13 +412,17 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     stopped: dict = {}
     stopped_lock = threading.Lock()
     measure = stats is not None
+    folded = folded or {}
+    folded_results = folded_results or {}
     stages, entries = _build(workflow, settings, over, workers, model_workers, results, measure,
-                             stopped, stopped_lock)
+                             stopped, stopped_lock, folded, driving, run)
     began = time.perf_counter()
     for stage in stages.values():
         stage.start()
 
-    wanted = len(workflow.order)
+    #: How many stages must report before an item is whole. The folded nodes are not among them:
+    #: they have no stage, and their results are added to each item on the way out.
+    wanted = len(workflow.order) - len(folded) - (1 if driving else 0)
     sources: dict = {}          # seq -> the item, until it is handed over
     gathered: dict = {}         # seq -> {node id: output}, until the item is complete
     ready: dict = {}            # seq -> results, or the failed Event, awaiting its turn
@@ -417,6 +467,11 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
             emit += 1
             inflight.release()
             failure = outcome if _failed(outcome) else None
+            if not failure and (folded_results or driving):
+                extra = dict(folded_results)
+                if driving:
+                    extra[driving] = item            # the source produced it; say so
+                outcome = {**extra, **outcome}
             yield from deliver(item, None if failure else outcome, failure, on_error)
 
     try:
