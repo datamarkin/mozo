@@ -42,6 +42,11 @@ __all__ = ["run_pipelined"]
 DEPTH = 2
 
 _STOP = object()
+#: Put on the results queue in place of a node id when the run itself has broken -- a worker that
+#: died outside any node, or a source that raised part way through. Distinct from the ``None`` that
+#: means "the source is exhausted", because those are opposite answers: one ends the run, the other
+#: ends it *and says the answer is not to be trusted*.
+_BROKEN = object()
 #: The port a source node with no inputs is woken on. Stripped before the node is called, so a
 #: node never sees it. Sources other than the one bound to each item still have to run once per
 #: item, and they have no input to arrive on.
@@ -131,6 +136,26 @@ class Stage:
                 stage.offer(Parcel(seq, target_port, event))
 
     def _work(self) -> None:
+        """Drain this stage's queue until stopped, or until the run breaks under it.
+
+        The whole body is guarded, and the guard is the reliability of every long run. A node's own
+        failure is caught in :meth:`~mozo.workflow.graph.Step.call` and travels as a value; what is
+        caught here is everything *else* -- the engine miscounting, a queue refusing, memory
+        running out. Unguarded, such a failure killed this thread alone: the stage lost a worker,
+        then its last worker, and the run waited for reports from a stage that no longer existed.
+        Measured before this existed: four items of forty delivered, no error raised, and the run
+        never returned. A run that dies is a run someone can restart; a run that hangs is a machine
+        nobody looks at again.
+
+        So it is reported and the run ends. ``BaseException`` rather than ``Exception``, because
+        the point is that nothing leaves this loop without the run hearing about it.
+        """
+        try:
+            self._drain()
+        except BaseException as error:      # noqa: BLE001 -- the run's failure, not this item's
+            self.results.put((None, _BROKEN, error))
+
+    def _drain(self) -> None:
         while True:
             parcel = self.queue.get()
             # Stopping drops what is queued rather than working through it. Without this, a run
@@ -355,7 +380,7 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     expected: Optional[int] = None
 
     def feed() -> None:
-        count = 0
+        count, broken = 0, None
         try:
             for index, item in enumerate(items):
                 # Polled rather than waited on, because the permit that would wake this thread is
@@ -369,8 +394,16 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
                 for stage, port in entries:
                     stage.offer(Parcel(index, port, item))
                 count = index + 1
+        except BaseException as error:  # noqa: BLE001 -- the source's failure ends the run
+            # A source that stops is done; a source that raises is broken, and the difference has
+            # to reach the caller. Swallowed, a camera that dropped at frame 9,000 was reported
+            # exactly as a camera that had nothing more to send.
+            broken = error
         finally:
-            results.put((None, None, count))            # the source is exhausted, and how many
+            if broken is not None:
+                results.put((None, _BROKEN, broken))
+            else:
+                results.put((None, None, count))        # the source is exhausted, and how many
 
     threading.Thread(target=feed, daemon=True, name="pipeline-feed").start()
 
@@ -390,6 +423,8 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
         while True:
             seq, node_id, value = results.get()
             if seq is None:
+                if node_id is _BROKEN:
+                    raise RuntimeError(f"the run stopped: {value}") from value
                 expected = value
             elif seq >= emit and seq not in ready:      # anything older is already handed over
                 if node_id is None:
