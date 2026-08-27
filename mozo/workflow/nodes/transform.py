@@ -1,13 +1,19 @@
 """Changing the image, and changing what was found in it to match.
 
-Two kinds of node, and the difference is the whole point of the module. A geometric change to an
-image invalidates every box drawn on it: rotate the photograph and a box that fitted a face now
-sits over an ear. So each geometry node comes in two forms -- one that moves only pixels, and one
-that moves the detections with them and produces both.
+A geometric change to an image invalidates every box drawn on it: rotate the photograph and a box
+that fitted a face now sits over an ear. So most geometry nodes here come in two forms -- one that
+moves only pixels, and one that moves the detections with them and produces both.
 
 That is why a node may declare more than one output. PixelFlow's detection-aware transforms return
 the new image *and* the moved detections, because those are one operation and splitting them into
 two nodes would do the arithmetic twice from two sets of parameters that could disagree.
+
+**Most, not all.** :func:`resize` has no detection-aware form, and that gap is the shape of the
+pattern's cost rather than an oversight: pairing every geometry node with a second one makes the
+count of them two per operation, so adding one transform quietly owes a second node forever. The
+answer, when there is a reason to build it, is a transform that reports the mapping it applied and
+one node that moves detections through any mapping -- N plus one instead of two N. Until then
+``resize`` goes first in a graph, where there is nothing yet drawn for it to invalidate.
 
 ``normalize`` and ``standardize`` are deliberately absent. Both return float arrays rather than the
 ``HxWx3`` ``uint8`` an image port carries, and nothing downstream -- annotating, saving, a model --
@@ -54,6 +60,22 @@ def crop(image: Image, left: int = 0, top: int = 0, right: Optional[int] = None,
          bottom: Optional[int] = None) -> Image:
     """Cut a rectangle out of the image. Right and bottom default to the image's own edges."""
     return transforms.crop(image, _box(image, left, top, right, bottom))
+
+
+@node(category="Transform")
+def resize(image: Image, height: int = 720) -> Image:
+    """Scale the image to a height, keeping its shape.
+
+    One parameter, because "720p" is a height and the width follows from it. A width *and* a height
+    is the only pair that can change an image's shape, which is a different thing from scaling and
+    can wait for someone to want it.
+
+    **Resize before detecting, not after.** A model run on the full frame and drawn on a scaled one
+    puts every box in the wrong place, because the boxes are in the coordinates of the image the
+    model saw. Put this first and the graph has one coordinate space, which is the version with no
+    arithmetic in it to get wrong.
+    """
+    return transforms.resize(image, height=height)
 
 
 @node(category="Transform")
