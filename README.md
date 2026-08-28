@@ -265,7 +265,7 @@ from Python, from the command line, or over HTTP.
 ```python
 from mozo.workflow import Workflow
 
-results = Workflow.load("blur_faces.json").run(image="street.jpg")
+results = Workflow.load("blur_faces.json").run(source="street.jpg")
 ```
 
 ```bash

@@ -22,7 +22,7 @@ def workflow(tmp_path):
     """A one-node workflow on disk, with no file chosen, waiting to be given one."""
     path = tmp_path / "wf.json"
     path.write_text(json.dumps({
-        "nodes": [{"id": "load", "type": "load_image", "data": {"parameters": {}}}],
+        "nodes": [{"id": "load", "type": "read_media", "data": {"parameters": {}}}],
         "edges": [],
     }))
     return path
@@ -39,6 +39,6 @@ def test_the_file_is_bound_by_kind_not_by_a_name_written_here(workflow):
     renamed. The literal that used to be here did not."""
     from mozo.workflow import Workflow
 
-    assert Workflow.load(str(workflow)).file_parameter == "image"
+    assert Workflow.load(str(workflow)).file_parameter == "source"
     assert CliRunner().invoke(
         cli, ["run", str(workflow), "--file", str(FIXTURE)]).exit_code == 0

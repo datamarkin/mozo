@@ -23,6 +23,7 @@ import numpy as np
 import pixelflow as pf
 
 from mozo.workflow import Classifications, Depth, Detections, Embedding, Image, node
+from mozo.workflow.node import Source
 from mozo.workflow.node import Context
 from mozo.workflow.registry import source
 
@@ -46,6 +47,16 @@ def emit(run: Context, count: int = 3, width: int = 2) -> Image:
     run.declare(name="emit", fps=float(count), width=width, height=1, frames=count, is_live=False)
     for index in range(count):
         yield np.full((1, width, 3), index, dtype=np.uint8)
+
+
+@node(category="Test")
+def choose(chosen: Source = "other.jpg") -> Image:
+    """Take a file under a second name, so "which parameter is the file" can be ambiguous.
+
+    After the merge mozo ships one input node, so two differently-named ``Source`` parameters are
+    not constructible from shipped nodes -- and the branch that refuses them would go untested.
+    """
+    return np.zeros((1, 1, 3), dtype=np.uint8)
 
 
 @node(category="Test")

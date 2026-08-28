@@ -12,7 +12,7 @@ nothing extra to install.
 from mozo.workflow import Workflow
 
 workflow = Workflow.load("blur_faces.json")
-results = workflow.run(image="street.jpg")
+results = workflow.run(source="street.jpg")
 
 results[workflow.terminals[0]]      # what came out of the end
 ```
@@ -25,7 +25,7 @@ mozo run blur_faces.json --file street.jpg
 worth looking at, and hiding it would mean running the whole thing again to see it. `stream()`
 reports each node as it starts and finishes, which is what the editor draws.
 
-Overrides address a parameter by name: `run(image=..., threshold=0.6)`. A name more than one node
+Overrides address a parameter by name: `run(source=..., threshold=0.6)`. A name more than one node
 uses is refused rather than guessed at, and the message names the nodes that have it.
 
 ## What a workflow is
@@ -33,9 +33,9 @@ uses is refused rather than guessed at, and the message names the nodes that hav
 ```json
 {
   "nodes": [
-    {"id": "load-1", "type": "load_image",
+    {"id": "load-1", "type": "read_media",
      "position": {"x": 0, "y": 0},
-     "data": {"parameters": {"image": "street.jpg"}}},
+     "data": {"parameters": {"source": "street.jpg"}}},
     {"id": "detect-1", "type": "yolov26",
      "data": {"parameters": {"variant": "seg-nano", "threshold": 0.5}}}
   ],

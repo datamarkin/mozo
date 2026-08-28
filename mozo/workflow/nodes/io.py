@@ -1,6 +1,19 @@
 """Where a workflow gets its pixels, and where it puts them.
 
-Four nodes: two sources and two sinks, one of each for a single image and for a video.
+Three nodes: one source and two sinks.
+
+**One source, not one per kind of file.** A photograph and a two-hour video differ in how many
+items they are, and a source already says that -- it yields, so one yield is an image and two
+hundred thousand is a video. Nothing else about them differs: same absent inputs, same single
+:data:`~mozo.workflow.node.Image` out, same question asked of the person at the editor, which is
+"what should this run on". Two nodes made a person answer that question by first classifying their
+own file, and then made the answer unreachable anyway -- the editor's file picker was built for
+the image node and would not offer an ``.mp4`` to the video one.
+
+The sinks stay two, and by the same test rather than in spite of it.
+:func:`save_video` declares ``ordered``, which narrows its stage to one item at a time so frames
+are written in the order they were shot. A merged sink would impose that on saving a directory of
+images, where there is no order to keep and the narrowing is pure loss.
 
 None of them decode or encode anything themselves. Pixels are PixelFlow's, the way boxes are --
 :class:`pixelflow.VideoReader`, :class:`pixelflow.VideoWriter` and :func:`pixelflow.save_image` do
@@ -13,6 +26,7 @@ silence. One decoder, in the library whose whole contract is that images are RGB
 from __future__ import annotations
 
 from itertools import islice
+from pathlib import Path
 from typing import Optional
 
 import pixelflow as pf
@@ -23,70 +37,75 @@ from ..node import Context, Image, Source, State
 from ..registry import node, source
 
 
-@node(category="Input")
-def load_image(image: Optional[Source] = None) -> Image:
-    """Read an image from a path.
-
-    The parameter is called *image* so that running a workflow on something else reads the way it
-    should: ``workflow.run(image="street.jpg")``. It is optional because a workflow is commonly
-    saved with no path at all and given one per run -- which the catalogue now says, rather than
-    leaving an empty string to mean it.
-
-    :data:`~mozo.workflow.node.Source` rather than ``str`` for the same reason ``Color`` is not
-    ``str``: it is a path either way, but it is the one parameter whose value a person at a browser
-    has no way to write down, since their file is on their machine and the path would have to name
-    the server's. Saying so in the annotation is what puts a file picker on the node instead of a
-    text box nobody can fill in.
-    """
-    # Blank as well as unset: a form field sends "" where a Python caller sends None, and both
-    # mean the same thing. This is not the sentinel it replaced -- the catalogue says the parameter
-    # is optional, and "" is simply another way to have said nothing.
-    #
-    # Asked of the two things that can be blank rather than of the value: ``not image`` reads an
-    # array as a truth value, which numpy refuses for anything but a single element, so every frame
-    # handed to ``run_many`` -- which its own docstring says it takes -- raised here instead of
-    # being decoded. Empty bytes are the same claim as an empty string and are refused with it.
-    if image is None or (isinstance(image, (str, bytes, bytearray)) and not image):
-        raise ValueError("no image to load -- set this node's path, or pass run(image=...)")
-    return decode(image)
+#: Extensions read as video. Everything else is decoded as one image.
+#:
+#: The extension rather than the content, because a person choosing a file already knows which kind
+#: it is and the name they gave it is where they said so. Sniffing the bytes would be more clever
+#: and less predictable: being wrong would read one frame of a film with nothing to indicate why.
+#: This belongs in PixelFlow eventually, next to the decoders it selects between.
+VIDEO_SUFFIXES = frozenset({
+    ".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".mpg", ".mpeg", ".wmv", ".flv", ".ts",
+})
 
 
 @source(category="Input")
-def read_video(run: Context, path: Optional[Source] = None, stride: int = 1,
+def read_media(run: Context, source: Optional[Source] = None, stride: int = 1,
                start: int = 0, count: Optional[int] = None) -> Image:
-    """Read a video file, one frame at a time.
+    """Read an image or a video: one frame for the first, every frame for the second.
 
-    A source rather than an ordinary node, because a video is one node and a great many items: the
-    run is a pass over what this yields, and it yields rather than returning, which is why a
-    two-hour file costs what a ten-second one costs.
-
-    The decoding is PixelFlow's, for the reason every other node's work is:
-    :class:`pixelflow.VideoReader` owns frames the way ``pf.annotate`` owns boxes, and a second
-    decoder here would be a second answer rather than a duplicate. What this node contributes is
-    the declaration -- which parameters, and what the run is.
+    Every workflow starts here. It is a source, so it is asked once for a sequence and what it
+    yields is the run -- one item for a photograph, two hundred thousand for a film, and the same
+    graph downstream of both. That is what lets a workflow built on a still image be pointed at
+    footage without being rewired, and it is why one node can do both: a source that yields once
+    and a source that yields for an hour differ in nothing a graph can observe.
 
     **The rate it declares is the rate it yields**, because PixelFlow divides by the stride before
     reporting it. Every fifth frame of a 25 fps file is a 5 fps sequence, and a sink writing it
     back at 25 would play five times too fast. Neither this node nor the sink does that arithmetic,
-    so neither can get it wrong.
+    so neither can get it wrong. A still image has no rate at all and declares none, which is why
+    :func:`save_video` behind one asks to be told.
 
     Args:
-        path: The file to read. Optional for the same reason :func:`load_image`'s is -- a workflow
-            is commonly saved with no file and given one per run.
+        source: The file to read. :data:`~mozo.workflow.node.Source` rather than ``str`` for the
+            same reason ``Color`` is not ``str``: it is a path either way, but it is the one
+            parameter a person at a browser cannot write down, since their file is on their machine
+            and the path would name the server's. Saying so is what puts a file picker on the node
+            instead of a box nobody can fill in. Optional because a workflow is commonly saved with
+            no file and given one per run.
         stride: Take every *stride*-th frame. PixelFlow walks past the others without decoding
-            them, and divides the declared rate to match.
+            them -- measured at 2.43x on 720p -- and divides the declared rate to match. Ignored
+            for an image, which is one frame however you step through it.
         start: Skip this many frames first.
         count: Stop after this many frames. Unset reads to the end.
     """
-    if not path:
-        raise ValueError("no video to read -- set this node's path, or pass path=...")
-    reader = pf.VideoReader(str(path), stride=stride, start=start)
-    try:
-        run.declare(name=str(path), fps=reader.fps, width=reader.width,
-                    height=reader.height, frames=reader.frames, is_live=reader.is_live)
-        yield from (reader if count is None else islice(reader, count))
-    finally:
-        reader.close()
+    # Blank as well as unset: a form field sends "" where a Python caller sends None, and both mean
+    # the same thing. Asked of the two things that can be blank rather than of the value, because
+    # ``not source`` reads an array as a truth value, which numpy refuses for anything but a single
+    # element -- so every frame handed to ``run_many``, which its own docstring says it takes,
+    # raised here instead of being decoded.
+    if source is None or (isinstance(source, (str, bytes, bytearray)) and not source):
+        raise ValueError(
+            "nothing to read -- choose a file on this node, or pass run(source=...)")
+
+    named = isinstance(source, (str, Path))
+    if named and Path(source).suffix.lower() in VIDEO_SUFFIXES:
+        reader = pf.VideoReader(str(source), stride=stride, start=start)
+        try:
+            run.declare(name=str(source), fps=reader.fps, width=reader.width,
+                        height=reader.height, frames=reader.frames, is_live=reader.is_live)
+            yield from (reader if count is None else islice(reader, count))
+        finally:
+            reader.close()
+    else:
+        # Bytes or an array is already-decoded pixels, so one image with no name of its own.
+        frame = decode(source)
+        height, width = frame.shape[:2]
+        # Declared before the yield like a video's, and for the same reason: a sink downstream
+        # opens itself from these and must not have to know which kind of file was upstream.
+        # ``fps`` is None because a photograph has no rate -- which is what makes a video sink ask.
+        run.declare(name=str(source) if named else "an image", fps=None,
+                    width=width, height=height, frames=1, is_live=False)
+        yield frame
 
 
 @node(category="Output")

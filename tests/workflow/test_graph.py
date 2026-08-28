@@ -159,8 +159,8 @@ class TestWhichParameterTakesAFile:
 
     def test_it_is_read_off_the_annotation_not_the_name(self):
         """``Source`` is what declares a value a person cannot type. The name is incidental."""
-        made = Workflow.from_dict(document({"a": ("load_image", {})}))
-        assert made.file_parameter == "image"
+        made = Workflow.from_dict(document({"a": ("read_media", {})}))
+        assert made.file_parameter == "source"
 
     def test_a_workflow_with_no_file_to_read_says_so(self):
         made = Workflow.from_dict(document(
@@ -170,13 +170,12 @@ class TestWhichParameterTakesAFile:
 
     def test_two_of_them_is_refused_rather_than_chosen_between(self):
         """One file cannot say which it is, and picking for the caller would be silent."""
-        made = Workflow.from_dict(document(
-            {"a": ("load_image", {}), "b": ("read_video", {})}))
+        made = Workflow.from_dict(document({"a": ("read_media", {}), "b": ("choose", {})}))
         with pytest.raises(ValueError, match="take a file"):
             made.file_parameter
 
     def test_run_many_binds_to_it_without_being_told(self, image):
-        made = Workflow.from_dict(document({"a": ("load_image", {})}))
+        made = Workflow.from_dict(document({"a": ("read_media", {})}))
         got = list(made.run_many([str(FIXTURE)] * 2))
         assert [item for item, _ in got] == [str(FIXTURE)] * 2
         assert all(results["a"].shape == image.shape for _, results in got)
@@ -343,7 +342,7 @@ class TestRunningOverManyItems:
 
     def test_the_default_binds_each_item_to_the_node_that_reads_a_file(self):
         """The documented default, on the one shipped node that has an ``image`` parameter."""
-        workflow = Workflow.from_dict(document({"a": ("load_image", {})}))
+        workflow = Workflow.from_dict(document({"a": ("read_media", {})}))
         answers = list(workflow.run_many([str(FIXTURE), str(FIXTURE)]))
         assert [item for item, _ in answers] == [str(FIXTURE), str(FIXTURE)]
         assert answers[0][1]["a"].shape == answers[1][1]["a"].shape

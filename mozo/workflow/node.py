@@ -119,7 +119,7 @@ class Context:
         def save_video(image: Image, run: Context, state: State, path: str = "out.mp4") -> None:
             ...cv2.VideoWriter(path, fourcc, run.fps, (run.width, run.height))
 
-    ``read_video(stride=5)`` declares ``fps = 25 / 5``, and the sink is right without anyone
+    ``read_media(stride=5)`` declares ``fps = 25 / 5``, and the sink is right without anyone
     knowing to make it right. That is the point: not the typing it saves, but that the wrong answer
     stops being expressible.
 

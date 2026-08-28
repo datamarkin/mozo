@@ -15,9 +15,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from conftest import FIXTURE, document, port_types_of, weights_are_here
+from conftest import (CLIP_FPS, CLIP_FRAMES, FIXTURE, document, port_types_of,
+                      weights_are_here)
 from mozo.registry import MODEL_REGISTRY
 from mozo.workflow import PortType, Workflow, get
+from mozo.workflow.node import Context
 from workflow_nodes import shipped
 
 #: The families that have no node yet, and why. The one thing here that cannot be derived, because
@@ -102,31 +104,68 @@ class TestTheCatalogue:
 class TestReadingAndWriting:
     """The two ends of a workflow, which need no weights."""
 
-    def test_load_image_produces_what_its_port_claims(self, image):
+    def test_read_media_produces_what_its_port_claims(self, image):
         loaded = Workflow.from_dict(_loads(str(FIXTURE))).run()["load"]
-        assert get("load_image").outputs[0].type in port_types_of(loaded)
+        assert get("read_media").outputs[0].type in port_types_of(loaded)
         assert np.array_equal(loaded, image)
 
     def test_the_path_can_be_given_at_run_time(self, image):
         saved = Workflow.from_dict(_loads(None))
-        assert np.array_equal(saved.run(image=str(FIXTURE))["load"], image)
+        assert np.array_equal(saved.run(source=str(FIXTURE))["load"], image)
 
     @pytest.mark.parametrize("nothing", [None, ""])
     def test_loading_nothing_says_what_to_do_about_it(self, nothing):
         events = list(Workflow.from_dict(_loads(nothing)).stream())
         assert events[-1].status == "failed"
-        assert "run(image=...)" in events[-1].error
+        assert "run(source=...)" in events[-1].error
 
     def test_an_image_survives_a_round_trip_through_a_file(self, tmp_path, image):
         from mozo.image import load_image
 
         written = tmp_path / "out.png"
         Workflow.from_dict(document(
-            {"load": ("load_image", {"image": str(FIXTURE)}),
+            {"load": ("read_media", {"source": str(FIXTURE)}),
              "save": ("save_image", {"path": str(written)})},
             [("load", "image", "save", "image")])).run()
 
         assert np.array_equal(load_image(str(written)), image)
+
+
+class TestOneNodeReadsBothKinds:
+    """One node reads an image or a video. :mod:`mozo.workflow.nodes.io` says why."""
+
+    def test_the_same_workflow_takes_either_without_being_rewired(self, clip, image):
+        """One saved document, two files, no edit in between. The whole point of the merge."""
+        made = Workflow.from_dict(_loads(None))
+        stills = list(made.process(source=str(FIXTURE)))
+        assert len(stills) == 1
+        assert np.array_equal(stills[0][1]["load"], image)
+        assert len(list(made.process(source=str(clip)))) == CLIP_FRAMES
+
+    def test_the_kind_is_read_from_the_extension(self, tmp_path, clip):
+        """Named rather than sniffed, so being wrong is something a person can see and correct.
+
+        The same bytes under an image's name are decoded as one and say so, rather than quietly
+        producing a frame nobody asked for.
+        """
+        misnamed = tmp_path / "clip.jpg"
+        misnamed.write_bytes(clip.read_bytes())
+        events = list(Workflow.from_dict(_loads(str(misnamed))).stream())
+        assert events[-1].status == "failed"
+
+    def test_an_image_declares_no_rate_rather_than_a_wrong_one(self):
+        """A photograph has no frame rate, and saying so is what makes a video sink ask for one."""
+        run = Context()
+        frame = next(get("read_media").run(run, source=str(FIXTURE)))
+        assert run.fps is None and run.frames == 1 and run.is_live is False
+        assert (run.height, run.width) == frame.shape[:2]
+
+    def test_a_video_declares_the_rate_it_yields_at(self, clip):
+        """Strided, so the declared rate is the yielded one rather than the file's."""
+        run = Context()
+        frames = list(get("read_media").run(run, source=str(clip), stride=2))
+        assert run.fps == CLIP_FPS / 2
+        assert len(frames) == (CLIP_FRAMES + 1) // 2
 
 
 class TestWhatTheModelsActuallyReturn:
@@ -180,8 +219,8 @@ def _some_model_ran(ran, absent):
 
 
 def _loads(path) -> dict:
-    """A one-node workflow that loads *path*."""
-    return document({"load": ("load_image", {"image": path})})
+    """A one-node workflow that reads *path*."""
+    return document({"load": ("read_media", {"source": path})})
 
 
 def _run_one(name: str):
@@ -191,7 +230,7 @@ def _run_one(name: str):
     fails reports why. ``run`` drops a failed node from its results, which turns a model error into
     a ``KeyError`` naming nothing -- one confusing debugging session was enough.
     """
-    nodes = {"load": ("load_image", {"image": str(FIXTURE)}), "model": (name, {})}
+    nodes = {"load": ("read_media", {"source": str(FIXTURE)}), "model": (name, {})}
     edges = [("load", "image", "model", "image")]
     # Anything the node needs beyond the photograph is produced by another node, wired up here.
     # Feeding it a hand-built value instead would test the node against a fixture rather than

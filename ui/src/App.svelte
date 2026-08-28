@@ -15,10 +15,10 @@
     // Every workflow starts here: pixels have to come from somewhere, and this is the node whose
     // path the runner overrides per image.
     const createLoadImageNode = () => ({
-        id: 'load_image-1',
+        id: 'read_media-1',
         type: 'default',
         position: { x: 100, y: 100 },
-        data: { nodeType: 'load_image', parameters: {} },
+        data: { nodeType: 'read_media', parameters: {} },
         class: 'node-category-input'
     });
 

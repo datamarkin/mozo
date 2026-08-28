@@ -76,7 +76,7 @@ class Case:
 
 CASES = [
     Case("detect_annotate", "linear: one detector, two annotators",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("yolov11", {"variant": "nano", "threshold": 0.4}),
           "boxes": ("draw_boxes", {}),
           "labels": ("draw_labels", {})},
@@ -85,7 +85,7 @@ CASES = [
           ("boxes:image", "labels:image"), ("det:detections", "labels:detections")]),
 
     Case("two_detectors", "two model stages racing into one chain of joins",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "a": ("yolov8", {"variant": "nano", "threshold": 0.4}),
           "b": ("yolov26", {"variant": "nano", "threshold": 0.4}),
           "boxes": ("draw_boxes", {}),
@@ -95,7 +95,7 @@ CASES = [
           ("boxes:image", "labels:image"), ("b:detections", "labels:detections")]),
 
     Case("three_way_join", "three detectors of unequal cost, joined one after another",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "a": ("yolov8", {"variant": "nano", "threshold": 0.4}),
           "b": ("yolov12", {"variant": "nano", "threshold": 0.4}),
           "c": ("rfdetr", {"variant": "nano", "threshold": 0.4}),
@@ -108,7 +108,7 @@ CASES = [
           ("labels:image", "blur:image"), ("c:detections", "blur:detections")]),
 
     Case("preprocess_branches", "two preprocessing branches, a detector on each, rejoined",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "grey": ("to_grayscale", {}),
           "clahe": ("enhance_clahe", {"clip_limit": 3.0}),
           "a": ("yolov12", {"variant": "nano", "threshold": 0.4}),
@@ -121,7 +121,7 @@ CASES = [
           ("boxes:image", "pixelate:image"), ("b:detections", "pixelate:detections")]),
 
     Case("depth_and_detect", "a dense-regression branch beside a detection branch, never rejoined",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "depth": ("depth_anything_v2", {"variant": "small"}),
           "det": ("yolov11", {"variant": "nano", "threshold": 0.4}),
           "boxes": ("draw_boxes", {})},
@@ -129,7 +129,7 @@ CASES = [
           ("in:image", "boxes:image"), ("det:detections", "boxes:detections")]),
 
     Case("geometry_chain", "four two-output nodes in a row -- every one can swap its ports",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("yolov8", {"variant": "nano", "threshold": 0.4}),
           "rot": ("rotate_with_detections", {"angle": 17.0}),
           "flip": ("flip_horizontal_with_detections", {}),
@@ -145,7 +145,7 @@ CASES = [
           ("boxes:image", "gamma:image")]),
 
     Case("classify_pair", "two classifiers, no join -- both branches are terminal",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "clip": ("clip", {"variant": "base",
                             "text": "a photograph of a person, a street, a landscape, food"}),
           "siglip": ("siglip2", {"variant": "base-224",
@@ -153,7 +153,7 @@ CASES = [
          [("in:image", "clip:image"), ("in:image", "siglip:image")]),
 
     Case("ocr_read", "text detection and reading, whose cost swings hugely per image",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "ocr": ("easyocr", {"variant": "english"}),
           "boxes": ("draw_boxes", {}),
           "labels": ("draw_labels", {})},
@@ -163,7 +163,7 @@ CASES = [
          share=0.4),
 
     Case("pose_chain", "detector into pose, then two annotators that read the same keypoints",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("yolov11", {"variant": "nano", "threshold": 0.5}),
           "pad": ("pad_detections", {"padding": 0.1}),
           "pose": ("vitpose", {"variant": "small"}),
@@ -176,7 +176,7 @@ CASES = [
          share=0.4),
 
     Case("fanout_crops", "one image becomes a batch of crops, and a model runs once per crop",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("yolov8", {"variant": "nano", "threshold": 0.5}),
           "crops": ("crop_around_detections", {"padding": 0.05}),
           "clip": ("clip", {"variant": "base", "text": "a person, a vehicle, an animal"})},
@@ -185,7 +185,7 @@ CASES = [
          share=0.4),
 
     Case("segment_masks", "instance masks, where the compositing is the parallel part",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "seg": ("yolov26", {"variant": "seg-nano", "threshold": 0.4}),
           "masks": ("draw_masks", {"opacity": 0.4}),
           "polys": ("draw_polygons", {})},
@@ -194,7 +194,7 @@ CASES = [
           ("masks:image", "polys:image"), ("seg:detections", "polys:detections")]),
 
     Case("long_chain", "ten stages, most of them cheap -- what bounds this is the admission limit",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "contrast": ("auto_contrast", {"cutoff": 1.0}),
           "gamma": ("gamma_correction", {"gamma": 1.1}),
           "clahe": ("enhance_clahe", {}),
@@ -214,7 +214,7 @@ CASES = [
          # The path is rewritten into the run's scratch directory before this runs -- see
          # :func:`writes_into`. Left as a bare name it lands in the working directory, which for
          # a tool run from the repository root is the repository.
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("yolov11", {"variant": "nano", "threshold": 0.4}),
           "boxes": ("draw_boxes", {}),
           "out": ("save_image", {"path": "out.jpg"})},
@@ -223,7 +223,7 @@ CASES = [
          share=0.2),
 
     Case("grounded", "open-vocabulary detection from a phrase -- seconds an image",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "det": ("grounding_dino", {"variant": "tiny", "text": "person, car, dog, tree",
                                      "threshold": 0.3}),
           "boxes": ("draw_boxes", {}),
@@ -234,7 +234,7 @@ CASES = [
          share=0.2),
 
     Case("owl_prompted", "a second open-vocabulary family, drawn on the greyscale of the original",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "grey": ("to_grayscale", {}),
           "det": ("owlv2", {"variant": "base-ensemble", "text": "a person, a car, a dog",
                             "threshold": 0.15}),
@@ -244,7 +244,7 @@ CASES = [
          share=0.1),
 
     Case("sam3_masks", "concept segmentation into mask compositing",
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "seg": ("sam3", {"variant": "sam3", "text": "person", "threshold": 0.5}),
           "masks": ("draw_masks", {"opacity": 0.5}),
           "polys": ("draw_polygons", {})},
@@ -257,7 +257,7 @@ CASES = [
          # Masks from a closed-vocabulary segmenter rather than from SAM 3, because the point of
          # this graph is to put moebius under load: a prompt that finds nothing makes the repaint
          # a no-op, and a run of no-ops measures the scheduler against no work at all.
-         {"in": ("load_image", {}),
+         {"in": ("read_media", {}),
           "seg": ("yolov26", {"variant": "seg-nano", "threshold": 0.4}),
           "paint": ("moebius", {"variant": "general", "seed": 7, "dilate": 4})},
          [("in:image", "seg:image"), ("in:image", "paint:image"),
@@ -308,7 +308,7 @@ def random_case(seed: int, size: int) -> Case:
 
     generator = random.Random(seed)
     specs = {entry["name"]: entry for entry in catalogue() if entry["name"] in PALETTE}
-    nodes: dict = {"in": ("load_image", {})}
+    nodes: dict = {"in": ("read_media", {})}
     edges: list = []
     #: port type -> the ``"node:port"`` values of that type produced so far.
     pool: dict = {"image": ["in:image"]}
@@ -587,7 +587,7 @@ def warm(case: Case, paths: list) -> None:
     workflow = case.build()
     for path in paths[:2]:
         try:
-            workflow.run(image=str(path))
+            workflow.run(source=str(path))
         except Exception:                                 # noqa: BLE001 -- a warm-up proves nothing
             pass
 
@@ -666,7 +666,7 @@ def unstable(case: Case, item: str, node: str, times: int = 5) -> bool:
     seen = set()
     for _ in range(times):
         try:
-            seen.add(digest(workflow.run(image=item)[node]))
+            seen.add(digest(workflow.run(source=item)[node]))
         except Exception:                                 # noqa: BLE001 -- it failed, not moved
             return False
     return len(seen) > 1

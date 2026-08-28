@@ -23,7 +23,7 @@ def as_json(nodes: dict, edges: list = ()) -> str:
 
 
 GRAYSCALE = as_json(
-    {"load": ("load_image", {"image": ""}), "gray": ("to_grayscale", {})},
+    {"load": ("read_media", {"source": ""}), "gray": ("to_grayscale", {})},
     [("load", "image", "gray", "image")])
 
 
@@ -58,9 +58,9 @@ class TestValidating:
         assert answer == {"valid": True, "order": ["load", "gray"], "terminals": ["gray"]}
 
     @pytest.mark.parametrize("document, because", [
-        (as_json({"a": ("load_image", {}), "b": ("invent", {})}), "unknown node"),
+        (as_json({"a": ("read_media", {}), "b": ("invent", {})}), "unknown node"),
         (as_json({"a": ("to_grayscale", {})}), "nothing connected"),
-        (as_json({"a": ("load_image", {}), "b": ("draw_boxes", {})},
+        (as_json({"a": ("read_media", {}), "b": ("draw_boxes", {})},
                  [("a", "image", "b", "detections")]), "takes detections"),
         ("{not json", "not JSON"),
     ])
@@ -85,7 +85,7 @@ class TestRunning:
         assert answer["results"]["gray"].startswith("data:image/png;base64,")
 
     def test_an_image_on_disk_needs_no_upload(self, client):
-        answer = _run(client, GRAYSCALE, inputs=json.dumps({"image": str(FIXTURE)}))
+        answer = _run(client, GRAYSCALE, inputs=json.dumps({"source": str(FIXTURE)}))
         assert answer["results"]["gray"].startswith("data:image/png;base64,")
 
     def test_only_the_ends_come_back_unless_you_ask_for_more(self, client, payload):
@@ -99,7 +99,7 @@ class TestRunning:
         nothing, and throws away the reason the node gave."""
         response = client.post("/workflow/run", data={"workflow": GRAYSCALE})
         assert response.status_code == 422
-        assert "run(image=...)" in response.json()["detail"]
+        assert "run(source=...)" in response.json()["detail"]
 
     def test_a_workflow_that_is_not_one_is_refused_before_anything_runs(self, client):
         response = client.post("/workflow/run", data={"workflow": as_json({"a": ("invent", {})})})
@@ -140,7 +140,7 @@ class TestStreaming:
     def test_a_failing_node_is_reported_and_the_stream_stops(self, client):
         events = _stream(client, GRAYSCALE, None)  # nothing to load
         assert events[-1]["status"] == "failed"
-        assert "run(image=...)" in events[-1]["error"]
+        assert "run(source=...)" in events[-1]["error"]
         assert not any(e.get("node") == "gray" for e in events)
         assert not any("done" in event for event in events), (
             "a stream that failed should not also report that it finished")
@@ -185,7 +185,7 @@ class TestEveryPortTypeSurvivesJson:
         ("fake_embedding", lambda v: v == [[0.0, 1.0, 2.0, 3.0], [4.0, 5.0, 6.0, 7.0]]),
     ])
     def test_a_port_is_sent_as_what_it_declared(self, client, payload, producer, check):
-        made = as_json({"load": ("load_image", {}), "out": (producer, {})},
+        made = as_json({"load": ("read_media", {}), "out": (producer, {})},
                        [("load", "image", "out", "image")])
         assert check(_run(client, made, payload)["results"]["out"])
 
@@ -198,7 +198,7 @@ class TestSerialisingResults:
         require_present("yolov26", "nano")
 
         found = as_json(
-            {"load": ("load_image", {}), "detect": ("yolov26", {"threshold": 0.5})},
+            {"load": ("read_media", {}), "detect": ("yolov26", {"threshold": 0.5})},
             [("load", "image", "detect", "image")])
         answer = _run(client, found, payload)
         found = answer["results"]["detect"]
@@ -209,7 +209,7 @@ class TestSerialisingResults:
         require_present("depth_anything_v2", "small")
 
         far = as_json(
-            {"load": ("load_image", {}), "depth": ("depth_anything_v2", {})},
+            {"load": ("read_media", {}), "depth": ("depth_anything_v2", {})},
             [("load", "image", "depth", "image")])
         result = _run(client, far, payload)["results"]["depth"]
         assert result["depth"].startswith("data:image/png;base64,")
@@ -220,7 +220,7 @@ class TestSerialisingResults:
         require_present("yolov26", "nano")
 
         crops = as_json(
-            {"load": ("load_image", {}), "detect": ("yolov26", {}),
+            {"load": ("read_media", {}), "detect": ("yolov26", {}),
              "crop": ("crop_around_detections", {})},
             [("load", "image", "detect", "image"),
              ("load", "image", "crop", "image"),

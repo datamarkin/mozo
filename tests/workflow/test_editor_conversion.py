@@ -26,7 +26,7 @@ import { toDocument, fromDocument } from '%s';
 
 const nodes = [
   { id: 'load-1', type: 'custom', position: { x: 10, y: 20 },
-    data: { nodeType: 'load_image', parameters: { image: 'a.jpg' } } },
+    data: { nodeType: 'read_media', parameters: { source: 'a.jpg' } } },
   { id: 'det-1', type: 'custom', position: { x: 200, y: 20 },
     data: { nodeType: 'yolov26', parameters: { variant: 'seg-nano' } } },
 ];
@@ -71,7 +71,7 @@ class TestTheConversion:
 
     def test_a_canvas_becomes_mozo_s_document_format(self, converted):
         document = converted["document"]
-        assert [node["type"] for node in document["nodes"]] == ["load_image", "yolov26"]
+        assert [node["type"] for node in document["nodes"]] == ["read_media", "yolov26"]
         assert document["edges"][0]["sourceHandle"] == "image"
 
     def test_loading_a_document_and_saving_it_gives_the_same_document(self, converted):

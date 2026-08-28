@@ -457,9 +457,9 @@ class Workflow:
                 stats: Optional[dict] = None, **overrides) -> Iterator[tuple]:
         """Run once per item the source yields, yielding ``(item, results)`` as each finishes.
 
-        A run is one pass over whatever the workflow's source produces: one image from
-        :func:`~mozo.workflow.nodes.io.load_image`, every frame from
-        :func:`~mozo.workflow.nodes.io.read_video`, an unbounded stream from a camera. How many
+        A run is one pass over whatever the workflow's source produces: one image or every
+        frame of a video from :func:`~mozo.workflow.nodes.io.read_media`, an unbounded stream from
+        a camera. How many
         items there are stops being something the caller has to know and becomes something the
         workflow says -- which is the difference between this and :meth:`run_many`, where the
         caller brings the items and the workflow is only told what to do with each.
@@ -483,7 +483,7 @@ class Workflow:
         if source_id is None:
             raise ValueError(
                 "this workflow has no source, so there is nothing for a run to be a pass over. "
-                "Give it one -- read_video, load_image -- or bring the items yourself with "
+                "Give it one -- read_media -- or bring the items yourself with "
                 "run_many(items, over=...).")
 
         settings = self._resolve(overrides)

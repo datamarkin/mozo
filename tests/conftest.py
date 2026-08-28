@@ -200,6 +200,37 @@ def payload() -> bytes:
     """The fixture photograph as encoded bytes, i.e. what an HTTP request body carries."""
     return FIXTURE.read_bytes()
 
+
+#: What :func:`clip` writes. Small and short, because what these tests need from a video is that it
+#: is many items with a rate, which eight frames states as well as eight thousand.
+CLIP_FRAMES = 8
+CLIP_FPS = 10.0
+
+
+@pytest.fixture(scope="session")
+def clip(tmp_path_factory) -> Path:
+    """A short video, written rather than committed.
+
+    Written because a checked-in ``.mp4`` is a binary whose contents no reviewer can read, and
+    because writing it exercises the sink these tests read back through -- a fixture that could
+    only be produced by the code under test is a round trip, which is more than a stored file
+    proves.
+    """
+    import numpy as np
+    import pixelflow as pf
+
+    path = tmp_path_factory.mktemp("media") / "clip.mp4"
+    writer = pf.VideoWriter(str(path), fps=CLIP_FPS)
+    try:
+        for index in range(CLIP_FRAMES):
+            frame = np.zeros((64, 96, 3), dtype=np.uint8)
+            frame[:, :, index % 3] = 8 * index + 16      # each frame distinguishable from the rest
+            writer.write(frame)
+    finally:
+        writer.close()
+    return path
+
+
 #: What a synthetic zoo contains: two variants of one family, one revision apart, with a
 #: different artifact set each so selection and absence are both exercised -- plus one variant
 #: whose graph runtime is split across parts, because SAM 2 publishes an encoder and a decoder
