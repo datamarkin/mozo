@@ -1,9 +1,15 @@
 """mozo's image contract: RGB, ``uint8``, ``HxWx3``.
 
-One function, because there is one decision to make and it must be made once. Channel order is
-created when bytes are decoded and invisible afterwards, so a second decoder somewhere else is
-not a duplicate -- it is a second answer, and the wrong one fails silently. A channel swap cost
-Depth Anything V2 0.166 m of mean error and 1.84 m at worst, with nothing raised.
+One decision, made once, and it is made at the codec boundary in both directions. Channel order is
+created when bytes are decoded and destroyed when they are encoded, and invisible in between -- so
+a second decoder or a second encoder somewhere else is not a duplicate, it is a second answer, and
+the wrong one fails silently. A channel swap cost Depth Anything V2 0.166 m of mean error and
+1.84 m at worst, with nothing raised.
+
+Two functions rather than one because bytes cross the boundary both ways, not because there are two
+decisions. :func:`load_image` is what a file or a request body becomes; :func:`encode_image` is what
+goes back out. The encoder was private inside the workflow's HTTP layer until the model endpoints
+started borrowing it by its private name, which is how a shared fact announces it is homed wrong.
 
 **The decoder is PixelFlow's.** That is the same argument aimed one layer down rather than a
 retreat from it: ``pf.read_image`` decodes for every consumer of the library whose stated contract
@@ -67,3 +73,28 @@ def load_image(image: Union[str, os.PathLike, bytes, np.ndarray]) -> np.ndarray:
         >>> image = load_image(existing_rgb_array)   # doctest: +SKIP
     """
     return pf.read_image(image)
+
+
+def encode_image(image: np.ndarray, extension: str = ".png") -> bytes:
+    """Encode an RGB array as bytes -- the way back out, and the mirror of :func:`load_image`.
+
+    PixelFlow's, for the reason the decoder is: ``cv2.imencode`` alone is only half the operation,
+    and the half it leaves out is the RGB-to-BGR conversion that goes with it. Written by hand that
+    step is remembered in most places and forgotten in one, which is exactly the failure this module
+    exists to make unconstructible -- and forgetting it here produces a picture that looks plausible
+    and has its channels swapped.
+
+    Args:
+        image: ``HxWx3`` RGB ``uint8``, as :func:`load_image` returns.
+        extension: The format, with or without the dot. PNG by default because an annotated image
+            is mostly thin lines and mask edges, which is what JPEG is worst at, and a result that
+            has been quietly smeared is worse than a larger response. A caller that wants a cheap
+            preview rather than a result asks for ``".jpg"`` and says so.
+
+    Returns:
+        bytes: The encoded image.
+
+    Raises:
+        ValueError: If *image* is not ``HxWx3`` RGB ``uint8``, or the format cannot be encoded.
+    """
+    return pf.encode_image(image, extension)

@@ -33,8 +33,20 @@ ADAPTERS = {"rfdetr": (RFDETRPredictor, "nano"), "depth_anything_v2": (DepthAnyt
 #: Matched on the final name, so an alias or a ``from cv2 import imdecode`` is caught too.
 DECODERS = {"imread", "imdecode", "decode_image", "decode_jpeg", "read_image"}
 
+#: The other half of the same boundary. Channel order is created at decode and destroyed at
+#: encode, so an encoder written by hand is the same failure as a decoder written by hand -- and
+#: the one that gets forgotten is the RGB-to-BGR step, which produces a plausible-looking picture
+#: with its channels swapped.
+#: ``pf.encode_image`` is written with its receiver because the name is not unique: CLIP and
+#: SigLIP 2 both have an ``encode_image`` that produces an embedding, which is a different
+#: operation that happens to share a word. Same reason ``Image.open`` is matched on both halves.
+ENCODERS = {"imencode", "imwrite", "pf.encode_image"}
+
 #: mozo.image is where the contract is declared; vendored code keeps its upstream's own.
+#: mozo.depth encodes too, and is exempt only for encoding: a depth map is 16-bit single-channel,
+#: so it has no channel order to get wrong, and its endpoints have to travel with it.
 EXEMPT = {ROOT / "mozo" / "image.py"}
+EXEMPT_FROM_ENCODING = EXEMPT | {ROOT / "mozo" / "depth.py"}
 
 
 @pytest.fixture(scope="module")
@@ -110,6 +122,50 @@ class TestLoadImage:
             load_image(42)
 
 
+#: Names that mean one thing on their own and another with a receiver in front. ``Image.open``
+#: decodes where ``target.open("wb")`` writes a file; ``pf.encode_image`` encodes where
+#: ``self._encoder.encode_image`` embeds. Matched on both halves so the two do not collide.
+QUALIFIED = {"open", "encode_image"}
+
+
+def called(node: ast.Call) -> str:
+    """The name being called, however it was imported or aliased.
+
+    Shared by both sweeps rather than nested in one, because "what is being called" is the same
+    question either way and a second copy is how the two rules come to disagree about it.
+    """
+    if isinstance(node.func, ast.Attribute):
+        receiver = getattr(node.func.value, "id", "")
+        return (f"{receiver}.{node.func.attr}" if node.func.attr in QUALIFIED
+                else node.func.attr)
+    return getattr(node.func, "id", "")
+
+
+class TestOneEncodeBoundary:
+    def test_nothing_outside_image_py_encodes_an_image(self):
+        """The mirror of the decode rule, and it exists because the substring version failed.
+
+        The first attempt asserted that ``mozo/workflow/api.py`` no longer contained the string
+        ``def _png``. It passed while ``mozo/server.py`` imported that very function from that very
+        module and raised ``ImportError`` on every call, because the property is repo-wide and a
+        substring search of one file cannot hold a repo-wide property. This is the same sweep the
+        decode rule uses, over the calls that turn an array into bytes.
+        """
+        scanned, offenders = 0, []
+        for path in sorted((ROOT / "mozo").rglob("*.py")):
+            if path in EXEMPT_FROM_ENCODING or "vendors" in path.parts:
+                continue
+            scanned += 1
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.Call) and (name := called(node)) in ENCODERS:
+                    offenders.append(f"{path.relative_to(ROOT)}:{node.lineno} {name}")
+
+        assert scanned > 5, f"only scanned {scanned} files under {ROOT / 'mozo'}"
+        assert not offenders, (
+            "these encode an image without going through mozo.image.encode_image, which is where "
+            f"RGB-to-BGR is decided: {offenders}")
+
+
 class TestOneDecodeBoundary:
     def test_nothing_outside_load_image_decodes_an_image(self):
         """Every decoder call in the package, found by parsing rather than by grepping.
@@ -125,15 +181,6 @@ class TestOneDecodeBoundary:
         accident this guards against -- resolving those needs an alias map that buys nothing
         else.
         """
-        def called(node: ast.Call) -> str:
-            """The name being called, however it was imported or aliased."""
-            if isinstance(node.func, ast.Attribute):
-                receiver = getattr(node.func.value, "id", "")
-                # ``Image.open`` decodes; ``target.open("wb")`` writes a file. Only the
-                # receiver tells them apart, so that one pair is matched on both halves.
-                return f"{receiver}.{node.func.attr}" if node.func.attr == "open" else node.func.attr
-            return getattr(node.func, "id", "")
-
         scanned, offenders = 0, []
         for path in sorted((ROOT / "mozo").rglob("*.py")):
             if path in EXEMPT or "vendors" in path.parts:

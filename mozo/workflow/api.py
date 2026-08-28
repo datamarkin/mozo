@@ -13,26 +13,26 @@ Validation is construction. :class:`~mozo.workflow.graph.Workflow` refuses a doc
 node that does not exist, wires ports whose types disagree, leaves an input unfed or contains a
 cycle, so ``/validate`` builds one and reports what building it said. Nothing here re-checks any of
 that, which is why there is no second opinion to keep in step.
+
+**What travels is not this module's to decide.** Turning a node's output into JSON is
+:mod:`mozo.workflow.wire`'s, because it is a property of the port types rather than of HTTP. What
+is left here is requests: which endpoint, what it accepts, and how long an uploaded file lives.
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
-import cv2
-import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from ..depth import encode as encode_depth
 from .graph import Workflow
-from .node import PortType
 from .registry import catalogue
+from .wire import serialise
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
@@ -135,7 +135,7 @@ def run(
                 # Serialised as it arrives, so a node's output is not held past the one it feeds.
                 # Combined with the engine dropping a wire once its last reader has run, a
                 # five-node chain over a 4K photograph peaks at 70 MB instead of 182 MB.
-                results[event.node] = _serialise(built, event.node, event.output)
+                results[event.node] = serialise(built.steps[event.node].spec, event.output)
     finally:
         _discard(upload)
 
@@ -177,7 +177,7 @@ def stream(
             for event in started:
                 reported = {"node": event.node, "status": event.status}
                 if event.status == "completed" and (include == "all" or event.node in terminals):
-                    reported["output"] = _serialise(built, event.node, event.output)
+                    reported["output"] = serialise(built.steps[event.node].spec, event.output)
                 if event.error:
                     reported["error"] = event.error
                 yield _event(reported)
@@ -282,63 +282,3 @@ def _discard(upload: Optional[Path]) -> None:
 def _event(payload: dict) -> str:
     """One server-sent event."""
     return f"data: {json.dumps(payload)}\n\n"
-
-
-def _serialise(built: Workflow, node: str, value: Any) -> Any:
-    """One node's output as JSON, by the port type it declared.
-
-    By the declaration rather than by the shape of the value, because the shapes collide. A depth
-    map and an embedding matrix are both two-dimensional float arrays; guessing would have sent an
-    embedding as a min-max normalised 16-bit PNG the moment a node produced one, and said nothing.
-
-    Which value belongs to which port is :meth:`NodeSpec.paired`'s to say, not this module's.
-    """
-    paired = built.steps[node].spec.paired(value)
-    if not paired:
-        return None
-    if len(paired) == 1:
-        return _as_json(paired[0][0].type, paired[0][1])
-    return [_as_json(port.type, part) for port, part in paired]
-
-
-def _as_json(port: PortType, value: Any) -> Any:
-    """One value travelling on a port of type *port*.
-
-    A list is a batch -- one wire carrying many -- and every item on it has the same port type.
-    """
-    if value is None:
-        return None
-    if isinstance(value, list):
-        return [_as_json(port, item) for item in value]
-
-    if port in (PortType.DETECTIONS, PortType.CLASSIFICATIONS):
-        return value.to_dict()
-    if port is PortType.IMAGE:
-        return _data_uri(_png(value))
-    if port is PortType.DEPTH:
-        png, low, high = encode_depth(value)
-        # The endpoints travel with the pixels rather than in a header, because here there is no
-        # header to put them in -- and a depth map without them is a picture, not a measurement.
-        # Same encoding as /predict, from the same function.
-        return {"depth": _data_uri(png), "min": low, "max": high}
-    if port is PortType.EMBEDDING:
-        return np.asarray(value).tolist()
-
-    raise TypeError(f"no way to send a {port.value} as JSON")
-
-
-def _png(image: np.ndarray) -> bytes:
-    """Encode an RGB image as PNG.
-
-    PNG rather than JPEG: an annotated image is mostly thin lines and mask edges, which is what
-    JPEG is worst at, and a result that has been quietly smeared is worse than a larger response.
-    """
-    success, encoded = cv2.imencode(".png", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    if not success:
-        raise HTTPException(status_code=500, detail="could not encode an image")
-    return encoded.tobytes()
-
-
-def _data_uri(png: bytes) -> str:
-    """PNG bytes as something an ``<img src>`` can take."""
-    return f"data:image/png;base64,{base64.b64encode(png).decode()}"

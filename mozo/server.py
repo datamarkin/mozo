@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from . import __version__, _shared
 from .depth import encode as encode_depth
 from .text import comma_separated
-from .image import load_image
+from .image import encode_image, load_image
 from .registry import BOXED, ENCODES, MODEL_REGISTRY, PROMPTED, get_model_info
 from .workflow.api import router as workflow_router
 
@@ -266,14 +266,20 @@ def _subjects(corners: List[tuple]) -> Any:
 def _image_response(frame: np.ndarray) -> Response:
     """Send an image back, as an ordinary 8-bit PNG.
 
-    Lossless on purpose, and through the workflow runtime's own encoder so that a frame returned
-    by this endpoint and one returned by a workflow are the same bytes. This is the output of a
-    generative model and a caller may well run it again with another seed and compare, which JPEG
-    would quietly make impossible to do honestly.
-    """
-    from .workflow.api import _png
+    Lossless on purpose, and through :func:`mozo.image.encode_image` -- the same function a
+    workflow's result goes through -- so that a frame returned by this endpoint and one returned by
+    a workflow are the same bytes. This is the output of a generative model and a caller may well
+    run it again with another seed and compare, which JPEG would quietly make impossible to do
+    honestly.
 
-    return Response(content=_png(frame), media_type="image/png")
+    It used to import a private ``_png`` from the workflow package, which broke the moment that
+    package moved it. A shared fact reached for by its private name is a shared fact homed wrong.
+    """
+    try:
+        payload = encode_image(frame)
+    except ValueError as error:
+        raise HTTPException(status_code=500, detail=str(error)) from error
+    return Response(content=payload, media_type="image/png")
 
 
 def _depth_response(depth: np.ndarray, unit: Optional[str]) -> Response:
