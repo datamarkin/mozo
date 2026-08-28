@@ -151,6 +151,14 @@ class Event:
     error: Optional[str] = None
 
 
+#: Why a workflow cannot be run over a source it does not have. One sentence, because both
+#: :meth:`Workflow.process` and the HTTP endpoint refuse for it and a caller reading one should
+#: not be told a different remedy than a caller reading the other.
+NO_SOURCE = ("this workflow has no source, so there is nothing for a run to be a pass over. "
+             "Give it one -- read_media -- or bring the items yourself with "
+             "run_many(items, over=...).")
+
+
 def _named(item) -> str:
     """*item* in a failure message, short enough to read.
 
@@ -494,10 +502,7 @@ class Workflow:
         """
         source_id = self.source
         if source_id is None:
-            raise ValueError(
-                "this workflow has no source, so there is nothing for a run to be a pass over. "
-                "Give it one -- read_media -- or bring the items yourself with "
-                "run_many(items, over=...).")
+            raise ValueError(NO_SOURCE)
 
         settings = self._resolve(overrides)
         states = self._remember(settings)

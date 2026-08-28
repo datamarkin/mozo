@@ -24,15 +24,16 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from .graph import Workflow
+from .graph import NO_SOURCE, Workflow
 from .registry import catalogue
-from .wire import serialise
+from .wire import PREVIEW_EVERY, preview as wire_preview, serialise
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
 
@@ -120,12 +121,11 @@ def run(
     terminals = built.terminals
     # Asked before the file is written down, so a workflow with nowhere to put one is refused
     # having copied nothing. Deriving the name costs microseconds; spooling costs the whole upload.
-    into = _destination(built) if file is not None else None
-    upload = _spool(file)
+    settled, upload = _prepared(built, inputs, file)
 
     results = {}
     try:
-        for event in _events(built, inputs, upload, into):
+        for event in _events(built, settled):
             if event.status == "failed":
                 # A run that failed is not a run that returned nothing. Answering 200 with an empty
                 # results dict is indistinguishable from success to any client that does not go
@@ -165,12 +165,10 @@ def stream(
     terminals = built.terminals
 
     # Settled here rather than inside ``events`` so that a refused override is still a 400 before
-    # the response begins, which is what this endpoint promises. Everything that can refuse runs
-    # before the file is written down, so the only spooled file that exists is one a started run
-    # owns -- and it outlives this function, which is why the generator is what removes it.
-    into = _destination(built) if file is not None else None
-    upload = _spool(file)
-    started = _events(built, inputs, upload, into)
+    # the response begins, which is what this endpoint promises. The spooled file outlives this
+    # function, which is why the generator is what removes it.
+    settled, upload = _prepared(built, inputs, file)
+    started = _events(built, settled)
 
     def events():
         try:
@@ -193,23 +191,45 @@ def stream(
         finally:
             _discard(upload)      # however the response ended, including a client hanging up
 
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
+    return _sse(events())
 
 
-def _events(built: Workflow, inputs: str, upload: Optional[Path], into: Optional[str]):
-    """Start *built* running, turning a refused override into a 400 before anything executes.
+def _events(built: Workflow, settled: dict):
+    """Start *built* running one item, turning a refused override into a 400 before it executes.
 
     ``stream`` settles the overrides before it returns its iterator, so this catches a bad one here
     rather than part-way through a response that has already claimed success.
     """
     try:
-        return built.stream(**_overrides(inputs, upload, into))
+        return built.stream(**settled)
     except KeyError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def _prepared(built: Workflow, inputs: str, file: Optional[UploadFile]) -> tuple:
+    """Everything a run needs, as ``(overrides, the spooled upload or None)``.
+
+    **Everything that can refuse runs before anything is written down.** Bad JSON, a workflow with
+    nowhere to put a file -- both are answered while the only cost so far is a parse, so a refused
+    request leaves no temporary file behind and neither endpoint needs a guard around the write.
+    It is the order that gets that, not a ``finally``.
+    """
+    settled = _overrides(inputs)
+    upload = None
+    if file is not None:
+        into = _destination(built)      # refuses here, before the upload costs a byte of disk
+        upload = _spool(file)
+        settled[into] = str(upload)
+    return settled, upload
+
+
+def _sse(generator) -> StreamingResponse:
+    """A server-sent event stream, with the headers that keep proxies from buffering it."""
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
 
 
 def _build(document: str) -> Workflow:
@@ -222,23 +242,14 @@ def _build(document: str) -> Workflow:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def _overrides(inputs: str, upload: Optional[Path], into: Optional[str]) -> dict:
-    """Parameter overrides for this run, with an uploaded file folded in as one of them.
-
-    *into* is the parameter the file is the value of, which
-    :attr:`~mozo.workflow.graph.Workflow.file_parameter` derived from the annotations rather than
-    from a name written down here. This used to write to a parameter literally called ``image``,
-    which meant the transport knew one node's vocabulary and broke when that node was renamed.
-    """
+def _overrides(inputs: str) -> dict:
+    """Parameter overrides for this run, as the request gave them."""
     try:
         overrides = json.loads(inputs)
     except json.JSONDecodeError as error:
         raise HTTPException(status_code=400, detail=f"inputs is not JSON: {error}") from error
     if not isinstance(overrides, dict):
         raise HTTPException(status_code=400, detail="inputs must be a JSON object")
-
-    if upload is not None:
-        overrides[into] = str(upload)
     return overrides
 
 
@@ -277,6 +288,74 @@ def _discard(upload: Optional[Path]) -> None:
     """
     if upload is not None:
         upload.unlink(missing_ok=True)
+
+
+@router.post("/process", summary="Run a workflow over everything its source produces")
+def process(
+    workflow: str = Form(..., description="The workflow document, as JSON"),
+    inputs: str = Form("{}", description="Parameter overrides, as a JSON object"),
+    preview: str = Form("", description="Node id to send a thumbnail of, or empty for none"),
+    file: Optional[UploadFile] = File(None, description="An image or video to run on, if it is "
+                                                        "not already on the server"),
+):
+    """Run a workflow over its whole source, reporting progress as it goes.
+
+    **The other verb.** ``/stream`` is one pass over one item with every node's output at full
+    size -- what the editor draws on the canvas while a graph is being wired. This is one pass over
+    everything the source produces, which for a video is two hundred thousand items and for a
+    folder is however many files are in it.
+
+    They cannot be one endpoint, and the reason is measured rather than aesthetic. ``/stream`` sends
+    one event per node per item, each image a lossless PNG data URI: on a 315-frame clip through two
+    nodes that is 2.33 GB and fifteen seconds of encoding, and on a two-hour run it is 1.3 TB. So
+    this one sends a counter, which is bytes, and a small JPEG no more often than
+    :data:`~mozo.workflow.wire.PREVIEW_EVERY`.
+
+    **Cancelling is hanging up.** There is no state here to cancel: closing the connection closes
+    the generator, which ends the run, which closes what the run opened -- a video sink writes its
+    index and the file plays. Measured: a client that left at item 50 stopped the run at item 42.
+
+    A refused override is reported as a failed event rather than as a 400, unlike ``/stream``:
+    :meth:`~mozo.workflow.graph.Workflow.process` settles its overrides on the first item, so there
+    is nothing to catch before the response begins. What *can* be refused first is refused first --
+    a document that is not a workflow, a workflow with no source, a preview naming no node.
+
+    Args:
+        preview: Which node's output to show. Empty sends counters only, which is the cheapest this
+            can be and is right for a headless caller.
+    """
+    built = _build(workflow)
+    if built.source is None:
+        raise HTTPException(status_code=400, detail=NO_SOURCE)
+    if preview and preview not in built.steps:
+        raise HTTPException(status_code=400, detail=f"no node {preview!r} to preview")
+
+    settled, upload = _prepared(built, inputs, file)
+    watched = built.steps[preview].spec if preview else None
+
+    def events():
+        done, last, began = 0, 0.0, time.monotonic()
+        try:
+            for _item, results in built.process(**settled):
+                done += 1
+                report = {"item": done}
+                now = time.monotonic()
+                if watched is not None and now - last >= PREVIEW_EVERY:
+                    last = now
+                    shown = wire_preview(watched, results.get(preview))
+                    if shown is not None:
+                        report["preview"] = shown
+                yield _event(report)
+            yield _event({"done": True, "items": done,
+                          "seconds": round(time.monotonic() - began, 2)})
+        except Exception as error:      # a node that failed, or a source that broke under us
+            yield _event({"status": "failed", "error": str(error)})
+        finally:
+            # Reached however this ended, the case that matters being a client that hung up: the
+            # generator is closed, ``process`` unwinds, and the sinks close the files they opened.
+            _discard(upload)
+
+    return _sse(events())
 
 
 def _event(payload: dict) -> str:

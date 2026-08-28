@@ -25,15 +25,39 @@ opinions is how one of them goes stale.
 from __future__ import annotations
 
 import base64
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
+
+from pixelflow import transforms
 
 from ..depth import encode as encode_depth
 from ..image import encode_image
 from .node import NodeSpec, PortType
 
-__all__ = ["as_json", "serialise"]
+__all__ = ["as_json", "preview", "serialise", "thumbnail"]
+
+#: How tall a preview is. Width follows the aspect ratio.
+#:
+#: 360 rather than something smaller, which is the opposite of what you would guess: OpenCV sizes
+#: its resize threads by the *destination* area while ``INTER_AREA``'s work is set by the source,
+#: so a smaller preview is the same work on fewer threads. Measured, 1920x1281 down to 270 costs
+#: 7.0 ms and down to 360 costs 5.9 ms -- bigger and cheaper. Against the canvas's 3.6 MB PNG this
+#: is around a hundredth of the bytes.
+#:
+#: **The cost is the source's size, not this one's**, and on a 12 MP camera photograph the resize
+#: is 18 ms whatever height is asked for. That belongs to ``pf.transforms.resize`` rather than
+#: here; what bounds it here is :data:`PREVIEW_EVERY`.
+PREVIEW_HEIGHT = 360
+
+#: The floor between previews, in seconds. Shared by every transport that sends them, because it
+#: is one measured trade-off -- what a glance is worth against what it costs -- and not a property
+#: of HTTP or of a terminal.
+#:
+#: By the clock rather than by a count of items: every tenth item is fifty previews a second on a
+#: graph that runs fast and one every twenty seconds on a graph that runs slow, where an interval
+#: reads the same on both and needs no tuning per workflow.
+PREVIEW_EVERY = 0.2
 
 
 def serialise(spec: NodeSpec, value: Any) -> Any:
@@ -84,6 +108,39 @@ def as_json(port: PortType, value: Any) -> Any:
         return np.asarray(value).tolist()
 
     raise TypeError(f"no way to send a {port.value} as JSON")
+
+
+def preview(spec: NodeSpec, value: Any) -> Optional[str]:
+    """A thumbnail of what *spec* produced, or None where it produced nothing to look at.
+
+    The cheap counterpart of :func:`serialise`, and it pairs the value the same way -- through
+    :meth:`~mozo.workflow.node.NodeSpec.paired`, which is the one place that knows a single output
+    is the value and several are a tuple in declared order. That rule had two homes once, the
+    second being a transport deciding it again; this is the same function resisting the same drift.
+
+    None rather than a refusal for a node with no picture: watching a detector's output is a
+    reasonable thing to ask for, and not a reason to stop a run that is otherwise fine.
+    """
+    for port, part in spec.paired(value):
+        if port.type is PortType.IMAGE and part is not None:
+            return thumbnail(part)
+    return None
+
+
+def thumbnail(image: np.ndarray, height: int = PREVIEW_HEIGHT) -> str:
+    """A cheap look at *image*, for watching a run rather than reading its result.
+
+    The same value as :func:`as_json` would send on an image port, smaller and lossy. Both live
+    here so there is one place that knows how an image leaves the process; a preview encoder beside
+    the transport that wanted it would be the second opinion this module exists to prevent.
+
+    **JPEG and small, deliberately.** :func:`as_json` sends lossless PNG because an annotated
+    result is thin lines and mask edges, which is what JPEG is worst at, and a smeared result is
+    worse than a large response. A preview is not a result -- it is a glance at the fiftieth of
+    two hundred thousand frames, discarded before the next one arrives -- so the trade goes the
+    other way, and the run is what the viewer is reading, not this.
+    """
+    return _data_uri(encode_image(transforms.resize(image, height=height), ".jpg"), "image/jpeg")
 
 
 def _data_uri(payload: bytes, media_type: str) -> str:

@@ -14,7 +14,7 @@ import tempfile
 import pytest
 
 import mozo
-from conftest import FIXTURE, document, require_present
+from conftest import CLIP_FRAMES, FIXTURE, document, require_present
 import workflow_nodes  # noqa: F401 -- imported to register the port-type test nodes
 
 
@@ -216,6 +216,66 @@ class TestEveryPortTypeSurvivesJson:
         assert check(_run(client, made, payload)["results"]["out"])
 
 
+class TestRunningTheWholeSource:
+    """``/process`` -- the other verb. ``/stream`` is one item; this is all of them.
+
+    Why they cannot be one endpoint is argued where the endpoint is, in ``api.py``.
+    """
+
+    def test_every_item_is_counted(self, client, clip):
+        events = _events(client, "process", _clip_document(clip))
+        assert [e["item"] for e in events if "item" in e] == list(range(1, CLIP_FRAMES + 1))
+
+    def test_it_says_what_it_did_at_the_end(self, client, clip):
+        last = _events(client, "process", _clip_document(clip))[-1]
+        assert last["done"] is True and last["items"] == CLIP_FRAMES
+        assert last["seconds"] >= 0
+
+    def test_no_node_output_comes_back(self, client, clip):
+        """The whole reason it is a second endpoint."""
+        events = _events(client, "process", _clip_document(clip))
+        assert not any("output" in event for event in events)
+
+    def test_a_preview_is_a_small_jpeg_not_a_canvas_png(self, client, clip):
+        events = _events(client, "process", _clip_document(clip), preview="load", every="0")
+        shown = [e["preview"] for e in events if "preview" in e]
+        assert shown, "asked for a preview and got none"
+        assert all(uri.startswith("data:image/jpeg;base64,") for uri in shown)
+
+    def test_nothing_is_previewed_unless_asked(self, client, clip):
+        events = _events(client, "process", _clip_document(clip))
+        assert not any("preview" in event for event in events)
+
+    def test_a_node_with_no_picture_is_skipped_rather_than_failing_the_run(self, client, clip):
+        """Watching a detections node is a reasonable mistake, and not a reason to stop."""
+        document = as_json({"load": ("read_media", {"source": str(clip)}),
+                            "counts": ("fake_scores", {})},
+                           [("load", "image", "counts", "image")])
+        events = _events(client, "process", document, preview="counts", every="0")
+        assert events[-1]["done"] is True
+        assert not any("preview" in event for event in events)
+
+    def test_a_workflow_with_no_source_is_refused(self, client):
+        """There is nothing for a pass to be over, and running one item would be ``/stream``."""
+        document = as_json({"a": ("make", {}), "b": ("brighten", {})},
+                           [("a", "image", "b", "image")])
+        response = client.post("/workflow/process", data={"workflow": document})
+        assert response.status_code == 400
+        assert "no source" in response.json()["detail"]
+
+    def test_previewing_a_node_that_is_not_there_is_refused(self, client, clip):
+        response = client.post("/workflow/process",
+                               data={"workflow": _clip_document(clip), "preview": "nope"})
+        assert response.status_code == 400
+        assert "no node" in response.json()["detail"]
+
+    def test_a_failing_node_ends_the_stream_with_the_reason(self, client, clip):
+        document = as_json({"load": ("read_media", {"source": str(clip)}),
+                            "boom": ("explode", {})},
+                           [("load", "image", "boom", "image")])
+        assert _events(client, "process", document)[-1]["status"] == "failed"
+
+
 class TestSerialisingResults:
     """The same, on real models. Skips without weights."""
 
@@ -270,7 +330,8 @@ class TestTheModelServerIsUnaffected:
 
         added = {path for path in _every_path(app.routes) if "workflow" in path}
         assert added == {"/workflow", "/workflow/assets/{name}", "/workflow/nodes",
-                         "/workflow/run", "/workflow/stream", "/workflow/validate"}
+                         "/workflow/process", "/workflow/run", "/workflow/stream",
+                         "/workflow/validate"}
 
 
 def _every_path(routes) -> set:
@@ -316,6 +377,21 @@ def _post(client, path: str, workflow: str, payload: bytes = None, filename: str
 def _run(client, workflow: str, payload: bytes = None, **fields) -> dict:
     """POST a workflow to /run and return the parsed answer."""
     return _post(client, "run", workflow, payload, **fields).json()
+
+
+def _clip_document(clip) -> str:
+    """A two-node workflow over the short video, which is what a pass has to be over."""
+    return as_json({"load": ("read_media", {"source": str(clip)}),
+                    "gray": ("to_grayscale", {})},
+                   [("load", "image", "gray", "image")])
+
+
+def _events(client, path: str, workflow: str, **fields) -> list:
+    """Every server-sent event from one request, parsed."""
+    response = client.post(f"/workflow/{path}", data={"workflow": workflow, **fields})
+    assert response.status_code == 200, response.text
+    return [json.loads(line[len("data: "):])
+            for line in response.text.splitlines() if line.startswith("data: ")]
 
 
 def _stream(client, workflow: str, payload: bytes | None, **fields) -> list:
