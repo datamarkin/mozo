@@ -168,6 +168,55 @@ class TestOneNodeReadsBothKinds:
         assert len(frames) == (CLIP_FRAMES + 1) // 2
 
 
+class TestAFolderInAFolderOut:
+    """Point it at a folder and get the same names back. The symmetry is the whole design.
+
+    Nothing here is video's. ``save_video`` is still what a video goes to; a video reaching a
+    folder sink is what falls out of every item having a name, not something built for.
+    """
+
+    @pytest.fixture
+    def photos(self, tmp_path):
+        """A folder as they really are: mixed names, mixed formats, and junk beside them."""
+        folder = tmp_path / "photos"
+        folder.mkdir()
+        for name in ("cat.jpg", "dog.png", "frame_2.jpg", "frame_10.jpg"):
+            (folder / name).write_bytes(FIXTURE.read_bytes())
+        (folder / ".DS_Store").write_bytes(b"junk")
+        (folder / "README.md").write_text("not an image")
+        return folder
+
+    def test_the_names_come_out_as_they_went_in(self, photos, tmp_path):
+        out = tmp_path / "out"
+        made = Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(photos)}),
+             "save": ("save_image", {"path": str(out)})},
+            [("load", "image", "save", "image")]))
+        assert len(list(made.process())) == 4
+        assert sorted(p.name for p in out.iterdir()) == [
+            "cat.jpg", "dog.jpg", "frame_10.jpg", "frame_2.jpg"]
+
+    def test_a_file_that_is_not_an_image_is_passed_over_not_raised_on(self, photos):
+        """Six files, four images. A folder of photographs has a ``.DS_Store`` in it, and refusing
+        to run because of that would be refusing the ordinary case."""
+        made = Workflow.from_dict(_loads(str(photos)))
+        assert len(list(made.process())) == 4
+
+    def test_a_sequence_is_read_in_its_own_order_not_in_character_order(self, photos):
+        """``frame_10`` sorts before ``frame_2`` by character, which turns a frame sequence into a
+        shuffled one -- and shuffled frames written back out still play."""
+        run = Context()
+        list(get("read_media").run(run, source=str(photos)))
+        run.seal()
+        assert [run.at(i).label for i in range(4)] == ["cat", "dog", "frame_2", "frame_10"]
+
+    def test_an_empty_folder_says_so_rather_than_running_on_nothing(self, tmp_path):
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        events = list(Workflow.from_dict(_loads(str(empty))).stream())
+        assert events[-1].status == "failed"
+        assert "no images in" in events[-1].error
+
 class TestWhatTheRunSaysItWillDo:
     """The count a sink reads to decide whether it can take one filename."""
 
