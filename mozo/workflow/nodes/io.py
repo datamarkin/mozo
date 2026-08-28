@@ -87,31 +87,75 @@ def read_media(run: Context, source: Optional[Source] = None, stride: int = 1,
         raise ValueError(
             "nothing to read -- choose a file on this node, or pass run(source=...)")
 
-    named = isinstance(source, (str, Path))
-    if named and Path(source).suffix.lower() in VIDEO_SUFFIXES:
-        reader = pf.VideoReader(str(source), stride=stride, start=start)
+    path = Path(source) if isinstance(source, (str, Path)) else None
+
+    if path is not None and path.suffix.lower() in VIDEO_SUFFIXES:
+        reader = pf.VideoReader(str(path), stride=stride, start=start)
         try:
-            run.declare(name=str(source), fps=reader.fps, width=reader.width,
-                        height=reader.height, frames=reader.frames, is_live=reader.is_live)
-            yield from (reader if count is None else islice(reader, count))
+            # What it will yield, not what the file holds. PixelFlow already divides its count by
+            # the stride; ``count`` is this node's own limit, so correcting for it is this node's
+            # job -- and a sink deciding whether it can take one filename reads this number.
+            # ``filter(None, ...)`` drops whatever nobody knows, and None is the only honest
+            # answer to how many are coming from a reader that cannot count itself.
+            run.declare(name=str(path), fps=reader.fps, width=reader.width,
+                        height=reader.height, is_live=reader.is_live,
+                        frames=min(filter(None, (reader.frames, count)), default=None))
+            yield from islice(reader, count)
         finally:
             reader.close()
-    else:
-        # Bytes or an array is already-decoded pixels, so one image with no name of its own.
-        frame = decode(source)
-        height, width = frame.shape[:2]
-        # Declared before the yield like a video's, and for the same reason: a sink downstream
-        # opens itself from these and must not have to know which kind of file was upstream.
-        # ``fps`` is None because a photograph has no rate -- which is what makes a video sink ask.
-        run.declare(name=str(source) if named else "an image", fps=None,
-                    width=width, height=height, frames=1, is_live=False)
-        yield frame
+        return
+
+    # Bytes or an array is already-decoded pixels, so one image with no name of its own.
+    frame = decode(source)
+    height, width = frame.shape[:2]
+    # Declared before the yield like a video's, and for the same reason: a sink downstream opens
+    # itself from these and must not have to know which kind of source was upstream. ``fps`` is
+    # None because a photograph has no rate -- which is what makes a video sink ask for one.
+    run.declare(name=str(path) if path else "an image", width=width, height=height, frames=1,
+                # Its own name, so one photograph through a folder sink comes back as itself
+                # rather than as itself with an index glued on. Bytes have no name to keep.
+                labels=(path.stem,) if path else None)
+    yield frame
 
 
 @node(category="Output")
-def save_image(image: Image, path: str = "output.jpg") -> None:
-    """Write an image to a file."""
-    pf.save_image(path, image)
+def save_image(image: Image, run: Context, path: str = "output",
+               format: str = ".jpg") -> None:
+    """Write each image to its own file.
+
+    **A folder writes one file per item, named for the item.** So a folder of photographs comes
+    back as a folder of the same names, and that is the whole of it -- ``photos/cat.jpg`` in,
+    ``out/cat.jpg`` out. :attr:`~mozo.workflow.node.Context.label` is where the name comes from,
+    and every source has one, so this does not ask which kind of run it is in.
+
+    It used to take one filename and write it once per item. Ten frames in produced one file,
+    overwritten nine times, with nothing raised -- the same shape of wrong as a video that plays
+    at the wrong speed. Now a filename is refused as soon as the run *says* it has more than one
+    item, which is before anything is written and before the second item exists.
+
+    Refused in a preview as well, where only one item is taken and one filename would have been
+    fine. A preview that worked where the run it previews would fail is a preview that told you
+    the wrong thing, and the wiring it is reporting on is the same wiring.
+
+    Args:
+        path: A folder, made if it is not there. A name with a suffix instead writes that one file,
+            which is right for a run of one item and refused for a run of many.
+        format: The suffix to write. Stated rather than carried over from the input, because the
+            output is not the input file -- it has been decoded, run through the graph and encoded
+            again, so the container the bytes arrived in is not a property they still have.
+    """
+    target = Path(path)
+    if not target.suffix:
+        target.mkdir(parents=True, exist_ok=True)
+        target = target / f"{run.label}.{format.lstrip('.')}"
+    elif run.is_live or (run.frames or 1) > 1:
+        # ``is_live`` as well as the count, because a camera declares no count at all -- and
+        # ``frames`` is documented as an estimate and the wrong thing to decide with, so a source
+        # that cannot count itself would otherwise be the one place the overwriting survived.
+        raise ValueError(
+            f"{run.frames or 'unboundedly many'} images to write but one filename, {path!r}. "
+            f"Give a folder and each is written under its own name.")
+    pf.save_image(str(target), image)
 
 
 @node(category="Output", ordered=True)

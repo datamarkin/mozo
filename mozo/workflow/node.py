@@ -34,6 +34,7 @@ import types
 import typing
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, NewType, Optional, Sequence
 
 import numpy as np
@@ -221,6 +222,28 @@ class Context:
     def name(self) -> Optional[str]:
         """What the source is, for a message or a file name. A path, a URL, a camera."""
         return self._facts.get("name")
+
+    @property
+    def label(self) -> str:
+        """What to call this item, for a file named after it.
+
+        Every item has one, so a sink writing one file per item never has to ask whether it does.
+        A folder's items are named by their files, a single image by its own, and a video's frames
+        by the run and their place in it -- which is not a feature for video's sake but the reason
+        the sink stays one line.
+
+        The names themselves are the source's, declared as ``labels`` before the first item the way
+        every other fact is, because the source is the only thing that knows them. A source that
+        declares them declares one per item it will yield -- it is the same list it is about to
+        iterate -- so there is no length to check here. Where it declares none, this derives a name
+        rather than answering None: a sink handed None would have to invent the same fallback, and
+        inventing it here means inventing it once.
+        """
+        labels = self._facts.get("labels")
+        if labels:
+            return labels[self._index]
+        stem = Path(self.name).stem if self.name else "item"
+        return f"{stem}_{self._index:06d}"
 
     @property
     def time(self) -> Optional[float]:

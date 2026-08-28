@@ -168,6 +168,66 @@ class TestOneNodeReadsBothKinds:
         assert len(frames) == (CLIP_FRAMES + 1) // 2
 
 
+class TestWhatTheRunSaysItWillDo:
+    """The count a sink reads to decide whether it can take one filename."""
+
+    def test_the_count_it_declares_is_the_count_it_yields(self, clip):
+        """A sink refuses "many images, one filename" by reading this, so an estimate that ignored
+        ``count`` would refuse runs that were going to be fine."""
+        run = Context()
+        frames = list(get("read_media").run(run, source=str(clip), count=3))
+        assert run.frames == 3 == len(frames)
+
+
+class TestOneImagePerItem:
+    """``save_image`` used to take one filename and write it once per item."""
+
+    def test_every_item_gets_its_own_file(self, clip, tmp_path):
+        """Ten frames in produced one file, overwritten nine times, with nothing raised."""
+        out = tmp_path / "frames"
+        made = Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(clip)}),
+             "save": ("save_image", {"path": str(out)})},
+            [("load", "image", "save", "image")]))
+        assert len(list(made.process())) == CLIP_FRAMES
+        assert len(list(out.iterdir())) == CLIP_FRAMES
+
+    def test_one_filename_and_many_images_is_refused_before_anything_is_written(
+            self, clip, tmp_path):
+        """Refused on what the source says it will produce, and in a preview too -- ``save_image``
+        says why."""
+        target = tmp_path / "only.jpg"
+        made = Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(clip)}),
+             "save": ("save_image", {"path": str(target)})},
+            [("load", "image", "save", "image")]))
+
+        assert list(made.stream())[-1].status == "failed"
+        with pytest.raises(RuntimeError, match="one filename"):
+            list(made.process())
+        assert not target.exists()
+
+    def test_one_filename_is_right_for_a_run_of_one(self, tmp_path):
+        """A single photograph and a named file is the ordinary case and stays ordinary."""
+        target = tmp_path / "only.jpg"
+        made = Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(FIXTURE)}),
+             "save": ("save_image", {"path": str(target)})},
+            [("load", "image", "save", "image")]))
+        assert len(list(made.process())) == 1
+        assert target.exists()
+
+    def test_the_failure_names_the_item_rather_than_printing_it(self, clip, tmp_path):
+        """The item is the frame in a ``process`` run, so the message used to be the repr of a
+        720x1280 array with the reason buried under it."""
+        made = Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(clip)}),
+             "save": ("save_image", {"path": str(tmp_path / "only.jpg")})},
+            [("load", "image", "save", "image")]))
+        with pytest.raises(RuntimeError, match=r"^a \d+x\d+ image: "):
+            list(made.process())
+
+
 class TestWhatTheModelsActuallyReturn:
     """The declared output type, checked against the real thing. Skips without weights."""
 
