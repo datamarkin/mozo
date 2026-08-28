@@ -88,8 +88,8 @@ class Stage:
     """One node, its inbound queue, and the workers that drain it."""
 
     def __init__(self, step, ports: frozenset, width: int, settings: dict, results: Queue,
-                 stopped: dict, stopped_lock: threading.Lock, measure: bool = False,
-                 context=None) -> None:
+                 stopped: dict, stopped_lock: threading.Lock, declared: dict,
+                 measure: bool = False, context=None) -> None:
         self.step = step
         #: Every argument that must arrive before this node can run. Input ports, plus the
         #: parameter the run binds each item to when this is the node the items enter by.
@@ -117,6 +117,16 @@ class Stage:
         #: this exists to fix, and a default would make that constructible.
         self.stopped = stopped
         self.stopped_lock = stopped_lock
+        #: ``{seq: Context}`` -- what a source declared for one item, where the source is a node of
+        #: the graph rather than the thing driving the run. That is ``run_many`` over an input
+        #: node: the caller brings the files, so each item is its own one-item run and its own
+        #: source has its own facts, which the item's later nodes must read instead of the run's.
+        #:
+        #: Shared and keyed by item for the same reason :attr:`stopped` is -- the stages that need
+        #: it are not all downstream of the one that fills it, so there is no wire to send it
+        #: along. Emptied in ``release`` as each item is handed over, under the same lock, so a
+        #: million items hold one context at a time rather than a million.
+        self.declared = declared
         #: The run's sealed facts, or None where no node here asked for them. Sealed once and
         #: read per item -- ``at(seq)`` is a view, not a copy, so a hundred thousand items cost a
         #: hundred thousand small objects and one dict.
@@ -233,10 +243,26 @@ class Stage:
             return
 
         arguments.pop(_TRIGGER, None)
-        if self.step.spec.context:
-            arguments[self.step.spec.context] = self.context.at(seq)
         started = time.perf_counter_ns() if self.measure else 0
-        outputs, failure = self.step.call({**self.settings, **arguments})
+
+        if self.step.spec.produces_many:
+            # A source that is not driving the run: ``run_many`` bound this item's file to it, so
+            # it is asked for one item and closed, exactly as the serial engine and the editor's
+            # preview ask. Its facts are this item's, not the run's -- a batch of a thousand
+            # photographs has a thousand sizes -- so they are declared into a context of their own
+            # and left where the item's later nodes will find them.
+            item_context = Context()
+            if self.step.spec.context:
+                arguments[self.step.spec.context] = item_context
+            outputs, failure = self.step.first({**self.settings, **arguments})
+            item_context.seal()
+            with self.stopped_lock:
+                self.declared[seq] = item_context
+        else:
+            if self.step.spec.context:
+                arguments[self.step.spec.context] = self._context_for(seq)
+            outputs, failure = self.step.call({**self.settings, **arguments})
+
         if self.measure:
             self.busy_ns += time.perf_counter_ns() - started
         if failure is not None:
@@ -245,6 +271,18 @@ class Stage:
 
         self.results.put((seq, self.step.id, self.step.spec.result(outputs)))
         self._send(seq, outputs)
+
+    def _context_for(self, seq: int):
+        """The facts this item's nodes should read: its own source's, or the run's.
+
+        Its own where a source node ran inside this item -- ``run_many`` over an input node --
+        because then the run is one item long and the run's facts are that item's. The run's
+        otherwise, which is every other case: :meth:`~mozo.workflow.graph.Workflow.process` seals
+        one set before the first frame, and a graph with no source seals an empty one.
+        """
+        with self.stopped_lock:
+            own = self.declared.get(seq)
+        return own if own is not None else self.context.at(seq)
 
     def start(self) -> None:
         for _ in range(self.width):
@@ -317,8 +355,8 @@ def _report(stages: dict, elapsed: float) -> dict:
 
 
 def _build(workflow, settings: dict, over: str, workers: int, model_workers: int,
-           results: Queue, measure: bool, stopped: dict,
-           stopped_lock: threading.Lock, folded: dict, driving=None, run=None) -> tuple:
+           results: Queue, measure: bool, stopped: dict, stopped_lock: threading.Lock,
+           declared: dict, folded: dict, driving=None, run=None) -> tuple:
     """Wire one stage per node. Returns ``(stages, the stages each item is fed into)``.
 
     Every node with no inputs is a source and must be woken once per item, not only the one the
@@ -361,7 +399,7 @@ def _build(workflow, settings: dict, over: str, workers: int, model_workers: int
         if node_id in entry:
             ports.add(entry[node_id])
         stages[node_id] = Stage(step, frozenset(ports), _width(step.spec, workers, model_workers),
-                                arguments, results, stopped, stopped_lock, measure, run)
+                                arguments, results, stopped, stopped_lock, declared, measure, run)
 
     for node_id, wires in workflow.incoming.items():
         if node_id in folded or node_id == driving:
@@ -418,12 +456,15 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
     #: ``{seq: the Event that ended it}`` for items that failed somewhere. Belongs to the run
     #: rather than to any stage: what it exists to stop is the branches a failure has no wire to.
     stopped: dict = {}
+    #: ``{seq: Context}`` for items whose own source ran inside them, under the same lock and with
+    #: the same lifetime. See :attr:`Stage.declared`.
+    declared: dict = {}
     stopped_lock = threading.Lock()
     measure = stats is not None
     folded = folded or {}
     folded_results = folded_results or {}
     stages, entries = _build(workflow, settings, over, workers, model_workers, results, measure,
-                             stopped, stopped_lock, folded, driving, run)
+                             stopped, stopped_lock, declared, folded, driving, run)
     began = time.perf_counter()
     for stage in stages.values():
         stage.start()
@@ -474,6 +515,7 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
             outcome, item = ready.pop(emit), sources.pop(emit)
             with stopped_lock:
                 stopped.pop(emit, None)                  # handed over; nothing left to stop
+                declared.pop(emit, None)                 # and nothing left to read its facts
             emit += 1
             inflight.release()
             failure = outcome if _failed(outcome) else None

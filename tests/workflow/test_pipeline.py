@@ -123,6 +123,37 @@ class TestASourceIsTheWholeGraph:
         assert [item.tolist() for item, _ in made.process(workers=4)] == serial
 
 
+class TestASourceInsideEachItem:
+    """``run_many`` over an input node: the caller brings the files, and each is its own run.
+
+    The merge that gave mozo one input node made this the ordinary batch case -- a thousand
+    photographs bound one at a time to a node that is a source. Serially the source is asked for
+    one item and closed; this is that, in the pipeline.
+    """
+
+    def test_each_item_gets_its_own_pass_over_its_own_source(self):
+        made = Workflow.from_dict(document(
+            {"a": ("emit", {}), "b": ("brighten", {})}, [("a", "image", "b", "image")]))
+        got = list(made.run_many([1, 3, 5], over="count", workers=4))
+        assert [item for item, _ in got] == [1, 3, 5]
+        # One item out of each run, whatever the source would have gone on to yield.
+        assert all(results["b"].shape[0] == 1 for _, results in got)
+
+    def test_the_facts_are_the_item_s_own_not_the_run_s(self):
+        """A batch of a thousand files has a thousand sizes, so one set of facts cannot serve.
+
+        Serially each item's source declares into a context of its own; the pipeline reaches its
+        stages through a shared map instead, because they are not all downstream of the source and
+        there is no wire to send it along. This is that the two agree.
+        """
+        made = Workflow.from_dict(document(
+            {"a": ("emit", {}), "b": ("report_width", {})}, [("a", "image", "b", "image")]))
+        serial = [r["b"] for _, r in made.run_many([2, 5], over="width", workers=1)]
+        piped = [r["b"] for _, r in made.run_many([2, 5], over="width", workers=4)]
+        assert serial == [2, 5], serial
+        assert piped == serial
+
+
 class TestTheDefault:
     """``run_many`` pipelines unless told otherwise, and what that costs."""
 

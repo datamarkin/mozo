@@ -122,6 +122,17 @@ def fake_embedding(image: Image) -> Embedding:
 
 
 @node(category="Test")
+def report_width(image: Image, run: Context) -> Classifications:
+    """Return the width the run's source declared, so a test can see whose facts arrived.
+
+    The port type is a lie of convenience -- what travels is an int -- but a node must declare
+    one, and nothing here looks at it. What is under test is which :class:`Context` a stage was
+    handed, not what a wire carries.
+    """
+    return run.width
+
+
+@node(category="Test")
 def measure(image: Image) -> None:
     """Consume an image and produce nothing, the way a node that writes a file does."""
     RECORD.append(("measure", image.shape[1]))
