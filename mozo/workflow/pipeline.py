@@ -52,6 +52,14 @@ _BROKEN = object()
 #: node never sees it. Sources other than the one bound to each item still have to run once per
 #: item, and they have no input to arrive on.
 _TRIGGER = "\0trigger"
+#: Put on the results queue in place of a node id for an item that has no node to run.
+#:
+#: That is a workflow whose only node is its source -- reading a file and doing nothing else, which
+#: is what the editor shows the moment an input node is dropped on an empty canvas. Every other
+#: item is complete when the stages downstream of the source have all reported; this one has none,
+#: so nothing would ever report and the run waited for a count that could not arrive. Announced by
+#: the thread that fed it, because that is the only thread that knows the item exists.
+_WHOLE = object()
 
 
 @dataclass(frozen=True)
@@ -443,6 +451,8 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
                 sources[index] = item
                 for stage, port in entries:
                     stage.offer(Parcel(index, port, item))
+                if not entries:
+                    results.put((index, _WHOLE, None))   # nothing to run; already whole
                 count = index + 1
         except BaseException as error:  # noqa: BLE001 -- the source's failure ends the run
             # A source that stops is done; a source that raises is broken, and the difference has
@@ -482,7 +492,9 @@ def run_pipelined(workflow, items, over: str, settings: dict, workers: int,
                     raise RuntimeError(f"the run stopped: {value}") from value
                 expected = value
             elif seq >= emit and seq not in ready:      # anything older is already handed over
-                if node_id is None:
+                if node_id is _WHOLE:
+                    ready[seq] = {}                     # no stage ran, so no output but the item's
+                elif node_id is None:
                     ready[seq] = value                  # the failed Event
                     gathered.pop(seq, None)
                 else:

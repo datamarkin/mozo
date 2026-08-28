@@ -23,6 +23,8 @@ import numpy as np
 import pixelflow as pf
 
 from mozo.workflow import Classifications, Depth, Detections, Embedding, Image, node
+from mozo.workflow.node import Context
+from mozo.workflow.registry import source
 
 RECORD: list = []
 
@@ -31,6 +33,19 @@ SEQUENCE: list = []
 
 #: Every item that reached ``hesitate``, so a test can count what is alive.
 STARTED: list = []
+
+
+@source(category="Test")
+def emit(run: Context, count: int = 3, width: int = 2) -> Image:
+    """Yield *count* images, so ``process`` has something to be a pass over.
+
+    A source without a file behind it. ``read_video`` is the shipped one, but a pipeline test that
+    reached for it would be testing OpenCV's decoder as well as the scheduler, and would need a
+    video on disk to run at all.
+    """
+    run.declare(name="emit", fps=float(count), width=width, height=1, frames=count, is_live=False)
+    for index in range(count):
+        yield np.full((1, width, 3), index, dtype=np.uint8)
 
 
 @node(category="Test")

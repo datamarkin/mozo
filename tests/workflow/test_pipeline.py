@@ -93,6 +93,36 @@ class TestSameAnswer:
         assert seen == [2, 3, 4]
 
 
+class TestASourceIsTheWholeGraph:
+    """A workflow whose only node is its source: read a file, do nothing else.
+
+    Not a contrived shape. It is what the editor shows the moment an input node is dropped on an
+    empty canvas, and it is what a person runs to check that their file opens before wiring
+    anything to it.
+    """
+
+    def test_it_finishes_rather_than_waiting_for_a_stage_that_does_not_exist(self):
+        """It used to hang. Every other item is complete once the stages after the source report,
+        and this one has none, so the run waited on a count that could never arrive -- forever,
+        holding the file open, with no error and nothing to look at."""
+        made = Workflow.from_dict(document({"a": ("emit", {"count": 4})}))
+        items = list(made.process())
+        assert len(items) == 4
+        assert [int(item[0, 0, 0]) for item, _ in items] == [0, 1, 2, 3]
+
+    def test_the_source_is_still_reported_as_a_result(self):
+        """The node is the whole graph, so dropping its output would leave nothing at all."""
+        made = Workflow.from_dict(document({"a": ("emit", {"count": 2})}))
+        for item, results in made.process():
+            assert list(results) == ["a"]
+            assert results["a"] is item
+
+    def test_serial_and_pipelined_agree(self):
+        made = Workflow.from_dict(document({"a": ("emit", {"count": 3})}))
+        serial = [item.tolist() for item, _ in made.process(workers=1)]
+        assert [item.tolist() for item, _ in made.process(workers=4)] == serial
+
+
 class TestTheDefault:
     """``run_many`` pipelines unless told otherwise, and what that costs."""
 
