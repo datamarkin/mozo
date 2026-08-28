@@ -8,9 +8,10 @@
     import FlowDropZone from './lib/FlowDropZone.svelte';
     import DrawerSidebar from './lib/DrawerSidebar.svelte';
     import NodePalettePanel from './lib/NodePalettePanel.svelte';
+    import RunProgress from './lib/RunProgress.svelte';
     import { generateNodeClasses } from './lib/utils.js';
-    import { fetchCatalogue, fromDocument, stream, toDocument } from './lib/api.js';
-    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, chosenFile } from './lib/stores.js';
+    import { fetchCatalogue, fromDocument, process, stream, toDocument } from './lib/api.js';
+    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, chosenFile, running } from './lib/stores.js';
 
     // Every workflow starts here: pixels have to come from somewhere, and this is the node whose
     // path the runner overrides per image.
@@ -28,6 +29,10 @@
     let availableNodes = writable([]);
     let executionResults = writable(null);
     let isExecuting = writable(false);
+
+    //: The abort handle of the run in progress, or null. Cancelling is aborting: the connection
+    //: closes, the server's generator closes with it, and the run ends having closed its files.
+    let controller = null;
 
     let svelteFlowInstance;
     //: What the last connection was refused for, shown beside the canvas rather than in an alert.
@@ -252,7 +257,7 @@
         }));
     }
 
-    async function executeWorkflow() {
+    async function testWorkflow() {
         isExecuting.set(true);
         executionResults.set({ success: true, results: {} });
 
@@ -287,6 +292,58 @@
         } finally {
             isExecuting.set(false);
         }
+    }
+
+    /**
+     * Run over the whole source: every frame of a video, every file in a folder.
+     *
+     * No node outputs come back and none are drawn -- see `RunProgress`. What is watched is
+     * whichever node is selected, falling back to a terminal, because the end of the graph is what
+     * a person means by "show me" when they have not said.
+     */
+    async function runWorkflow() {
+        const fed = new Set($edges.map(edge => edge.source));
+        const watched = $selectedNode?.id || $nodes.filter(node => !fed.has(node.id)).pop()?.id || '';
+
+        controller = new AbortController();
+        running.set({ items: 0, seconds: 0, preview: null, node: watched, done: false });
+        const began = performance.now();
+
+        try {
+            await process(toDocument($nodes, $edges), $chosenFile, { preview: watched, signal: controller.signal },
+                          (event) => {
+                if (event.status === 'failed') {
+                    say(event.error);
+                    running.set(null);
+                    return;
+                }
+                if (event.done) {
+                    running.update(r => r && { ...r, items: event.items,
+                                               seconds: event.seconds, done: true });
+                    return;
+                }
+                running.update(r => r && {
+                    ...r,
+                    items: event.item,
+                    seconds: (performance.now() - began) / 1000,
+                    preview: event.preview || r.preview,
+                });
+            });
+        } catch (error) {
+            // An abort is the Cancel button working, not a failure to report.
+            if (error.name !== 'AbortError') {
+                say(error.message);
+                running.set(null);
+            }
+        } finally {
+            controller = null;
+        }
+    }
+
+    /** Hang up. That is the whole of cancelling: the server's generator closes with the socket. */
+    function cancelRun() {
+        controller?.abort();
+        running.set(null);
     }
 
     function exportWorkflow() {
@@ -335,10 +392,13 @@
 
 <SvelteFlowProvider>
             <Toolbar
-                    {executeWorkflow}
+                    {testWorkflow}
+                    {runWorkflow}
+                    {cancelRun}
                     {exportWorkflow}
                     {importWorkflow}
                     isExecuting={$isExecuting}
+                    isRunning={!!$running && !$running.done}
             />
 
 
@@ -387,6 +447,7 @@
     executionResults={$executionResults}
 />
 
+<RunProgress />
 
 </SvelteFlowProvider>
 

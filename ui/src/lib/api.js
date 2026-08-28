@@ -92,15 +92,14 @@ export async function validate(document) {
 }
 
 /**
- * Run a workflow, calling `onEvent` as each node starts and finishes.
+ * Read a server-sent event stream, calling `onEvent` for each one.
  *
- * `include: 'all'` because the editor draws every node's result on the canvas -- which is the case
- * the server's default is not tuned for, and the reason it is a choice rather than a fixed rule.
+ * Shared by both verbs because the framing is the same either way; what differs is which endpoint
+ * and what the events say. `signal` is how a run is cancelled: aborting closes the connection,
+ * which closes the generator on the server, which ends the run and closes what it opened.
  */
-export async function stream(document, file, onEvent) {
-    const response = await fetch(apiUrl('/workflow/stream'), {
-        method: 'POST', body: body(document, file, { include: 'all' }),
-    });
+async function events(path, form, onEvent, signal) {
+    const response = await fetch(apiUrl(path), { method: 'POST', body: form, signal });
 
     if (!response.ok) {
         let detail = `the server refused the workflow (${response.status})`;
@@ -123,4 +122,25 @@ export async function stream(document, file, onEvent) {
             if (line.startsWith('data: ')) onEvent(JSON.parse(line.slice(6)));
         }
     }
+}
+
+/**
+ * Test a workflow: one item through the graph, with every node's output drawn on the canvas.
+ *
+ * `include: 'all'` because the editor draws every node's result -- which is the case the server's
+ * default is not tuned for, and the reason it is a choice rather than a fixed rule.
+ */
+export function stream(document, file, onEvent) {
+    return events('/workflow/stream', body(document, file, { include: 'all' }), onEvent);
+}
+
+/**
+ * Run a workflow over its whole source, calling `onEvent` with `{item}` as each one finishes.
+ *
+ * No node outputs come back. One pass over a two-hour video through two nodes would be 1.3 TB of
+ * canvas images; what arrives instead is a counter and, at most five times a second, one small
+ * JPEG of `preview`. Pass an `AbortSignal` to cancel -- there is nothing else to call.
+ */
+export function process(document, file, { preview = '', signal } = {}, onEvent) {
+    return events('/workflow/process', body(document, file, { preview }), onEvent, signal);
 }

@@ -132,9 +132,15 @@
                             {/if}
                             <input id={field.name} class="input is-small mt-1" type="text"
                                    value={value === null || value === undefined ? '' : value}
-                                   placeholder="or a path on the server"
+                                   placeholder="or a path on the server -- a file or a folder"
                                    disabled={!!$chosenFile}
                                    on:input={(e) => changeText(field, e.target.value)} />
+                            {#if !$chosenFile}
+                                <p class="is-size-7 has-text-grey mt-1">
+                                    A folder runs every image in it. Folders are server paths --
+                                    only single files can be uploaded.
+                                </p>
+                            {/if}
                         {:else if field.kind === 'int' || field.kind === 'float'}
                             <input id={field.name} class="input is-small" type="number"
                                    step={field.kind === 'int' ? '1' : '0.05'}

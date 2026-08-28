@@ -55,3 +55,14 @@ export function clearPendingConnection() {
  * it, and wrongly: it filtered to `image/*`, which is what made a video unselectable.
  */
 export const chosenFile = writable(null);
+
+
+/**
+ * A run in progress, or null between runs.
+ *
+ * `{items, seconds, preview, node, done}` -- how many are done, how long it has taken, the last
+ * thumbnail that arrived, which node it is of, and whether the run has finished (which is what
+ * turns Cancel back into Run). Not the results: a run over ten thousand items has no results a
+ * canvas could hold, which is the whole reason it is a different verb from Test.
+ */
+export const running = writable(null);
