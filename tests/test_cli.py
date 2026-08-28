@@ -31,6 +31,34 @@ def workflow(tmp_path):
 def test_a_file_given_on_the_command_line_is_what_it_runs_on(workflow):
     result = CliRunner().invoke(cli, ["run", str(workflow), "--file", str(FIXTURE)])
     assert result.exit_code == 0, result.output
+    assert "1 item in" in result.output
+
+
+def test_run_is_the_whole_source_not_one_item_of_it(tmp_path):
+    """``mozo run`` says why this is the whole source rather than one item of it."""
+    photos, out = tmp_path / "photos", tmp_path / "out"
+    photos.mkdir()
+    for name in ("a.jpg", "b.jpg", "c.jpg"):
+        (photos / name).write_bytes(FIXTURE.read_bytes())
+    document = tmp_path / "wf.json"
+    document.write_text(json.dumps({
+        "nodes": [{"id": "load", "type": "read_media",
+                   "data": {"parameters": {"source": str(photos)}}},
+                  {"id": "save", "type": "save_image",
+                   "data": {"parameters": {"path": str(out)}}}],
+        "edges": [{"source": "load", "sourceHandle": "image",
+                   "target": "save", "targetHandle": "image"}]}))
+
+    result = CliRunner().invoke(cli, ["run", str(document)])
+    assert result.exit_code == 0, result.output
+    assert "3 items in" in result.output
+    assert sorted(p.name for p in out.iterdir()) == ["a.jpg", "b.jpg", "c.jpg"]
+
+
+def test_test_describes_every_node_for_one_item(workflow):
+    """The older behaviour, kept under its own name: what you want before pointing it at 10,000."""
+    result = CliRunner().invoke(cli, ["run", str(workflow), "--file", str(FIXTURE), "--test"])
+    assert result.exit_code == 0, result.output
     assert "1920x1281 image" in result.output
 
 

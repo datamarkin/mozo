@@ -4,6 +4,9 @@ Command-line interface for Mozo.
 Provides simple commands for starting the server and checking version.
 """
 
+import sys
+import time
+
 import click
 import uvicorn
 
@@ -42,13 +45,24 @@ def start(host, port, reload, workers):
               help="Run on this image or video instead of the one saved in the workflow")
 @click.option("--set", "settings", multiple=True, metavar="NAME=VALUE",
               help="Override a parameter. Repeatable.")
-def run(workflow, media, settings):
+@click.option("--test", is_flag=True,
+              help="Run one item and describe every node, instead of the whole source")
+def run(workflow, media, settings, test):
     """Run a workflow from a JSON file, with no browser and no server.
 
-    Prints one line per node: what it produced, in words. An image says its size, detections say
-    how many and what they were, a depth map says its range -- because a terminal is not a place
-    to put a photograph, and the thing worth seeing headlessly is whether the graph did its job.
-    Nodes that write files have already written them.
+    **The whole source, not one item of it.** A workflow whose input is a folder of ten thousand
+    photographs processes ten thousand; one whose input is a two-hour video processes every frame.
+    This used to take one item and stop -- which for a folder wrote a single file and reported
+    success, and is the same thing the editor's button still does.
+
+    ``--test`` is that older behaviour, kept because it is worth having: one item through the
+    graph, with every node describing what it produced. An image says its size, detections say how
+    many and what they were, a depth map says its range -- because a terminal is not a place to put
+    a photograph, and the thing worth seeing is whether the graph did its job before pointing it at
+    ten thousand files.
+
+    A full run prints progress instead, because ten thousand items is ten thousand lines nobody
+    reads. Nodes that write files have already written them.
     """
     from mozo.workflow import Workflow
 
@@ -68,12 +82,56 @@ def run(workflow, media, settings):
             overrides[built.file_parameter] = media
         except ValueError as error:
             raise click.BadParameter(str(error)) from error
-    for event in built.stream(**overrides):
-        if event.status == "failed":
-            raise click.ClickException(event.error)
-        if event.status == "completed":
-            ends = " (an end)" if event.node in built.terminals else ""
-            click.echo(f"  {event.node}: {_describe(event.output)}{ends}")
+    if test or built.source is None:
+        # No source means the caller has to bring the items, and this command does not: one pass
+        # over what is wired is the only thing it could mean.
+        for event in built.stream(**overrides):
+            if event.status == "failed":
+                raise click.ClickException(event.error)
+            if event.status == "completed":
+                ends = " (an end)" if event.node in built.terminals else ""
+                click.echo(f"  {event.node}: {_describe(event.output)}{ends}")
+        return
+
+    _process(built, overrides)
+
+
+def _process(built, overrides: dict) -> None:
+    """One pass over the whole source, reporting how far it has got.
+
+    Throttled on :data:`~mozo.workflow.wire.PREVIEW_EVERY`, which is where that trade-off is
+    stated. Written over itself on a terminal and one line per update elsewhere, so a log file does
+    not become a progress bar nobody can read.
+    """
+    from mozo.workflow.wire import PREVIEW_EVERY
+
+    live = sys.stdout.isatty()
+    began = last = time.monotonic()
+    done = 0
+    try:
+        for _item, _results in built.process(**overrides):
+            done += 1
+            now = time.monotonic()
+            if now - last >= PREVIEW_EVERY:
+                last = now
+                rate = done / (now - began)
+                click.echo(f"\r  {_items(done)} ({rate:,.0f}/s)", nl=not live)
+    except RuntimeError as error:
+        # The engine names the item and the node; wrapping it in a traceback would bury both.
+        raise click.ClickException(str(error)) from error
+    finally:
+        if live and done:
+            click.echo()
+
+    # Floored rather than branched on: a coarse clock can report zero for a fast run, and a
+    # division by it is the only thing that cares.
+    took = max(time.monotonic() - began, 1e-9)
+    click.echo(f"  {_items(done)} in {took:.1f}s ({done / took:,.0f}/s)")
+
+
+def _items(count: int) -> str:
+    """``1 item`` rather than ``1 items``, which is the sort of thing a person reads as a bug."""
+    return f"{count:,} item{'' if count == 1 else 's'}"
 
 
 def _typed(built, name: str, text: str):
