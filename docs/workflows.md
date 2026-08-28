@@ -18,7 +18,7 @@ results[workflow.terminals[0]]      # what came out of the end
 ```
 
 ```bash
-mozo run blur_faces.json --image street.jpg
+mozo run blur_faces.json --file street.jpg
 ```
 
 `run()` gives back every node's output keyed by node id — an intermediate result is often the one

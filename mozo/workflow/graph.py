@@ -248,6 +248,41 @@ class Workflow:
         return found[0] if found else None
 
     @property
+    def file_parameter(self) -> str:
+        """The parameter a file chosen somewhere else is the value of.
+
+        A question about the graph's shape, like :attr:`source` and :attr:`parameters`, and asked
+        here so that every way in gets the same answer. The three that need it -- the HTTP upload,
+        the command line's ``--file``, and :meth:`run_many`'s default -- each used to name a
+        parameter as a string literal instead, which meant each knew one node's vocabulary. Renaming
+        that parameter broke them one at a time, and the command line was still broken after the
+        other two were fixed.
+
+        Derived from what the parameter *is* rather than what it is called:
+        :data:`~mozo.workflow.node.Source` is the annotation for a value a person cannot type,
+        which is why it puts a file picker on the node. An input node added tomorrow, calling its
+        parameter anything at all, is reachable from all three without any of them changing.
+
+        Raises:
+            ValueError: If there is not exactly one. Both other answers are wrong in a way that
+                would be silent -- nowhere to put the file means it was chosen for nothing, and
+                two places means choosing one of them on the caller's behalf.
+        """
+        named = sorted({parameter.name
+                        for step in self.steps.values()
+                        for parameter in step.spec.parameters
+                        if parameter.kind == "source"})
+        if not named:
+            raise ValueError(
+                "no node in this workflow reads a file, so there is nothing for one to be. "
+                "Add an input node, or set the value by name.")
+        if len(named) > 1:
+            raise ValueError(
+                f"{len(named)} parameters take a file: {named}. One file cannot say which it is "
+                f"-- set them by name instead.")
+        return named[0]
+
+    @property
     def parameters(self) -> dict:
         """Every parameter in the workflow, as ``name -> [node id, ...]``.
 
@@ -284,7 +319,7 @@ class Workflow:
         finally:
             _forget(states)
 
-    def run_many(self, items, *, over: str = "image", on_error=None, workers: int = 2,
+    def run_many(self, items, *, over: Optional[str] = None, on_error=None, workers: int = 2,
                  model_workers: int = 1, stats: Optional[dict] = None,
                  **overrides) -> Iterator[tuple]:
         """Run the workflow once per item, yielding ``(item, results)`` as each finishes.
@@ -303,9 +338,9 @@ class Workflow:
         Args:
             items: What to run on, one at a time. Anything :meth:`run` accepts for *over* -- paths,
                 bytes, arrays -- and any iterable of them.
-            over: The parameter each item is bound to. ``"image"`` because that is what
-                :func:`~mozo.workflow.nodes.io.load_image` calls its own, so a workflow reads the
-                way it should.
+            over: The parameter each item is bound to. Left unset it is
+                :attr:`file_parameter` -- the one that takes a file, whatever the node calls it --
+                so a batch of paths needs no name at all and a node named differently still works.
             on_error: Called as ``on_error(item, event)`` with the failing :class:`Event`, which
                 skips that item and continues. Left unset, a failure raises and the run stops.
                 A corrupt file in a million should not end a six-hour run, but silently dropping
@@ -352,6 +387,7 @@ class Workflow:
             >>> for path, results in workflow.run_many(paths):   # doctest: +SKIP
             ...     save(results["annotate"], path)
         """
+        over = self.file_parameter if over is None else over
         if over in overrides:
             raise KeyError(
                 f"{over!r} is both the parameter each item binds to and an override, so every "

@@ -149,6 +149,39 @@ class TestRunning:
         assert record == [("make", 4), ("measure", 4)]
 
 
+class TestWhichParameterTakesAFile:
+    """One derivation of it, because three copies of the name is how one of them went stale.
+
+    The HTTP upload, the command line's ``--file`` and :meth:`run_many`'s default all need the
+    same answer. Each used to hold it as a string literal, so renaming the parameter fixed one
+    caller at a time and left the command line raising ``KeyError`` with nothing to notice.
+    """
+
+    def test_it_is_read_off_the_annotation_not_the_name(self):
+        """``Source`` is what declares a value a person cannot type. The name is incidental."""
+        made = Workflow.from_dict(document({"a": ("load_image", {})}))
+        assert made.file_parameter == "image"
+
+    def test_a_workflow_with_no_file_to_read_says_so(self):
+        made = Workflow.from_dict(document(
+            {"a": ("make", {}), "b": ("brighten", {})}, [("a", "image", "b", "image")]))
+        with pytest.raises(ValueError, match="nothing for one to be"):
+            made.file_parameter
+
+    def test_two_of_them_is_refused_rather_than_chosen_between(self):
+        """One file cannot say which it is, and picking for the caller would be silent."""
+        made = Workflow.from_dict(document(
+            {"a": ("load_image", {}), "b": ("read_video", {})}))
+        with pytest.raises(ValueError, match="take a file"):
+            made.file_parameter
+
+    def test_run_many_binds_to_it_without_being_told(self, image):
+        made = Workflow.from_dict(document({"a": ("load_image", {})}))
+        got = list(made.run_many([str(FIXTURE)] * 2))
+        assert [item for item, _ in got] == [str(FIXTURE)] * 2
+        assert all(results["a"].shape == image.shape for _, results in got)
+
+
 class TestOverrides:
     """Running the same workflow on something else."""
 

@@ -115,9 +115,10 @@ def run(
     """
     built = _build(workflow)
     terminals = built.terminals
+    into = _destination(built) if image is not None else None
 
     results = {}
-    for event in _events(built, inputs, image):
+    for event in _events(built, inputs, image, into):
         if event.status == "failed":
             # A run that failed is not a run that returned nothing. Answering 200 with an empty
             # results dict is indistinguishable from success to any client that does not go
@@ -152,7 +153,7 @@ def stream(
     """
     built = _build(workflow)
     terminals = built.terminals
-    started = _events(built, inputs, image)
+    started = _events(built, inputs, image, _destination(built) if image is not None else None)
 
     def events():
         try:
@@ -180,14 +181,15 @@ def stream(
     )
 
 
-def _events(built: Workflow, inputs: str, image: Optional[UploadFile]):
+def _events(built: Workflow, inputs: str, image: Optional[UploadFile],
+            into: Optional[str]):
     """Start *built* running, turning a refused override into a 400 before anything executes.
 
     ``stream`` settles the overrides before it returns its iterator, so this catches a bad one here
     rather than part-way through a response that has already claimed success.
     """
     try:
-        return built.stream(**_overrides(inputs, image))
+        return built.stream(**_overrides(inputs, image, into))
     except KeyError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -202,13 +204,14 @@ def _build(document: str) -> Workflow:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def _overrides(inputs: str, image: Optional[UploadFile]) -> dict:
+def _overrides(inputs: str, image: Optional[UploadFile], into: Optional[str]) -> dict:
     """Parameter overrides for this run, with an uploaded image folded in as one of them.
 
-    An upload arrives as the ``image`` parameter's value, as bytes. That is not a widening of what
-    the parameter means: ``load_image`` takes a path, encoded bytes or an array, and the model
-    endpoints already hand it the bytes of an upload. What a person types into the editor is still
-    a path; what a browser sends instead is the file.
+    *into* is the parameter the file is the value of, which
+    :attr:`~mozo.workflow.graph.Workflow.file_parameter` derived from the annotations rather than
+    from a name written down here. This used to write to a parameter literally called ``image``,
+    which meant the transport knew one node's vocabulary and would break when that node was
+    renamed -- as the command line, which had its own copy of the same literal, actually did.
     """
     try:
         overrides = json.loads(inputs)
@@ -218,8 +221,16 @@ def _overrides(inputs: str, image: Optional[UploadFile]) -> dict:
         raise HTTPException(status_code=400, detail="inputs must be a JSON object")
 
     if image is not None:
-        overrides["image"] = image.file.read()
+        overrides[into] = image.file.read()
     return overrides
+
+
+def _destination(built: Workflow) -> str:
+    """Where an upload goes, as a 400 rather than a traceback where there is no such place."""
+    try:
+        return built.file_parameter
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def _event(payload: dict) -> str:

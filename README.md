@@ -269,7 +269,7 @@ results = Workflow.load("blur_faces.json").run(image="street.jpg")
 ```
 
 ```bash
-mozo run blur_faces.json --image street.jpg
+mozo run blur_faces.json --file street.jpg
 ```
 
 38 nodes: every model family, the image transforms and annotations PixelFlow provides, and the two

@@ -38,10 +38,11 @@ def start(host, port, reload, workers):
 
 @cli.command()
 @click.argument("workflow", type=click.Path(exists=True, dir_okay=False))
-@click.option("--image", help="Run on this image instead of the path saved in the workflow")
+@click.option("--file", "media",
+              help="Run on this image or video instead of the one saved in the workflow")
 @click.option("--set", "settings", multiple=True, metavar="NAME=VALUE",
               help="Override a parameter. Repeatable.")
-def run(workflow, image, settings):
+def run(workflow, media, settings):
     """Run a workflow from a JSON file, with no browser and no server.
 
     Prints one line per node: what it produced, in words. An image says its size, detections say
@@ -59,8 +60,14 @@ def run(workflow, image, settings):
         if not separator:
             raise click.BadParameter(f"expected NAME=VALUE, got {setting!r}")
         overrides[name] = _typed(built, name, value)
-    if image:
-        overrides["image"] = image
+    if media:
+        # Asked of the workflow rather than named here. This line used to say "image", which was
+        # one node's parameter written down in a second place -- so renaming that parameter left
+        # the command line raising KeyError while the HTTP endpoint went on working.
+        try:
+            overrides[built.file_parameter] = media
+        except ValueError as error:
+            raise click.BadParameter(str(error)) from error
     for event in built.stream(**overrides):
         if event.status == "failed":
             raise click.ClickException(event.error)
