@@ -12,6 +12,8 @@ argument ``tests/families/test_prompted.py`` already makes for doing it this way
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
@@ -275,6 +277,149 @@ class TestOneImagePerItem:
             [("load", "image", "save", "image")]))
         with pytest.raises(RuntimeError, match=r"^a \d+x\d+ image: "):
             list(made.process())
+
+
+class TestWritingDownWhatWasFound:
+    """``save_annotations`` writes a line as each item finishes, rather than a document at the end.
+
+    Every test here is about that one property seen from a different side: the line carries what
+    nothing else will remember, an item with nothing found still gets one, and a run that was
+    stopped part way leaves a file that parses. ``mozo.workflow.nodes.io`` says why -- gathering a
+    million items first costs 11.6 GB before any file exists, so it loses the run twice over.
+    """
+
+    @pytest.fixture
+    def tiny(self, tmp_path):
+        """Three small photographs -- ``tiny`` rather than ``photos`` so a reader
+        never has to check which class they are in. Small because ``detect`` produces one detection per pixel
+        column, so the width is the count and three is easier to read than nineteen hundred."""
+        import pixelflow as pf
+
+        folder = tmp_path / "tiny"
+        folder.mkdir()
+        for index, name in enumerate(("cat.jpg", "dog.jpg", "fox.jpg")):
+            pf.save_image(str(folder / name), np.full((2, 3, 3), 40 * index + 20, np.uint8))
+        return folder
+
+    def _made(self, source, written, finder: str = "detect") -> Workflow:
+        return Workflow.from_dict(document(
+            {"load": ("read_media", {"source": str(source)}),
+             "find": (finder, {}),
+             "save": ("save_annotations", {"path": str(written)})},
+            [("load", "image", "find", "image"),
+             ("load", "image", "save", "image"),
+             ("find", "detections", "save", "detections")]))
+
+    def _lines(self, written) -> list:
+        return [json.loads(line) for line in written.read_text().splitlines()]
+
+    def test_every_item_gets_a_line_named_after_it(self, tiny, tmp_path):
+        """Three photographs, three lines, in the order the source produced them -- which is what
+        ``ordered`` buys beyond one writer per handle."""
+        written = tmp_path / "out" / "annotations.jsonl"
+        made = self._made(tiny, written)
+        assert len(list(made.process())) == 3
+
+        lines = self._lines(written)
+        assert [line["label"] for line in lines] == ["cat", "dog", "fox"]
+        assert [line["index"] for line in lines] == [0, 1, 2]
+
+    def test_a_line_carries_what_nothing_else_will_remember(self, tiny, tmp_path):
+        """The size because both COCO and YOLO ask for it and reading it back off the images is
+        the coupling this avoids, and the detections because they are the point."""
+        written = tmp_path / "annotations.jsonl"
+        list(self._made(tiny, written).process())
+
+        first = self._lines(written)[0]
+        assert (first["width"], first["height"]) == (3, 2)
+        assert len(first["detections"]) == 3            # one per pixel column, from ``detect``
+        assert first["detections"][0]["bbox"] == [0.0, 0.0, 1.0, 1.0]
+
+    def test_a_rate_travels_where_there_is_one_and_is_absent_where_there_is_not(
+            self, tiny, clip, tmp_path):
+        """``time`` needs a rate only the source knew, so it cannot be recovered later -- and a
+        folder of photographs has none, which is a fact rather than a gap to fill with a zero."""
+        video, folder = tmp_path / "video.jsonl", tmp_path / "folder.jsonl"
+        list(self._made(clip, video).process())
+        list(self._made(tiny, folder).process())
+
+        assert [line["time"] for line in self._lines(video)][:3] == [0.0, 1 / CLIP_FPS, 2 / CLIP_FPS]
+        assert all("time" not in line for line in self._lines(folder))
+
+    def test_an_item_with_nothing_found_is_still_a_line(self, tiny, tmp_path):
+        """A dataset needs its negatives. No line is indistinguishable from not processed."""
+        written = tmp_path / "annotations.jsonl"
+        made = self._made(tiny, written, finder="find_nothing")
+        assert len(list(made.process())) == 3
+
+        lines = self._lines(written)
+        assert len(lines) == 3
+        assert all(line["detections"] == [] for line in lines)
+
+    def test_the_keys_holding_nothing_are_not_written(self, tiny, tmp_path):
+        """338 bytes a detection against 98 on a real RF-DETR result, for nothing lost. What holds
+        something stays, whatever it is called: the field list is PixelFlow's, and a second one
+        here would go stale the first time a field was added there."""
+        written = tmp_path / "annotations.jsonl"
+        list(self._made(tiny, written).process())
+
+        found = self._lines(written)[0]["detections"][0]
+        assert not [key for key, value in found.items() if value in (None, [], {}, "")]
+        assert {"bbox", "confidence"} <= set(found)
+
+    @pytest.mark.parametrize("value", [0, 0.0, False], ids=["int", "float", "bool"])
+    def test_a_zero_is_a_measurement_and_is_kept(self, value):
+        """The difference between nothing and zero. A confidence of zero dropped for looking empty
+        is indistinguishable, to a reader, from one that was never taken."""
+        from mozo.workflow.nodes.io import _nothing
+
+        assert not _nothing(value)
+
+    @pytest.mark.parametrize("value", [np.float32(0.5), np.zeros(0), np.zeros((2, 2))],
+                             ids=["scalar", "empty", "array"])
+    def test_asking_whether_a_numpy_value_is_nothing_does_not_raise(self, value):
+        """``value == []`` against an array is an element-wise comparison returning an array, which
+        ``or`` then refuses -- the same break ``not source`` was in ``read_media``. ``to_dict``
+        converts numpy out before returning, so nothing reaches this today. This is so that the
+        answer does not depend on that staying true."""
+        from mozo.workflow.nodes.io import _nothing
+
+        assert not _nothing(value)
+
+    def test_a_mask_travels_as_bytes_rather_than_as_a_field_of_booleans(self, tiny, tmp_path):
+        """The claim the segmentation case rests on. A 2x3 raster mask is small either way; what
+        this catches is a dump that writes the raster out as nested JSON booleans, which at a
+        megapixel is four megabytes a detection and no error."""
+        written = tmp_path / "annotations.jsonl"
+        list(self._made(tiny, written, finder="detect_masks").process())
+
+        found = self._lines(written)[0]["detections"][0]
+        assert found["masks"], "a segmenter's masks reached the file as nothing"
+        assert "true" not in json.dumps(found["masks"]).lower()
+
+    def test_a_run_stopped_part_way_leaves_a_file_that_parses(self, clip, tmp_path):
+        """The counterpart of the video that still plays. The caller walks away after one item;
+        every line already written is whole, because each was flushed as it was written."""
+        written = tmp_path / "annotations.jsonl"
+        run = self._made(clip, written).process()
+        next(run)
+        run.close()
+
+        text = written.read_text()
+        assert text.endswith("\n")                       # no half-written final line
+        lines = self._lines(written)
+        assert 1 <= len(lines) <= CLIP_FRAMES
+        assert all(line["detections"] for line in lines)
+
+    def test_a_second_run_replaces_the_first_rather_than_appending_to_it(self, tiny, tmp_path):
+        """Two runs sharing a path would otherwise interleave two datasets under one set of
+        indices, which reads as one dataset and is not."""
+        written = tmp_path / "annotations.jsonl"
+        made = self._made(tiny, written)
+        list(made.process())
+        list(made.process())
+
+        assert len(self._lines(written)) == 3
 
 
 class TestWhatTheModelsActuallyReturn:

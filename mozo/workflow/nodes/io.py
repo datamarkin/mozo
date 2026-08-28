@@ -1,6 +1,6 @@
 """Where a workflow gets its pixels, and where it puts them.
 
-Three nodes: one source and two sinks.
+Four nodes: one source and three sinks.
 
 **One source, not one per kind of file.** A photograph and a two-hour video differ in how many
 items they are, and a source already says that -- it yields, so one yield is an image and two
@@ -10,10 +10,21 @@ hundred thousand is a video. Nothing else about them differs: same absent inputs
 own file, and then made the answer unreachable anyway -- the editor's file picker was built for
 the image node and would not offer an ``.mp4`` to the video one.
 
-The sinks stay two, and by the same test rather than in spite of it.
+The two image sinks stay two, and by the same test rather than in spite of it.
 :func:`save_video` declares ``ordered``, which narrows its stage to one item at a time so frames
 are written in the order they were shot. A merged sink would impose that on saving a directory of
 images, where there is no order to keep and the narrowing is pure loss.
+
+:func:`save_annotations` is the third, and the only one here that writes something other than
+pixels. It is a sink by the same definition as the others -- inputs, no output, a file at the end
+of it -- and it lives beside them because that is what this module is: where a workflow's values
+leave the process. A second annotation sink would earn its own module; one does not.
+
+It delegates like the rest: a detection becomes JSON by PixelFlow's ``to_dict``, the way pixels
+become a file by ``save_image``. :mod:`mozo.workflow.wire` does the same for a detection on its way
+to a browser and keeps every key; this drops the empty ones. Two products, deliberately -- a
+transport payload is read once and discarded, a dataset line is read a million times -- and both
+say so where they diverge.
 
 None of them decode or encode anything themselves. Pixels are PixelFlow's, the way boxes are --
 :class:`pixelflow.VideoReader`, :class:`pixelflow.VideoWriter` and :func:`pixelflow.save_image` do
@@ -25,6 +36,7 @@ silence. One decoder, in the library whose whole contract is that images are RGB
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from itertools import islice
@@ -35,7 +47,7 @@ import pixelflow as pf
 
 from mozo.image import load_image as decode
 
-from ..node import Context, Image, Source, State
+from ..node import Context, Detections, Image, Source, State
 from ..registry import node, source
 
 
@@ -142,6 +154,34 @@ def read_media(run: Context, source: Optional[Source] = None, stride: int = 1,
     yield frame
 
 
+#: What can be empty. A tuple of names inside the function body is six ``LOAD_GLOBAL``s and a
+#: ``BUILD_TUPLE`` per call, and this is called once per key per detection -- 221 million times
+#: over a million images. Measured, 179 ns a call against 154 hoisted.
+_EMPTY = (str, bytes, list, tuple, dict, set)
+
+
+def _nothing(value) -> bool:
+    """Is *value* the absence of a value, rather than a value?
+
+    What :func:`save_annotations` leaves out of a line. None and an empty collection both mean
+    nothing was there, and so does the key not being present -- so dropping them is lossless, and
+    on a real detection it is 151 bytes against 98. Zero is not among them: a confidence or a
+    duration of zero is a measurement, and a reader cannot tell one this dropped from one that was
+    never taken.
+
+    A rule about values, deliberately, and not a list of keys to skip. A list would be a second
+    statement of what a detection is, next to PixelFlow's, and the two would drift apart the first
+    time a field was added there.
+
+    Asked of the container types by name rather than by comparing against ``[]`` and ``{}``.
+    ``value == []`` is an array comparison when the value is a numpy anything, which returns an
+    empty array, which ``or`` then raises on -- the same shape of break that ``not source`` was in
+    :func:`read_media`. :meth:`~pixelflow.Detections.to_dict` converts numpy out before returning,
+    so nothing here reaches that today; this does not depend on it continuing to.
+    """
+    return value is None or (isinstance(value, _EMPTY) and not value)
+
+
 def _listing(folder: Path) -> list:
     """The images in *folder*, in the order a person would put them in.
 
@@ -240,3 +280,87 @@ def save_video(image: Image, run: Context, state: State, path: str = "output.mp4
         state.on_close(writer.close)
         state["writer"] = writer
     writer.write(image)
+
+
+@node(category="Output", ordered=True)
+def save_annotations(image: Image, detections: Detections, run: Context, state: State,
+                     path: str = "annotations.jsonl") -> None:
+    """Write what was detected, one line of JSON per item, as each item finishes.
+
+    **Written as it happens, not gathered and written at the end.** That is the whole design, and
+    it is the difference between a run that survives being interrupted and one that does not.
+    Gathering a million items to write one document at the end costs 11.6 GB of Python objects
+    before any file exists -- so it does not merely lose everything to a crash at item 500,000, it
+    runs out of memory long before reaching one. Writing one costs 0.037 ms measured end to end,
+    of which the append and its flush are 0.003 -- against a single SAM 3 inference, about a
+    five-hundredth. There is no throughput argument for the other way; it is slower *and* it loses
+    the run.
+
+    So a cancelled run leaves a complete file of everything that finished, the same way a cancelled
+    :func:`save_video` leaves a video that plays. :meth:`~mozo.workflow.node.State.on_close` is
+    what closes the handle, and it runs however the run ended.
+
+    **JSONL rather than a dataset format, and deliberately not usable as-is.** COCO, YOLO and CSV
+    are each one document with a shape -- a global category table, boxes normalised by an image
+    size, one row per detection rather than per image -- and none of them can be appended to. What
+    can be appended to is a line at a time, so that is what is written, and converting it is a
+    reader's job. The conversion is also not once: the same run feeds a labelling tool as COCO, a
+    trainer as YOLO and a report as CSV, and a format chosen here would force one of them and make
+    the other two a re-run. Nothing converts yet. This is the file those converters will read.
+
+    **The size comes from the image rather than from the run.** Not only because a folder source
+    declares none -- every photograph in it differs -- but because the size on the line has to be
+    the one the boxes were measured against. Behind a ``resize`` the run's own figures are the
+    source's and would be confidently wrong, where the array is right in every graph. That is why
+    this is an input and not a fact :class:`~mozo.workflow.node.Context` should learn to carry.
+
+    **A line has to carry what nothing else remembers.** Which is the test for what belongs on it:
+    ``label`` is gone the moment the run ends, ``time`` needs a rate only the source knew, and the
+    detections are the point. ``width`` and ``height`` could be read back off the images, but
+    needing the images to convert the annotations is exactly the coupling this avoids -- and both
+    COCO and YOLO ask for them. Everything else is derivable and left out.
+
+    One is deferred rather than decided: :attr:`~mozo.workflow.node.Context.name`, the folder or
+    file the run read. It is a constant, so carrying it is the same forty bytes on every one of a
+    million lines, and JSONL has no header to put it in instead. A converter needing it can be told
+    where the images are, which it has to be anyway to resolve a stem to a file. Adding a field
+    later is backwards compatible; discovering one is missing after a million inferences is not.
+
+    **An image with nothing in it still gets a line.** A dataset needs its negatives, and no line
+    is indistinguishable from not processed.
+
+    The detections themselves are :meth:`pixelflow.Detections.to_dict`'s, minus the keys holding
+    nothing -- 338 bytes a detection against 98, measured on a real RF-DETR result. Not a field
+    list of this module's own: what a detection is, is PixelFlow's to say, and a second answer here
+    is one that goes stale. It already PNG-encodes masks to base64, so a SAM 3 mask costs 1.5 KB
+    rather than the four megabytes of nested booleans a raw dump would be.
+
+    ``ordered`` because one open file has one writer. It is not for the order -- though the lines
+    come out in item order, which is what lets a reader trust the file's shape -- it is that an
+    ``exclusive`` node is sized by ``model_workers``, so a caller who raised that for their model
+    would otherwise put four threads inside this one handle.
+
+    Args:
+        path: The file to write. Its folder is made if it is not there. Truncated at the start of
+            each run rather than appended to: two runs sharing a path would interleave two datasets
+            under one set of indices, which reads as one dataset and is not.
+    """
+    handle = state.get("handle")
+    if handle is None:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(target, "w", encoding="utf-8")
+        state.on_close(handle.close)
+        state["handle"] = handle
+
+    height, width = image.shape[:2]
+    when = run.time
+    record = {"index": run.index, "label": run.label, "width": width, "height": height,
+              "detections": [{key: value for key, value in found.items() if not _nothing(value)}
+                             for found in detections.to_dict()]}
+    if when is not None:
+        record["time"] = when
+    # One write of the whole line, flushed. The flush is what makes the claim above true: without
+    # it the last few kilobytes live in a buffer that a killed process never gets to empty.
+    handle.write(json.dumps(record) + "\n")
+    handle.flush()

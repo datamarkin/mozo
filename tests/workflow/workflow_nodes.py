@@ -91,15 +91,25 @@ def combine(left: Image, right: Image) -> Image:
     return np.concatenate([left, right], axis=1)
 
 
+def _boxes(count: int, **extra) -> Detections:
+    """A table of *count* unit boxes, plus whatever *extra* a caller wants on it.
+
+    One incantation for the three nodes that need one. ``tests/conftest.py`` records what the
+    copies cost the last time: when PixelFlow stopped truncating boxes to whole pixels, every
+    private copy was silently wrong and five files had to be found and patched.
+    """
+    return pf.detections.from_arrays(
+        boxes=np.tile(np.array([0.0, 0.0, 1.0, 1.0], dtype=np.float32), (count, 1)),
+        scores=np.ones(count, dtype=np.float32),
+        class_ids=np.zeros(count, dtype=int),
+        **extra,
+    )
+
+
 @node(category="Test")
 def detect(image: Image) -> Detections:
     """Produce one detection per pixel column, so the count is readable."""
-    count = image.shape[1]
-    return pf.detections.from_arrays(
-        boxes=np.array([[0.0, 0.0, 1.0, 1.0]] * count, dtype=np.float32),
-        scores=np.ones(count, dtype=np.float32),
-        class_ids=np.zeros(count, dtype=int),
-    )
+    return _boxes(image.shape[1])
 
 
 @node(category="Test")
@@ -239,3 +249,33 @@ def hesitate(image: Image, slow: int = -1) -> Image:
     if int(image[0, 0, 0]) == slow:
         time.sleep(0.4)
     return image
+
+
+@node(category="Test")
+def find_nothing(image: Image) -> Detections:
+    """Produce no detections at all, the way a detector on an empty photograph does.
+
+    :func:`detect` produces one per pixel column and so can never produce none, which leaves the
+    case a sink most needs to get right -- an image nothing was found in -- with nothing to test
+    it. A dataset without its negatives is a biased one.
+    """
+    return _boxes(0)
+
+
+@node(category="Test")
+def detect_masks(image: Image) -> Detections:
+    """Produce one masked detection per pixel column, the way a segmenter does.
+
+    :func:`detect` produces boxes only, which leaves the expensive half of what a sink must carry
+    untested -- a raster mask is four megabytes of booleans if anything dumps it naively, and the
+    node that writes annotations claims it costs kilobytes.
+
+    Four masks at most, where :func:`detect` produces one per column. A mask is a raster the size
+    of the whole image, so one per column is quadratic in the width -- measured, 197 MB at 640x480
+    and 3.98 GB at 1920x1080, from a node whose docstring invites being pointed at a real
+    photograph. Four proves what nineteen hundred would.
+    """
+    count = min(image.shape[1], 4)
+    masks = np.zeros((count,) + image.shape[:2], dtype=bool)
+    masks[np.arange(count), :, np.arange(count)] = True
+    return _boxes(count, masks=masks)
