@@ -151,6 +151,19 @@ class Event:
     error: Optional[str] = None
 
 
+def _named(item) -> str:
+    """*item* in a failure message, short enough to read.
+
+    ``run_many`` brings paths, which name themselves. :meth:`Workflow.process` brings whatever the
+    source yielded, and for a video or a folder that is the frame -- so the message used to be the
+    ``repr`` of a 720x1280 array, printed once per failure, burying the reason it was raised for.
+    """
+    if isinstance(item, (str, bytes, Path)):
+        return repr(item)
+    shape = getattr(item, "shape", None)
+    return f"a {shape[1]}x{shape[0]} image" if shape and len(shape) == 3 else type(item).__name__
+
+
 def deliver(item, outcome, failure: Optional[Event], on_error: Optional[Any]) -> Iterator:
     """Hand one finished item to the caller, the one way both engines hand it over.
 
@@ -161,7 +174,7 @@ def deliver(item, outcome, failure: Optional[Event], on_error: Optional[Any]) ->
     if failure is None:
         yield item, outcome
     elif on_error is None:
-        raise RuntimeError(f"{item!r}: {failure.error}")
+        raise RuntimeError(f"{_named(item)}: {failure.error}")
     else:
         on_error(item, failure)
 

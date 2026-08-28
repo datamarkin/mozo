@@ -181,6 +181,25 @@ class TestWhichParameterTakesAFile:
         assert all(results["a"].shape == image.shape for _, results in got)
 
 
+class TestWhatAFailureSays:
+    """The item in a failure message, short enough to read."""
+
+    def test_it_names_the_item_rather_than_printing_it(self):
+        """``run_many`` brings paths, which name themselves. :meth:`Workflow.process` brings
+        whatever the source yielded, and for a video or a folder that is the frame -- so this
+        used to be the repr of a 720x1280 array with the reason buried underneath it."""
+        made = Workflow.from_dict(document(
+            {"a": ("emit", {"count": 2}), "b": ("explode", {})}, [("a", "image", "b", "image")]))
+        with pytest.raises(RuntimeError, match=r"^a \d+x\d+ image: "):
+            list(made.process())
+
+    def test_a_path_still_names_itself(self):
+        made = Workflow.from_dict(document(
+            {"a": ("read_media", {}), "b": ("explode", {})}, [("a", "image", "b", "image")]))
+        with pytest.raises(RuntimeError, match=r"^'.*example\.jpg': "):
+            list(made.run_many([str(FIXTURE)]))
+
+
 class TestOverrides:
     """Running the same workflow on something else."""
 
