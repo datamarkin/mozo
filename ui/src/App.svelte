@@ -10,7 +10,7 @@
     import NodePalettePanel from './lib/NodePalettePanel.svelte';
     import { generateNodeClasses } from './lib/utils.js';
     import { fetchCatalogue, fromDocument, stream, toDocument } from './lib/api.js';
-    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, chosenImage } from './lib/stores.js';
+    import { openSidebar, closeSidebar, pendingConnection, clearPendingConnection, chosenFile } from './lib/stores.js';
 
     // Every workflow starts here: pixels have to come from somewhere, and this is the node whose
     // path the runner overrides per image.
@@ -263,7 +263,7 @@
         })));
 
         try {
-            await stream(toDocument($nodes, $edges), $chosenImage, (event) => {
+            await stream(toDocument($nodes, $edges), $chosenFile, (event) => {
                 if (event.done) {
                     isExecuting.set(false);
                 } else if (event.status === 'running') {

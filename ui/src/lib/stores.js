@@ -46,8 +46,12 @@ export function clearPendingConnection() {
  * The file the next run reads, chosen on a node whose parameter is a `source`.
  *
  * A store rather than a prop, because the node that offers the picker and the code that submits
- * the run are at opposite ends of the tree. One file per run, which is what the server accepts: an
- * upload arrives as the value of the parameter named `image`, and a workflow with two nodes that
- * have one is refused by name rather than guessed at.
+ * the run are at opposite ends of the tree. One file per run, which is what the server accepts:
+ * the upload binds to whichever parameter declares a `source`, and a workflow with two of those is
+ * refused rather than guessed at.
+ *
+ * An image or a video, and this does not know which. Deciding is the server's -- one input node
+ * reads either, from the extension -- so a picker that filtered by kind here would be re-deciding
+ * it, and wrongly: it filtered to `image/*`, which is what made a video unselectable.
  */
-export const chosenImage = writable(null);
+export const chosenFile = writable(null);

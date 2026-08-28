@@ -16,7 +16,7 @@
      * a file to upload as well, and says which of the two the next run will use.
      */
     import { formatParameterLabel } from './utils.js';
-    import { chosenImage } from './stores.js';
+    import { chosenFile } from './stores.js';
 
     export let selectedNode;
     export let updateNodeParameters;
@@ -48,10 +48,9 @@
         change(field, raw === '' && field.optional ? null : raw);
     }
 
-    /** Take the first image from a picker or a drop, whichever the file arrived by. */
+    /** Take the first file from a picker or a drop, whichever it arrived by. */
     function chooseFile(files) {
-        const file = [...(files || [])].find(candidate => candidate.type.startsWith('image/'));
-        if (file) chosenImage.set(file);
+        if (files?.[0]) chosenFile.set(files[0]);
     }
 
     let dragging = false;
@@ -118,15 +117,15 @@
                                      chooseFile(e.dataTransfer.files);
                                  }}>
                                 <label class="button is-small is-fullwidth">
-                                    {$chosenImage ? $chosenImage.name : 'Drop or choose an image'}
-                                    <input type="file" accept="image/*" style="display: none;"
+                                    {$chosenFile ? $chosenFile.name : 'Drop or choose a file'}
+                                    <input type="file" style="display: none;"
                                            on:change={(e) => chooseFile(e.target.files)} />
                                 </label>
                             </div>
-                            {#if $chosenImage}
+                            {#if $chosenFile}
                                 <p class="is-size-7 has-text-grey mt-1">
                                     The next run reads this file.
-                                    <button class="is-link-ish" on:click={() => chosenImage.set(null)}>
+                                    <button class="is-link-ish" on:click={() => chosenFile.set(null)}>
                                         Use the path instead
                                     </button>
                                 </p>
@@ -134,7 +133,7 @@
                             <input id={field.name} class="input is-small mt-1" type="text"
                                    value={value === null || value === undefined ? '' : value}
                                    placeholder="or a path on the server"
-                                   disabled={!!$chosenImage}
+                                   disabled={!!$chosenFile}
                                    on:input={(e) => changeText(field, e.target.value)} />
                         {:else if field.kind === 'int' || field.kind === 'float'}
                             <input id={field.name} class="input is-small" type="number"

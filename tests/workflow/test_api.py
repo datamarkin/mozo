@@ -9,6 +9,7 @@ JSON, and that mounting all of this changed nothing about the model server it ha
 from __future__ import annotations
 
 import json
+import tempfile
 
 import pytest
 
@@ -80,6 +81,9 @@ class TestRunning:
     """What a run gives back."""
 
     def test_an_uploaded_image_is_what_the_workflow_runs_on(self, client, payload):
+        # By kind, not by name: nothing in the request says the parameter is called "source", and
+        # if the upload still bound to a parameter named "image" this would be a 400.
+        assert "image" not in mozo.workflow.Workflow.from_dict(json.loads(GRAYSCALE)).parameters
         answer = _run(client, GRAYSCALE, payload)
         assert answer["terminals"] == ["gray"]
         assert answer["results"]["gray"].startswith("data:image/png;base64,")
@@ -109,9 +113,31 @@ class TestRunning:
     def test_an_override_that_names_nothing_is_a_refusal_not_a_crash(self, client, payload):
         response = client.post("/workflow/run", data={
             "workflow": GRAYSCALE, "inputs": json.dumps({"nonsense": 1})},
-            files={"image": ("photo.jpg", payload, "image/jpeg")})
+            files={"file": ("photo.jpg", payload, "image/jpeg")})
         assert response.status_code == 400
         assert "no parameter" in response.json()["detail"]
+
+    def test_an_uploaded_video_runs_too(self, client, clip):
+        """The complaint this change came from: the picker would not take an ``.mp4``."""
+        answer = _run(client, GRAYSCALE, clip.read_bytes(), filename="clip.mp4")
+        assert answer["results"]["gray"].startswith("data:image/png;base64,")
+
+    def test_a_workflow_with_nowhere_to_put_a_file_says_so(self, client, payload):
+        """Rather than accepting the upload and running without it, which reads as success."""
+        response = client.post(
+            "/workflow/run",
+            data={"workflow": as_json({"a": ("make", {}), "b": ("to_grayscale", {})},
+                                      [("a", "image", "b", "image")])},
+            files={"file": ("photo.jpg", payload, "image/jpeg")})
+        assert response.status_code == 400
+        assert "nothing for one to be" in response.json()["detail"]
+
+    def test_the_upload_does_not_outlive_the_run(self, client, payload, tmp_path,
+                                                monkeypatch):
+        """A spooled file per request, and a server that keeps them is a server that fills up."""
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+        _run(client, GRAYSCALE, payload)
+        assert list(tmp_path.iterdir()) == []
 
     def test_inputs_that_are_not_a_json_object_are_refused(self, client):
         response = client.post("/workflow/run",
@@ -158,7 +184,7 @@ class TestStreaming:
         """A stream that has already claimed success is the wrong place to learn it was refused."""
         response = client.post("/workflow/stream", data={
             "workflow": GRAYSCALE, "inputs": json.dumps({"nonsense": 1})},
-            files={"image": ("photo.jpg", payload, "image/jpeg")})
+            files={"file": ("photo.jpg", payload, "image/jpeg")})
         assert response.status_code == 400
         assert "no parameter" in response.json()["detail"]
 
@@ -273,11 +299,16 @@ def _every_path(routes) -> set:
     return found
 
 
-def _post(client, path: str, workflow: str, payload: bytes = None, **fields):
-    """POST a workflow, with an image if there is one."""
+def _post(client, path: str, workflow: str, payload: bytes = None, filename: str = "photo.jpg",
+          **fields):
+    """POST a workflow, with a file if there is one.
+
+    The name matters and is therefore a parameter: the server keeps the suffix when it spools the
+    upload, and the suffix is what the input node reads to choose a decoder.
+    """
     response = client.post(
         f"/workflow/{path}", data={"workflow": workflow, **fields},
-        files={"image": ("photo.jpg", payload, "image/jpeg")} if payload else None)
+        files={"file": (filename, payload, "application/octet-stream")} if payload else None)
     assert response.status_code == 200, response.text
     return response
 

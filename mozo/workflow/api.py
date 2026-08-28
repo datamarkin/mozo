@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import base64
 import json
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -97,7 +99,8 @@ def run(
     inputs: str = Form("{}", description="Parameter overrides, as a JSON object"),
     include: Literal["terminals", "all"] = Form(
         "terminals", description="Which nodes' outputs to send back"),
-    image: Optional[UploadFile] = File(None, description="An image to run on, if not on disk"),
+    file: Optional[UploadFile] = File(None, description="An image or video to run on, if it is "
+                                                        "not already on the server"),
 ):
     """Run a workflow and send back what it produced.
 
@@ -115,20 +118,26 @@ def run(
     """
     built = _build(workflow)
     terminals = built.terminals
-    into = _destination(built) if image is not None else None
+    # Asked before the file is written down, so a workflow with nowhere to put one is refused
+    # having copied nothing. Deriving the name costs microseconds; spooling costs the whole upload.
+    into = _destination(built) if file is not None else None
+    upload = _spool(file)
 
     results = {}
-    for event in _events(built, inputs, image, into):
-        if event.status == "failed":
-            # A run that failed is not a run that returned nothing. Answering 200 with an empty
-            # results dict is indistinguishable from success to any client that does not go
-            # looking, and the reason the node gave would be thrown away.
-            raise HTTPException(status_code=422, detail=event.error)
-        if event.status == "completed" and (include == "all" or event.node in terminals):
-            # Serialised as it arrives, so a node's output is not held past the one it feeds.
-            # Combined with the engine dropping a wire once its last reader has run, a five-node
-            # chain over a 4K photograph peaks at 70 MB instead of 182 MB.
-            results[event.node] = _serialise(built, event.node, event.output)
+    try:
+        for event in _events(built, inputs, upload, into):
+            if event.status == "failed":
+                # A run that failed is not a run that returned nothing. Answering 200 with an empty
+                # results dict is indistinguishable from success to any client that does not go
+                # looking, and the reason the node gave would be thrown away.
+                raise HTTPException(status_code=422, detail=event.error)
+            if event.status == "completed" and (include == "all" or event.node in terminals):
+                # Serialised as it arrives, so a node's output is not held past the one it feeds.
+                # Combined with the engine dropping a wire once its last reader has run, a
+                # five-node chain over a 4K photograph peaks at 70 MB instead of 182 MB.
+                results[event.node] = _serialise(built, event.node, event.output)
+    finally:
+        _discard(upload)
 
     return {"results": results, "terminals": list(terminals)}
 
@@ -139,7 +148,8 @@ def stream(
     inputs: str = Form("{}", description="Parameter overrides, as a JSON object"),
     include: Literal["terminals", "all"] = Form(
         "terminals", description="Which nodes' outputs to send back"),
-    image: Optional[UploadFile] = File(None, description="An image to run on, if not on disk"),
+    file: Optional[UploadFile] = File(None, description="An image or video to run on, if it is "
+                                                        "not already on the server"),
 ):
     """Run a workflow as server-sent events, one per node starting and finishing.
 
@@ -153,7 +163,14 @@ def stream(
     """
     built = _build(workflow)
     terminals = built.terminals
-    started = _events(built, inputs, image, _destination(built) if image is not None else None)
+
+    # Settled here rather than inside ``events`` so that a refused override is still a 400 before
+    # the response begins, which is what this endpoint promises. Everything that can refuse runs
+    # before the file is written down, so the only spooled file that exists is one a started run
+    # owns -- and it outlives this function, which is why the generator is what removes it.
+    into = _destination(built) if file is not None else None
+    upload = _spool(file)
+    started = _events(built, inputs, upload, into)
 
     def events():
         try:
@@ -173,6 +190,8 @@ def stream(
             yield _event({"status": "failed", "error": str(error)})
         else:
             yield _event({"done": True})
+        finally:
+            _discard(upload)      # however the response ended, including a client hanging up
 
     return StreamingResponse(
         events(),
@@ -181,15 +200,14 @@ def stream(
     )
 
 
-def _events(built: Workflow, inputs: str, image: Optional[UploadFile],
-            into: Optional[str]):
+def _events(built: Workflow, inputs: str, upload: Optional[Path], into: Optional[str]):
     """Start *built* running, turning a refused override into a 400 before anything executes.
 
     ``stream`` settles the overrides before it returns its iterator, so this catches a bad one here
     rather than part-way through a response that has already claimed success.
     """
     try:
-        return built.stream(**_overrides(inputs, image, into))
+        return built.stream(**_overrides(inputs, upload, into))
     except KeyError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -204,14 +222,13 @@ def _build(document: str) -> Workflow:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def _overrides(inputs: str, image: Optional[UploadFile], into: Optional[str]) -> dict:
-    """Parameter overrides for this run, with an uploaded image folded in as one of them.
+def _overrides(inputs: str, upload: Optional[Path], into: Optional[str]) -> dict:
+    """Parameter overrides for this run, with an uploaded file folded in as one of them.
 
     *into* is the parameter the file is the value of, which
     :attr:`~mozo.workflow.graph.Workflow.file_parameter` derived from the annotations rather than
     from a name written down here. This used to write to a parameter literally called ``image``,
-    which meant the transport knew one node's vocabulary and would break when that node was
-    renamed -- as the command line, which had its own copy of the same literal, actually did.
+    which meant the transport knew one node's vocabulary and broke when that node was renamed.
     """
     try:
         overrides = json.loads(inputs)
@@ -220,8 +237,8 @@ def _overrides(inputs: str, image: Optional[UploadFile], into: Optional[str]) ->
     if not isinstance(overrides, dict):
         raise HTTPException(status_code=400, detail="inputs must be a JSON object")
 
-    if image is not None:
-        overrides[into] = image.file.read()
+    if upload is not None:
+        overrides[into] = str(upload)
     return overrides
 
 
@@ -231,6 +248,35 @@ def _destination(built: Workflow) -> str:
         return built.file_parameter
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def _spool(upload: Optional[UploadFile]) -> Optional[Path]:
+    """*upload* as a file on disk, or None if there was none.
+
+    **A path rather than the bytes, because a video cannot be bytes.** ``cv2.VideoCapture`` takes a
+    filename, a device index or a URL and has no memory-buffer form at all, so an upload that never
+    touches the disk can only ever have been an image -- which is exactly the limit that made the
+    editor's picker refuse an ``.mp4``. Writing it down first is what lets one input node read
+    either kind from either place.
+
+    The suffix is kept, because it is what selects the decoder. A file arriving with no name is
+    decoded as an image, which is what the picker's own default would have done.
+    """
+    if upload is None:
+        return None
+    suffix = Path(upload.filename or "").suffix
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+        shutil.copyfileobj(upload.file, handle)
+    return Path(handle.name)
+
+
+def _discard(upload: Optional[Path]) -> None:
+    """Remove a spooled upload once the run that reads it is over.
+
+    ``missing_ok`` so that a file already gone cannot replace the run's own error with this one.
+    """
+    if upload is not None:
+        upload.unlink(missing_ok=True)
 
 
 def _event(payload: dict) -> str:

@@ -74,12 +74,12 @@ export function fromDocument(document, catalogue) {
     return { nodes, edges };
 }
 
-/** The form body every run endpoint takes: the document, an optional image, optional overrides. */
-function body(document, image, fields) {
+/** The form body every run endpoint takes: the document, an optional file, optional overrides. */
+function body(document, file, fields) {
     const form = new FormData();
     form.append('workflow', JSON.stringify(document));
     for (const [name, value] of Object.entries(fields || {})) form.append(name, value);
-    if (image) form.append('image', image);
+    if (file) form.append('file', file);
     return form;
 }
 
@@ -97,9 +97,9 @@ export async function validate(document) {
  * `include: 'all'` because the editor draws every node's result on the canvas -- which is the case
  * the server's default is not tuned for, and the reason it is a choice rather than a fixed rule.
  */
-export async function stream(document, image, onEvent) {
+export async function stream(document, file, onEvent) {
     const response = await fetch(apiUrl('/workflow/stream'), {
-        method: 'POST', body: body(document, image, { include: 'all' }),
+        method: 'POST', body: body(document, file, { include: 'all' }),
     });
 
     if (!response.ok) {
