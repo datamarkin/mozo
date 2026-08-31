@@ -206,13 +206,35 @@ def _section(
 def load_state_dict(path: str | Path) -> dict[str, torch.Tensor]:
     """Read a published checkpoint, unwrapping the ``model`` envelope if there is one.
 
+    Mapped rather than materialised. Every caller wants a *subset* of this file -- the trunk, or
+    the text tower, or the tracker -- and hands it straight to a module's ``load_state_dict``,
+    which copies what it names into parameters the module already allocated. So a mapped tensor
+    is a source to copy out of and never a tensor anything computes on, and a section nobody
+    names is never faulted in.
+
+    That matters most to the caller who wants least. A :class:`~.predictor.Segmenter` built with
+    a graph vision encoder never asks for the trunk, and the trunk is 1.85 GB of this file:
+    mapping takes its construction from 5.28 GB peak and 2.26 s to 3.37 GB and 1.76 s. Reading
+    the whole checkpoint costs the same either way once every section *is* wanted -- 7.16 GB
+    against 7.13 GB on the torch path -- so this is not a trade, it is the same read deferred.
+
+    Mapping needs the zipfile serialisation ``torch.save`` has written by default since 1.6, and
+    raises rather than falling back on a checkpoint written the old way. Since a caller may hand
+    us one of their own -- ``Sam3Predictor`` takes a ``checkpoint_path`` -- the old way is read
+    the old way. The tensors are the same either way; only what it costs to get them differs, so
+    this is a performance path quietly declining, not a difference anything downstream can see.
+
     Args:
         path: Path to ``sam3.pt``.
 
     Returns:
-        The raw state dict, still in Meta's key layout.
+        The raw state dict, still in Meta's key layout, backed by the mapped file where it could
+        be mapped.
     """
-    blob = torch.load(path, map_location="cpu", weights_only=True)
+    try:
+        blob = torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+    except RuntimeError:
+        blob = torch.load(path, map_location="cpu", weights_only=True)
     if "model" in blob and isinstance(blob["model"], dict):
         blob = blob["model"]
     return blob

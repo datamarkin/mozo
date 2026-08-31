@@ -25,19 +25,62 @@ import numpy as np
 import torch
 
 from ..image import load_image
-from ..runtimes import get_default_device, select_runtime
+from ..runtimes import CoreMLRunner, get_default_device, select_runtime
 from ..vendors.sam3_deploy import Segmenter
-from ..weights import artifacts, resolve
+from ..weights import artifacts, framework_of, resolve
 
 try:
     import pixelflow as pf
 except ImportError:
     raise ImportError("PixelFlow is not installed. Install it with: pip install pixelflow") from None
 
-__all__ = ["Sam3Predictor"]
+__all__ = ["GraphVision", "Sam3Predictor"]
 
 #: The family this adapter serves, as the registry and the manifest name it.
 FAMILY = "sam3"
+
+#: The concept pyramid's levels, finest first, as the exported graph names its outputs. The
+#: order is the contract: :class:`~mozo.vendors.sam3_deploy.grounding.concept.ConceptHead` reads
+#: ``levels[-1]`` as the grid it attends over and the rest as mask features, so a graph that
+#: returned them the other way round would segment confidently and wrongly.
+LEVELS = ("level0", "level1", "level2")
+
+
+class GraphVision:
+    """A graph artifact standing in for SAM 3's torch vision encoder.
+
+    :class:`~mozo.vendors.sam3_deploy.predictor.Segmenter` asks its encoder one question -- a
+    preprocessed batch in, the concept pyramid and its position encoding out -- and this answers
+    it from a CoreML package instead of from the trunk. That is the whole of what the graph
+    replaces; the text tower and the concept head stay in torch, so the checkpoint is still
+    loaded either way.
+
+    Args:
+        runner: The loaded package.
+        device: Where the torch half runs, and so where the outputs must land.
+
+    Raises:
+        ValueError: If asked for the click stack. The published graph carries the concept stack
+            alone, and the click path reads a differently preprocessed image -- see
+            :meth:`~mozo.vendors.sam3_deploy.predictor.Segmenter.encode_click`. Refusing here
+            rather than returning the concept pyramid is the difference between an error and a
+            mask of the wrong pixels.
+    """
+
+    def __init__(self, runner: CoreMLRunner, device: str) -> None:
+        self.runner = runner
+        self.device = device
+
+    def __call__(self, batch: torch.Tensor, stacks: tuple[str, ...] = ("concept",)) -> dict:
+        if tuple(stacks) != ("concept",):
+            raise ValueError(
+                f"the SAM 3 graph encoder serves the concept stack only, not {stacks!r}"
+            )
+        got = dict(zip(self.runner.outputs, self.runner(batch.cpu().numpy())))
+        return {
+            "concept": [torch.from_numpy(got[name]).to(self.device) for name in LEVELS],
+            "positions": torch.from_numpy(got["positions"]).to(self.device),
+        }
 
 
 class Sam3Predictor:
@@ -90,9 +133,16 @@ class Sam3Predictor:
             else select_runtime(self.device, artifacts(FAMILY, variant, revision=revision), runtime)
         )
 
+        # The graph covers the vision encoder and nothing else, so the checkpoint is resolved
+        # whichever runtime won -- the text tower and the concept head come out of it either
+        # way. What the graph changes is that its 1.85 GB of trunk is then never loaded.
         weights = (Path(checkpoint_path) if checkpoint_path
-                   else resolve(FAMILY, variant, self.runtime, revision=revision))
-        self._segmenter = Segmenter(weights, device=self.device)
+                   else resolve(FAMILY, variant, "torch-fp32", revision=revision))
+        vision = None
+        if framework_of(self.runtime) == "coreml":
+            package = resolve(FAMILY, variant, self.runtime, revision=revision)
+            vision = GraphVision(CoreMLRunner(package), self.device)
+        self._segmenter = Segmenter(weights, device=self.device, vision=vision)
         print(f"SAM 3 ready on {self.device} via {self.runtime}.")
 
     def predict(

@@ -95,6 +95,12 @@ def get_default_device() -> str:
 #: CoreML leads on Apple silicon because it was measured to: RF-DETR nano runs 10.8 ms through
 #: CoreML against 53.3 ms on torch MPS, five times faster, at a worst output delta of 0.001.
 #: That is the one entry here that overrides torch, and it is the one with the widest margin.
+#:
+#: It is not always that wide, and the second measurement is worth stating beside the first so
+#: the entry is not read as a promise. SAM 3's vision encoder runs 840 ms through CoreML against
+#: 1098 ms on torch MPS -- 1.3x, not 5x -- and 4488 ms on torch CPU. Both models prefer CoreML
+#: here; only one of them dramatically. A family whose margin came out under 1.0 would belong in
+#: ``EXECUTES`` or unpublished, not in a third preference table.
 _PREFERENCE: dict[str, tuple[str, ...]] = {
     "cuda": ("torch-fp32", "onnx-fp32"),
     "cpu": ("torch-fp32", "onnx-fp32"),
@@ -281,6 +287,14 @@ class CoreMLRunner:
     ANE, the GPU and the CPU as it sees fit. On RF-DETR the ANE contributes nothing measurable
     (compute units ALL and CPU_AND_GPU both run at 10.8 ms, CPU-only at 42 ms), so no attempt is
     made to steer it -- the default is already what the measurements were taken with.
+
+    That the default is safe is a property of what mozo publishes, not of CoreML. The ANE is not
+    always neutral: SAM 3's vision encoder at fp16 runs 750 ms on CPU_AND_GPU, 1826 ms on ALL,
+    and did not finish a single pass in two minutes on CPU_AND_NE -- offered the ANE, it takes
+    segments and loses badly. Every CoreML artifact published here is fp32, which the ANE cannot
+    execute at all, so every one of them is scheduled the same way however this is set. A family
+    that wanted fp16 would need this class to grow a compute-units argument first; see
+    ``tools/export/sam3.py`` for why none does.
 
     Attributes:
         inputs: Input tensor names, in the order the package declares them.

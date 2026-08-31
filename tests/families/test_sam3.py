@@ -284,6 +284,23 @@ def test_a_file_that_is_not_a_sam3_checkpoint_says_so():
         loader.vision_state_dict({"something.else": torch.zeros(1)})
 
 
+@pytest.mark.parametrize("zipfile_format", [True, False])
+def test_a_checkpoint_loads_whichever_way_it_was_serialised(tmp_path, zipfile_format):
+    """Reading is mapped for the memory it saves, and mapping refuses the pre-1.6 layout.
+
+    A caller may hand ``Sam3Predictor`` a checkpoint of their own, so the old layout has to keep
+    working -- and produce the same tensors, since only the cost of getting them differs.
+    """
+    payload = {"model": {"a": torch.randn(8), "b": torch.randn(4, 4)}}
+    path = tmp_path / "checkpoint.pth"
+    torch.save(payload, path, _use_new_zipfile_serialization=zipfile_format)
+
+    got = loader.load_state_dict(path)
+
+    assert sorted(got) == ["a", "b"], "the 'model' envelope is unwrapped either way"
+    assert all(torch.equal(payload["model"][key], got[key]) for key in payload["model"])
+
+
 # --- what the caller gets ----------------------------------------------------------------------
 
 def _result(scores: list[float]) -> dict[str, torch.Tensor]:
@@ -486,3 +503,52 @@ def test_one_concept_still_comes_back_as_one_class():
     assert model._segmenter.prompts == ["car"]
     assert [int(d.class_id) for d in found] == [0]
     assert [d.class_name for d in found] == ["car"]
+
+
+# --- the graph encoder -------------------------------------------------------------------------
+
+class _StubRunner:
+    """A CoreML runner's surface, without CoreML: named outputs in declaration order."""
+
+    outputs = ("level0", "level1", "level2", "positions")
+
+    def __call__(self, batch):
+        sides = (288, 144, 72)
+        return (*(np.zeros((1, 256, s, s), dtype=np.float32) for s in sides),
+                np.full((1, 256, 72, 72), 7.0, dtype=np.float32))
+
+
+def test_the_graph_encoder_answers_the_vision_encoders_question():
+    """Its whole job is to be substitutable for ``VisionEncoder.forward``, keys and order alike."""
+    from mozo.adapters.sam3 import GraphVision
+
+    got = GraphVision(_StubRunner(), "cpu")(torch.zeros(1, 3, 1008, 1008))
+
+    assert set(got) == {"concept", "positions"}
+    assert [tuple(level.shape[-2:]) for level in got["concept"]] == [(288, 288), (144, 144), (72, 72)], \
+        "finest first: the concept head reads levels[-1] as the grid it attends over"
+    assert got["positions"].shape == (1, 256, 72, 72)
+    assert all(isinstance(level, torch.Tensor) for level in got["concept"])
+
+
+def test_the_graph_encoder_refuses_the_click_stack():
+    """It carries the concept stack alone; answering with it would mask the wrong pixels."""
+    from mozo.adapters.sam3 import GraphVision
+
+    with pytest.raises(ValueError, match="concept stack only"):
+        GraphVision(_StubRunner(), "cpu")(torch.zeros(1, 3, 1008, 1008), stacks=("click",))
+
+
+def test_the_graphs_outputs_are_the_levels_the_neck_survives_the_scalp_with():
+    """``LEVELS`` names the graph's outputs, and the neck decides how many there are."""
+    from mozo.adapters.sam3 import LEVELS
+
+    assert len(LEVELS) == len(SPEC.scale_factors) - SPEC.scalp
+
+
+def test_a_supplied_vision_encoder_turns_the_click_path_off():
+    """Refusing beats answering from the concept pyramid, which reads different pixels."""
+    blank = _segmenter()
+    blank.click = None
+    with pytest.raises(RuntimeError, match="concept path only"):
+        blank.encode_click(np.zeros((8, 8, 3), dtype=np.uint8))

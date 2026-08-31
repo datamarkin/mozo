@@ -17,10 +17,12 @@ from __future__ import annotations
 import hashlib
 import os
 from collections import OrderedDict
+from collections.abc import Callable
 from threading import Lock
 
 import numpy as np
 import torch
+from torch import nn
 
 from .checkpoint import (
     concept_state_dict,
@@ -30,6 +32,7 @@ from .checkpoint import (
     vision_state_dict,
 )
 from .click import ClickHead
+from .config import SPEC
 from .grounding import ConceptHead
 from .grounding.boxes import box_cxcywh_to_xyxy
 from .image import preprocess, preprocess_click, to_model_coords, to_original
@@ -114,32 +117,55 @@ class Segmenter:
     Args:
         checkpoint: Path to Meta's published ``sam3.pt``.
         device: Where to run. mozo decides this; the default is only for direct use.
+        vision: An encoder to use instead of building the torch one -- anything that answers
+            :meth:`~..vision.encoder.VisionEncoder.forward`'s question, i.e. takes the
+            preprocessed batch and returns ``{"concept": [levels], "positions": ...}``. A
+            graph runtime is what this is for. Passing one **turns the click path off**: it is
+            fed by a second encode of its own, which such a graph does not carry, and the two
+            preprocess differently so it cannot borrow this one. See :meth:`encode_click`.
 
     Attributes:
         image_size: Square side the encoder runs at.
     """
 
-    def __init__(self, checkpoint: str | os.PathLike, device: str | torch.device = "cpu"):
+    def __init__(
+        self,
+        checkpoint: str | os.PathLike,
+        device: str | torch.device = "cpu",
+        *,
+        vision: Callable[..., dict] | None = None,
+    ):
         state = load_state_dict(os.fspath(checkpoint))
 
-        self.vision = VisionEncoder()
-        self.vision.load_state_dict(vision_state_dict(state), strict=True)
+        # The trunk is 1.85 GB of the checkpoint and the click head is only reachable through
+        # it, so a supplied encoder builds neither. It does not read them either: the state
+        # above is mapped, not materialised, so a section this branch never names is never
+        # faulted in. That is what makes the graph path cheaper to construct and not merely
+        # cheaper to hold -- 3.37 GB peak against 5.28 GB. See :func:`~.checkpoint.load_state_dict`.
+        self.vision = vision
+        self.click = None
+        if vision is None:
+            self.vision = VisionEncoder()
+            self.vision.load_state_dict(vision_state_dict(state), strict=True)
+            # 4.2 M parameters against the trunk's 300 M, and 16 ms to build against a 3.45 GB
+            # checkpoint load. Making it optional would save nothing worth the branch.
+            self.click = ClickHead()
+            self.click.load_state_dict(click_state_dict(state), strict=True)
         self.text = TextEncoder()
         self.text.load_state_dict(text_state_dict(state), strict=True)
         self.concept = ConceptHead()
         self.concept.load_state_dict(concept_state_dict(state), strict=True)
-        # 4.2 M parameters against the trunk's 300 M, and 16 ms to build against a 3.45 GB
-        # checkpoint load. Making it optional would save nothing worth the branch.
-        self.click = ClickHead()
-        self.click.load_state_dict(click_state_dict(state), strict=True)
         del state
 
         for module in (self.vision, self.text, self.concept, self.click):
-            module.eval().to(device)
+            if isinstance(module, nn.Module):
+                module.eval().to(device)
 
         self.tokenizer = Tokenizer()
         self.device = device
-        self.image_size = self.vision.trunk.spec.image_size
+        # From the spec rather than from ``self.vision``, which is not required to have a trunk
+        # to read it off. It is the same number either way: the geometry is written down.
+        self.image_size = SPEC.trunk.image_size
 
         self._images: OrderedDict[bytes, dict] = OrderedDict()
         self._clicks: OrderedDict[bytes, list] = OrderedDict()
@@ -191,7 +217,18 @@ class Segmenter:
 
         Only the click pyramid is kept. The concept stack this forward also produces belongs to
         the other preprocessing and would be wrong to serve from here.
+
+        Raises:
+            RuntimeError: If this segmenter was built with a supplied ``vision`` encoder. Such
+                an encoder carries the concept stack alone, and the click stack cannot be
+                derived from it -- the two read a differently preprocessed image. Serving the
+                concept pyramid here would answer with masks from the wrong pixels.
         """
+        if self.click is None:
+            raise RuntimeError(
+                "this Segmenter was built with a supplied vision encoder, which serves the "
+                "concept path only. Build one from the checkpoint to click on an image."
+            )
         key = hashlib.sha256(np.ascontiguousarray(image)).digest()
         return self._remember(
             self._clicks,

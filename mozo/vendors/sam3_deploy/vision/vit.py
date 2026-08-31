@@ -165,6 +165,17 @@ class RoPEAttention(nn.Module):
             persistent=True,
         )
 
+    def rotate(self, query: Tensor, key: Tensor) -> tuple[Tensor, Tensor]:
+        """Apply the rotation, in the complex arithmetic the checkpoint's table is stored in.
+
+        One line, and its own method, because it is the only part of this block a runtime
+        without complex numbers has to write differently -- see ``tools/export/sam3.py``, which
+        overrides exactly this and inherits the rest. A graph built by restating the block
+        around a real-valued rotation would be a second copy of the arithmetic above, free to
+        drift from it.
+        """
+        return apply_rotary(query, key, self.freqs_cis)
+
     def forward(self, x: Tensor) -> Tensor:
         """``(B, H, W, C)`` in and out -- spatial, because windowing needs the grid."""
         batch, height, width, _ = x.shape
@@ -175,7 +186,7 @@ class RoPEAttention(nn.Module):
         key = key.view(*shape).transpose(1, 2)
         value = value.view(*shape).transpose(1, 2)
 
-        query, key = apply_rotary(query, key, self.freqs_cis)
+        query, key = self.rotate(query, key)
         # No explicit ``scale``: upstream relies on the 1/sqrt(head_dim) default, and passing it
         # by hand is one more place for the two to drift apart.
         attended = F.scaled_dot_product_attention(query, key, value)
