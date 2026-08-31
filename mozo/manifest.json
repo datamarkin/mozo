@@ -525,6 +525,16 @@
               "sha256": "890d0f27e5a24349b1cf3c6b4863d63d2726a40d7fda888adead686c842f5646",
               "size": 1175
             },
+            "onnx-fp32-unet": {
+              "path": "moebius/general/2026-08-26/onnx-fp32-unet.onnx",
+              "sha256": "4769a5462349f2e4c083c951c209958a34bda5728fddac789eb9d33719a0b037",
+              "size": 894951290
+            },
+            "onnx-fp32-vae-decoder": {
+              "path": "moebius/general/2026-08-26/onnx-fp32-vae-decoder.onnx",
+              "sha256": "a3aae0a0c7e66c5579882b14f7f47a7eec35d609dfb401517442c5e8b287e4b0",
+              "size": 198061218
+            },
             "torch-fp32-unet": {
               "path": "moebius/general/2026-08-26/torch-fp32-unet.pth",
               "sha256": "6c9ee08ce467af48767b74416646d82f8a0c1dcfb558c478e635cef0ca8b2ad2",
@@ -1160,6 +1170,11 @@
               "path": "sam3/sam3/2026-08-20/NOTICE",
               "sha256": "50c96760d91d0b0de3a22ce9f40ef538a772c39fc51fbf02f23402d6bbfef021",
               "size": 1967
+            },
+            "coreml-fp32": {
+              "path": "sam3/sam3/2026-08-20/coreml-fp32.zip",
+              "sha256": "ccbfc7fb11ee2ea67ac63418cde80b8979b83e80f1ecf46d093241a845f88155",
+              "size": 1702243599
             },
             "torch-fp32": {
               "path": "sam3/sam3/2026-08-20/torch-fp32.pth",
