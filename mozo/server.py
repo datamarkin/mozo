@@ -274,6 +274,11 @@ def _image_response(frame: np.ndarray) -> Response:
 
     It used to import a private ``_png`` from the workflow package, which broke the moment that
     package moved it. A shared fact reached for by its private name is a shared fact homed wrong.
+
+    **Cut-outs go out through here too**, unchanged: :func:`mozo.image.encode_image` takes three
+    channels or four, so a background remover's RGBA answer needs no second wrapper. PNG is doing
+    two jobs at once for it -- lossless for the mask edges, and the only default here that can
+    carry an alpha channel at all.
     """
     try:
         payload = encode_image(frame)
@@ -494,6 +499,12 @@ def predict(
             return JSONResponse(content=model.predict(image, _subjects(corners)).to_dict())
         if task == "image_inpainting":
             return _image_response(model.predict(image, _subjects(corners), seed=seed))
+        if task == "image_matting":
+            # ``cutout`` rather than ``predict``: the adapter's predict returns the alpha alone,
+            # which is the model's answer but not a picture anyone can look at. The alpha is
+            # contrast-stretched per image, as the adapter documents; over HTTP that is not
+            # adjustable, and a caller wanting the calibrated sigmoid wants the Python API.
+            return _image_response(model.cutout(image))
         if task == "text_recognition":
             return JSONResponse(content=model.predict(image).to_dict())
         if task == "depth_estimation":

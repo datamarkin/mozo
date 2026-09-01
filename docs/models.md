@@ -450,6 +450,97 @@ curl -X POST "http://localhost:8000/predict/moebius/general?box=100,200,340,560&
 For a mask that follows an object's outline rather than a rectangle, run a segmenter and use the
 Python API.
 
+## BEN2
+
+Background removal. Give it a photograph and it returns an **alpha matte** — a per-pixel opacity,
+not a binary mask.
+
+```python
+model = mozo.get_model("ben2")
+
+alpha = model.predict(frame)                    # (H, W) uint8
+rgba  = model.cutout(frame, refine=True)        # (H, W, 4) uint8
+```
+
+### A matte, not a mask, and that is the whole point
+
+Every other model here that outlines something gives you a decision per pixel: in or out. Threshold
+that around a head of hair and the hair goes with the background, because a strand thinner than a
+pixel was never fully either. BEN2 answers with the mixing fraction instead, which is what a
+compositor actually needs.
+
+This is also why it is worth having alongside SAM 3 rather than instead of it. SAM 3 answers "where
+is every cow"; BEN2 answers "how much of this pixel is the cow". The first needs a prompt and gives
+you instances; the second takes no prompt at all and gives you one matte for the whole foreground.
+
+### The default alpha is not a probability
+
+The network emits a sigmoid, and upstream's postprocess then **min-max stretches it per image**, so
+the most-foreground pixel in *this* picture becomes 255 and the least becomes 0. mozo reproduces
+that by default, because it is what the model's own users get back and what its published examples
+show:
+
+```python
+alpha = model.predict(frame)                  # contrast-stretched, upstream's default
+alpha = model.predict(frame, stretch=False)   # the calibrated sigmoid, 0.5 means something
+```
+
+Compare a stretched alpha *within* an image, never across two. An image whose most confident pixel
+scored 0.6 still comes back with pixels at 255, and one the model was sure about everywhere comes
+back looking identical. Use `stretch=False` when you are thresholding, comparing frames, or feeding
+the matte to something else.
+
+Upstream divides by `max - min` with no guard, so a frame it reads as uniform produces `nan` cast to
+uint8 — silent garbage rather than an error. mozo skips the stretch when the matte is flat and
+returns the constant.
+
+### `refine` changes colour, not opacity
+
+Along a soft edge every pixel is a mix of foreground and background. Composite it onto something new
+and the old background shows through as a fringe. `cutout(refine=True)` estimates what the
+foreground colour would have been on its own and rewrites RGB accordingly — the alpha is untouched.
+It costs two full-resolution box blurs, which is why it is off by default.
+
+It also takes a **different alpha**, and that is upstream's doing rather than a choice here: the
+plain path resizes bilinearly and then stretches, the refined path casts the raw 1024×1024 sigmoid
+to uint8 and resizes *that*. Both are reproduced exactly, which is why `stretch` has no effect on
+the refined path.
+
+### It runs at 1024×1024 and nothing else, and it squashes to get there
+
+Not a setting. Each image is resized to a square 1024 — aspect ratio **not** preserved — then split
+into four 512×512 quadrants which are matted alongside a 512×512 downscale of the whole frame. The
+backbone therefore sees five images per photograph, and the decoder splits them `[4, 1]` at every
+rung, using the global view to gate the quadrants and folding the refined quadrants back in. That
+five-way split is what the confidence-guided refinement is built on.
+
+A 4000×500 panorama is squashed to a square, matted, and unsquashed. That looks wrong and is
+correct: the weights were trained that way, and letterboxing instead moves every pixel.
+
+### One variant, MIT on both halves
+
+Upstream publishes one checkpoint, and both the code and the weights are MIT — stated in the
+repository's `LICENSE` by the copyright holder and again as `license:mit` on an ungated model card.
+That is rarer here than it should be: the best-known alternative, Bria's RMBG-2.0, is CC BY-NC and
+needs a paid agreement for commercial use.
+
+### Torch only, and both graphs were measured before that was decided
+
+`EXECUTES = ("torch",)`. Both an ONNX and a CoreML graph were built and neither is published, which
+is a result rather than a gap — `tools/export/ben2.py` re-runs the measurement. ONNX is *slower*
+than torch (0.88x) and off by 4.9e-05. CoreML is **1.56x faster than torch on Metal**, the best
+number in the family, but 7.8% of its alpha pixels differ by more than a grey level, and the
+difference sits entirely on the edges — the one part of a matte that is the whole point of running
+one. Worth revisiting; `mozo/vendors/ben2_deploy/PROVENANCE.md` has the numbers to start from.
+
+On Apple silicon torch runs this at ~600 ms per 1920x1281 image against ~5.5 s on CPU, so the
+device matters far more here than the runtime does.
+
+Two things upstream publishes that mozo does not carry: `BEN2_Base.pth` is a *training* checkpoint
+whose 1.13 GB is three quarters optimiser state around the same 535 tensors mozo publishes as
+380 MB, and `BEN2_Base.onnx` is a float16 export of the CUDA path whose own runner script feeds it
+unnormalised input. `mozo/vendors/ben2_deploy/PROVENANCE.md` has the measurements for both.
+
 ## EasyOCR
 
 Text recognition. Finds every line of text on a page and reads it.

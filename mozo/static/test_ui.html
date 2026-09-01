@@ -827,7 +827,7 @@ async function run() {
       // on X-Depth-Unit would make takeImage the "not depth" branch, so a third image-returning
       // task would silently render an inpainting story about itself.
       if (task() === "depth_estimation") await takeDepth(response);
-      else await takeImage(response);
+      else await takeImage(response, task());
     } else {
       takeDetections(await response.text());
     }
@@ -896,7 +896,7 @@ async function takeDepth(response) {
   draw();
 }
 
-async function takeImage(response) {
+async function takeImage(response, kind) {
   const blob = await response.blob();
   const image = new Image();
   await new Promise((done, fail) => {
@@ -904,12 +904,12 @@ async function takeImage(response) {
     image.src = URL.createObjectURL(blob);
   });
 
-  state.edited = { image, bytes: blob.size };
+  state.edited = { image, bytes: blob.size, kind };
   state.depth = null;
   state.detections = [];
   state.masks.clear();
   state.raw = "";
-  tally.count = "edited image";
+  tally.count = kind === "image_matting" ? "cut-out" : "edited image";
   showTally();
   renderEdited();
   draw();
@@ -917,6 +917,7 @@ async function takeImage(response) {
 
 function renderEdited() {
   const e = state.edited;
+  if (e.kind === "image_matting") return renderCutout(e);
   $("pane-list").innerHTML = `
     <div class="status">
       <div class="headline">Edited image</div>
@@ -934,6 +935,29 @@ function renderEdited() {
       This family answers with an 8-bit PNG, not detections. There is nothing to read back out of
       the headers either: the response is the picture, and the only things that decide it are the
       seed and the box you drew.
+    </div>`;
+}
+
+function renderCutout(e) {
+  $("pane-list").innerHTML = `
+    <div class="status">
+      <div class="headline">Cut-out</div>
+      The background is gone: what came back is the frame with the model's opacity in its alpha
+      channel. The checkerboard behind it is this page, not the picture. It is a matte and not a
+      mask &mdash; every pixel along a soft edge carries a fraction rather than a yes or a no,
+      which is what keeps hair and fur intact when you composite it onto something else.
+      <dl>
+        <dt>size</dt><dd>${e.image.naturalWidth} &times; ${e.image.naturalHeight}</dd>
+        <dt>png</dt><dd>${byteSize(e.bytes)}, 8-bit RGBA</dd>
+      </dl>
+    </div>`;
+  $("pane-json").innerHTML = `
+    <div class="status">
+      <div class="headline">Not JSON</div>
+      This family answers with an RGBA PNG, not detections. It takes no prompt and no box &mdash;
+      the whole answer is the picture. Note that the alpha is contrast-stretched per image, so 255
+      means the most foreground pixel in <em>this</em> frame rather than certainty; the Python API
+      takes <code>stretch=False</code> for the calibrated number.
     </div>`;
 }
 
@@ -998,6 +1022,22 @@ function stencil(image, [r, g, b]) {
 
 /* --- Drawing ------------------------------------------------------------- */
 
+function paintCheckerboard(ox, oy, dw, dh, square = 12) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, dw, dh);
+  ctx.clip();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(ox, oy, dw, dh);
+  ctx.fillStyle = "#d7d7db";
+  for (let y = 0; y < dh; y += square) {
+    for (let x = ((y / square) % 2) * square; x < dw; x += square * 2) {
+      ctx.fillRect(ox + x, oy + y, square, square);   // ctx.clip() above bounds the rect
+    }
+  }
+  ctx.restore();
+}
+
 function draw() {
   const box = $("stage-body").getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -1016,6 +1056,10 @@ function draw() {
   const ox = (box.width - dw) / 2, oy = (box.height - dh) / 2;
   state.placement = { scale, ox, oy, w, h };
 
+  // A cut-out drawn on a cleared canvas is a picture with invisible holes -- the whole result
+  // is in the channel you cannot see. The checkerboard is the conventional way to show it, and
+  // it goes under this image only, not under the frame or a depth map.
+  if (state.edited && state.edited.kind === "image_matting") paintCheckerboard(ox, oy, dw, dh);
   ctx.drawImage(source, ox, oy, dw, dh);
   if (state.depth || state.edited) return;
 

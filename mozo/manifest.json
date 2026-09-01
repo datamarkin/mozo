@@ -1,6 +1,30 @@
 {
   "base_url": "https://dtmfiles.com/mozo/v1",
   "models": {
+    "ben2/base": {
+      "latest": "2026-09-01",
+      "revisions": {
+        "2026-09-01": {
+          "artifacts": {
+            "LICENSE": {
+              "path": "ben2/base/2026-09-01/LICENSE",
+              "sha256": "a4843132cbd56c50f20ae008739d85b7563d38905fd692a337af52ad588c581a",
+              "size": 1066
+            },
+            "NOTICE": {
+              "path": "ben2/base/2026-09-01/NOTICE",
+              "sha256": "575f9f93216938fc28623af318ec5094b2d4cff4d8d06c716aa712dbb481ded2",
+              "size": 1391
+            },
+            "torch-fp32": {
+              "path": "ben2/base/2026-09-01/torch-fp32.pth",
+              "sha256": "8f1e1f0f862f69bebfba53c6f69428791b8443178afdc5eb8657d6a8cc190bb7",
+              "size": 380689768
+            }
+          }
+        }
+      }
+    },
     "clip/base": {
       "latest": "2026-08-23",
       "revisions": {

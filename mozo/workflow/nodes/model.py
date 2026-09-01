@@ -133,6 +133,29 @@ def moebius(image: Image, detections: Detections,
     return mozo.get_model("moebius", variant).predict(image, detections, seed=seed, dilate=dilate)
 
 
+@node(category="Edit", exclusive=True)
+def ben2(image: Image, variant: variants("ben2") = "base",
+         stretch: bool = True, refine: bool = False) -> Image:
+    """BEN2 -- cut the background away, keeping a soft edge. Takes no prompt and no boxes.
+
+    Answers with a cut-out: the frame with the model's per-pixel opacity in its alpha channel --
+    an ordinary picture on an ordinary image wire, so it saves, previews and connects like any
+    other. A matte rather than a mask is the point: threshold a head of hair and the hair leaves
+    with the background.
+
+    Wire it into a detector or an annotator and the transparency is simply dropped: an image port
+    carries three channels or four, and a node is handed three unless it said it wanted four.
+    Nothing downstream needs to know this one came from here.
+
+    ``stretch`` reproduces upstream's per-image contrast normalisation of the matte, which is on by
+    default because it is what BEN2's own output looks like. Turn it off for the calibrated
+    sigmoid, which is what you want if a later node thresholds the alpha or compares two frames.
+    ``refine`` re-estimates foreground colour along soft edges so a composite does not carry a
+    fringe of the old background; it costs two full-resolution blurs.
+    """
+    return mozo.get_model("ben2", variant).cutout(image, stretch=stretch, refine=refine)
+
+
 # --- Pose ------------------------------------------------------------------------------------------
 
 @node(category="Pose", exclusive=True)

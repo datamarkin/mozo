@@ -61,6 +61,25 @@ ENCODES: dict[str, frozenset[str]] = {
 #: Family -> where its adapter lives, what it does, and which variants it publishes.
 #: An empty ``variants`` list means the family accepts any variant name.
 MODEL_REGISTRY: dict[str, dict[str, Any]] = {
+    'ben2': {
+        'adapter_class': 'Ben2Predictor',
+        'module': 'mozo.adapters.ben2',
+        'task_type': 'image_matting',
+        'description': (
+            'BEN2 by Prama LLC — background removal. Hand it a photograph and it returns an '
+            'alpha matte: a per-pixel opacity, not a binary mask, which is the difference '
+            'between keeping a head of hair and cutting it off. 94.6M parameters, a Swin-B '
+            'backbone under a confidence-guided decoder that re-attends to the pixels the model '
+            'was least sure of — which is where hair and fur live. 1 variant. It takes no '
+            'prompt and no box: the whole answer is the picture. Runs at 1024x1024 and nothing '
+            'else, splitting each image into four quadrants plus a half-scale global view. Note '
+            'that the alpha is contrast-stretched per image by default, as upstream does, so 255 '
+            'means the most foreground pixel in *this* picture — pass stretch=False for the '
+            'calibrated sigmoid. MIT on both the code and the weights.'
+        ),
+        'variants': ['base'],
+    },
+
     'clip': {
         'adapter_class': 'ClipPredictor',
         'module': 'mozo.adapters.clip',
