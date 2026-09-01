@@ -52,7 +52,8 @@ def test_run_is_the_whole_source_not_one_item_of_it(tmp_path):
     result = CliRunner().invoke(cli, ["run", str(document)])
     assert result.exit_code == 0, result.output
     assert "3 items in" in result.output
-    assert sorted(p.name for p in out.iterdir()) == ["a.jpg", "b.jpg", "c.jpg"]
+    # .png, because that is ``save_image``'s stated default; the point here is the count.
+    assert sorted(p.name for p in out.iterdir()) == ["a.png", "b.png", "c.png"]
 
 
 def test_test_describes_every_node_for_one_item(workflow):

@@ -47,6 +47,7 @@ PRODUCES = {
     # The one task whose answer is a picture. Every other entry here describes an image; this
     # one replaces it, which is why IMAGE appears on both sides of the node.
     "image_inpainting": PortType.IMAGE,
+    "image_matting": PortType.IMAGE,
 }
 
 #: What to wire into a model node's inputs other than its image, and what produces it. Most
@@ -195,8 +196,11 @@ class TestAFolderInAFolderOut:
              "save": ("save_image", {"path": str(out)})},
             [("load", "image", "save", "image")]))
         assert len(list(made.process())) == 4
+        # The stems survive and the suffix does not: one of the inputs was a .png and all four
+        # come out under ``save_image``'s stated format, which is what "stated rather than carried
+        # over" means. That default is .png, so a cut-out saves with its alpha intact.
         assert sorted(p.name for p in out.iterdir()) == [
-            "cat.jpg", "dog.jpg", "frame_10.jpg", "frame_2.jpg"]
+            "cat.png", "dog.png", "frame_10.png", "frame_2.png"]
 
     def test_a_file_that_is_not_an_image_is_passed_over_not_raised_on(self, photos):
         """Six files, four images. A folder of photographs has a ``.DS_Store`` in it, and refusing
@@ -420,6 +424,66 @@ class TestWritingDownWhatWasFound:
         list(made.process())
 
         assert len(self._lines(written)) == 3
+
+
+class TestTheAlphaChannelRule:
+    """An image port carries three channels or four, and one flag decides which a node gets.
+
+    This is the whole cost of not having a second image port, so it is pinned here rather than
+    trusted: twenty-one image nodes, one of which wants the fourth channel.
+    """
+
+    def _rgba(self):
+        import numpy as np
+
+        rgba = np.zeros((16, 16, 4), dtype=np.uint8)
+        rgba[..., 3] = 128
+        return rgba
+
+    def test_only_the_sink_that_can_store_alpha_asks_for_it(self):
+        """If a second node ever sets this, it should be a decision someone made on purpose."""
+        asking = sorted(name for name in shipped() if get(name).alpha)
+        assert asking == ["save_image"]
+
+    def test_the_rule_holds_through_the_call_boundary_not_just_the_helper(self):
+        """Every other case here pokes ``_shaped`` directly, which would keep passing if the call
+        to it were deleted from ``__call__``. This one goes through the door it guards."""
+        seen = {}
+        spec = get("draw_boxes")
+        original = spec.run
+        object.__setattr__(spec, "run", lambda **kw: seen.setdefault("channels", kw["image"].shape[2]))
+        try:
+            spec(image=self._rgba(), detections=None)
+        finally:
+            object.__setattr__(spec, "run", original)
+        assert seen["channels"] == 3
+
+    def test_a_node_that_did_not_ask_is_handed_three_channels(self):
+        for name in ("draw_boxes", "yolov8", "save_video"):
+            shaped = get(name)._shaped({"image": self._rgba()})
+            assert shaped["image"].shape[2] == 3, f"{name} was handed an alpha channel"
+
+    def test_the_node_that_asked_keeps_four(self):
+        shaped = get("save_image")._shaped({"image": self._rgba()})
+        assert shaped["image"].shape[2] == 4
+
+    def test_a_batch_is_coerced_item_by_item(self):
+        shaped = get("draw_boxes")._shaped({"image": [self._rgba(), self._rgba()]})
+        assert [item.shape[2] for item in shaped["image"]] == [3, 3]
+
+    def test_an_ordinary_photograph_is_passed_through_untouched(self):
+        import numpy as np
+
+        rgb = np.zeros((16, 16, 3), dtype=np.uint8)
+        assert get("draw_boxes")._shaped({"image": rgb})["image"] is rgb
+
+    def test_save_image_defaults_to_a_format_that_can_carry_alpha(self):
+        from mozo.image import ALPHA_FORMATS
+
+        default = next(p.default for p in get("save_image").parameters if p.name == "format")
+        assert default in ALPHA_FORMATS, (
+            f"save_image defaults to {default}, which cannot carry the alpha channel the one "
+            f"node with alpha=True exists to write")
 
 
 class TestWhatTheModelsActuallyReturn:

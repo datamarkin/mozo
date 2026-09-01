@@ -1,5 +1,15 @@
 # Mozo v1.1.0: Answers in Pixels
 
+## Unreleased
+
+- **`save_image` now writes PNG by default** (was JPEG). Annotated frames are thin lines and
+  mask edges, which is what JPEG is worst at, and it makes the node agree with
+  `mozo.image.encode_image`, which already defaulted to PNG. It is also the only common
+  default that can carry an alpha channel, so `ben2`'s cut-outs save with their transparency
+  intact. Pass `format=".jpg"` where size matters more than edges.
+- **New family `ben2`** — background removal, returning an RGBA cut-out. An image port now
+  carries three channels or four; a node is handed three unless it sets `alpha=True`.
+
 ## What's New in v1.1.0
 
 Fifteen families describe an image. The sixteenth rewrites it.

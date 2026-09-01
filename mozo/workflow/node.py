@@ -40,6 +40,8 @@ from typing import Any, Callable, NewType, Optional, Sequence
 import numpy as np
 import pixelflow as pf
 
+from ..image import as_rgb, has_alpha
+
 __all__ = [
     "Classifications", "Color", "Connection", "Depth", "Detections", "Embedding", "Image",
     "Context", "NodeSpec", "Parameter", "Port", "PortType", "Source", "State",
@@ -49,7 +51,7 @@ __all__ = [
 class PortType(Enum):
     """What can travel along a connection.
 
-    Five, because mozo's fourteen families return exactly five kinds of thing. Ten of them return
+    Five, because mozo's seventeen families return exactly five kinds of thing. Ten of them return
     ``pf.Detections`` -- including EasyOCR, whose read text is a detection with a string, and the
     promptable segmenters, whose masks are detections with no class. CLIP and SigLIP2 return
     ``pf.Classifications``. Depth Anything V2 returns an array, and the two embedding models return
@@ -59,6 +61,13 @@ class PortType(Enum):
     ``pf.Classifications`` has no boxes at all -- it offers ``top1``, ``top_k`` and
     ``filter_by_confidence``, and nothing to draw or crop. Sharing one port type would let the
     editor offer a connection that fails the moment it runs, which is a type check that lies.
+
+    **A cut-out is not a sixth kind.** BEN2 answers with an ``HxWx4`` RGBA array and it travels on
+    ``IMAGE`` like any other picture: every viewer downstream already knows what a fourth channel
+    means, and a wire type separating "image" from "image with transparency" would invent a
+    distinction nothing outside this graph makes. So ``IMAGE`` carries three channels or four, and
+    what the extra channel needs is not its own port but one rule at the node boundary --
+    :attr:`NodeSpec.alpha` and :meth:`NodeSpec._shaped`.
 
     ``DEPTH`` is separate from ``IMAGE`` because a depth map is a float array with a range, not
     pixels. Flatten it to eight bits and you have quantised a measurement to 256 levels; the
@@ -79,9 +88,13 @@ class PortType(Enum):
     EMBEDDING = "embedding"
 
 
-#: An ``HxWx3`` RGB ``uint8`` array -- :mod:`mozo.image`'s contract, unchanged. Not PIL: every
-#: adapter takes and returns this, so a workflow that carried PIL images would convert twice per
-#: node for nothing.
+#: An ``HxWx3`` RGB ``uint8`` array, or ``HxWx4`` RGBA where a node produces a cut-out. Not PIL:
+#: every adapter takes and returns this, so a workflow that carried PIL images would convert twice
+#: per node for nothing.
+#:
+#: One annotation for both, because a cut-out is a picture and the graph should not invent a
+#: distinction nothing outside it makes. What a node *receives* is settled by
+#: :attr:`NodeSpec.alpha`, not by the annotation: three channels unless it asked for four.
 Image = NewType("Image", np.ndarray)
 
 #: An ``HxW`` float array of depth, with the unit and endpoints the producing node reports.
@@ -422,6 +435,29 @@ class NodeSpec:
     #: one-at-a-time with more machinery. The two are separate flags because the converse does
     #: not hold -- a model is exclusive and does not care in which order frames arrive.
     ordered: bool = False
+
+    #: Whether this node can be handed an image with an alpha channel.
+    #:
+    #: ``PortType.IMAGE`` carries three channels or four, because a cut-out is a picture and a
+    #: second image port would invent a distinction nothing outside this graph makes. The cost of
+    #: that is one rule, and this flag is it: **a node is handed three channels unless it asked
+    #: for four.**
+    #:
+    #: Default ``False`` because that is what twenty of the twenty-one image nodes want. A
+    #: detector, a classifier and an annotator all want the picture and none has an opinion about
+    #: transparency, so they keep the precondition they were written with -- now enforced at the
+    #: boundary rather than assumed. Only a sink that can actually store the channel sets this.
+    alpha: bool = False
+
+    #: Every input's name. Precomputed for the reason :attr:`_narrow` is: it is a pure function
+    #: of :attr:`inputs`, and :meth:`__call__` consulted it on every call of every node.
+    _input_names: frozenset = frozenset()
+
+    #: The image inputs :meth:`_shaped` must narrow -- empty when there are none *or* when
+    #: :attr:`alpha` says this node wants them whole. Worked out once because rebuilding it per
+    #: call cost 0.7 us of the 0.8 us that method spent, and folded together with ``alpha``
+    #: because the two were only ever read as one question: is there anything to narrow here?
+    _narrow: tuple = ()
     #: Does one call of this node produce many items rather than one value?
     #:
     #: True for a source: a video file is one node and two hundred thousand items. What it changes
@@ -441,7 +477,7 @@ class NodeSpec:
     def from_function(cls, function: Callable, category: str,
                       outputs: Sequence[str] | None = None,
                       ordered: bool = False, exclusive: bool = False,
-                      produces_many: bool = False) -> NodeSpec:
+                      produces_many: bool = False, alpha: bool = False) -> NodeSpec:
         """Describe *function* as a node.
 
         Args:
@@ -452,6 +488,10 @@ class NodeSpec:
             outputs: Names for the output ports, in order. Each defaults to its port type's own
                 name, which reads correctly for the common cases (``image``, ``detections``) and
                 needs overriding only where that would be ambiguous or vague.
+            alpha: See :attr:`alpha`. Set it on a node that can take an image carrying an alpha
+                channel; every other node is handed three channels whatever the wire held.
+            produces_many: See :attr:`produces_many`. Set by :func:`~mozo.workflow.registry.source`
+                rather than by hand.
             ordered: See :attr:`ordered`. Set it on a node whose calls are a sequence rather than
                 a set -- a video writer, a running total, a tracker.
             exclusive: See :attr:`exclusive`. Set it on a node that holds a model or any other
@@ -532,6 +572,10 @@ class NodeSpec:
             state=state,
             context=context,
             produces_many=produces_many,
+            alpha=alpha,
+            _input_names=frozenset(port.name for port in inputs),
+            _narrow=() if alpha else tuple(port.name for port in inputs
+                                           if port.type is PortType.IMAGE),
         )
 
     def __call__(self, **arguments) -> dict:
@@ -556,9 +600,9 @@ class NodeSpec:
                 this replaces repeated the last item of the shorter one, which produces an answer
                 for every input and is wrong for some of them without saying so.
         """
-        ports = {port.name for port in self.inputs}
+        arguments = self._shaped(arguments)
         batched = {name: value for name, value in arguments.items()
-                   if name in ports and isinstance(value, list)}
+                   if name in self._input_names and isinstance(value, list)}
         if not batched:
             return self._wires(self.run(**arguments))
 
@@ -570,6 +614,42 @@ class NodeSpec:
                                         **{name: value[index] for name, value in batched.items()}}))
                 for index in range(next(iter(sizes.values())))]
         return {port.name: [one[port.name] for one in each] for port in self.outputs}
+
+    def _shaped(self, arguments: dict) -> dict:
+        """Give every image input the channel count this node can handle.
+
+        ``IMAGE`` carries three channels or four -- a photograph or a cut-out -- so exactly one
+        thing has to be decided somewhere, and this is it: **a node is handed three channels
+        unless :attr:`alpha` says it asked for four.**
+
+        Here rather than in each node because there are twenty-one image nodes and one of them
+        wants the fourth channel. Twenty checks that must each be remembered is how one of them
+        comes to be forgotten, and a forgotten one is not a crash -- it is a detector quietly
+        reading an alpha channel as if it were blue.
+
+        Dropping alpha is a real loss and it is the right default. A detector, a classifier and an
+        annotator all want the picture and none of them has an opinion about transparency. The
+        node that does have one says so.
+
+        Nothing is allocated unless something actually changes: the common case is a photograph on
+        an image port, where :func:`~mozo.image.has_alpha` says no before anything is built and
+        the caller's own dict comes back.
+        """
+        shaped = None
+        for name in self._narrow:
+            value = arguments.get(name)
+            if isinstance(value, list):
+                if not any(has_alpha(item) for item in value):
+                    continue
+                narrowed = [as_rgb(item) for item in value]
+            elif has_alpha(value):
+                narrowed = as_rgb(value)
+            else:
+                continue
+            if shaped is None:
+                shaped = dict(arguments)
+            shaped[name] = narrowed
+        return arguments if shaped is None else shaped
 
     def _wires(self, returned: Any) -> dict:
         """One call's return value, spread over the ports it declared."""

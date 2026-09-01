@@ -401,7 +401,9 @@ def port_types_of(value) -> set:
         return {PortType.DETECTIONS}
     if isinstance(value, np.ndarray) and value.ndim == 2:
         return {PortType.DEPTH, PortType.EMBEDDING}
-    if isinstance(value, np.ndarray) and value.ndim == 3:
+    # Three channels or four: an image port carries both, because a cut-out is a picture. The
+    # channel count is a property of the value, not of the wire, so it does not narrow the answer.
+    if isinstance(value, np.ndarray) and value.ndim == 3 and value.shape[2] in (3, 4):
         return {PortType.IMAGE}
     raise AssertionError(f"nothing a port can carry: {type(value)}")
 

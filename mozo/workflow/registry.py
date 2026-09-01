@@ -47,7 +47,7 @@ def source(*, category: str = "Input", outputs: Sequence[str] | None = None) -> 
 
 def node(*, category: str, outputs: Sequence[str] | None = None,
          ordered: bool = False, exclusive: bool = False,
-         produces_many: bool = False) -> Callable:
+         produces_many: bool = False, alpha: bool = False) -> Callable:
     """Register the decorated function as a node.
 
     Args:
@@ -62,14 +62,18 @@ def node(*, category: str, outputs: Sequence[str] | None = None,
             :class:`~mozo.workflow.node.State`.
         produces_many: Set by :func:`source` rather than by hand. Says the node is asked once for
             an iterator whose yields are the run's items, instead of being called once per item.
+        alpha: Set it where the node can take an image that carries an alpha channel. An image
+            port carries three channels or four, and a node is handed three unless this says
+            otherwise -- see :attr:`~mozo.workflow.node.NodeSpec.alpha`. One node sets it.
 
     Returns:
         The function, unchanged. A node is an ordinary function and stays callable as one, which
         is what lets it be tested without a graph around it.
     """
     def register(function: Callable) -> Callable:
-        spec = NodeSpec.from_function(function, category, outputs, ordered, exclusive,
-                                      produces_many)
+        spec = NodeSpec.from_function(function, category, outputs, ordered=ordered,
+                                      exclusive=exclusive, produces_many=produces_many,
+                                      alpha=alpha)
         if spec.name in _NODES:
             raise ValueError(
                 f"a node called {spec.name!r} is already registered, from "

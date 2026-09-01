@@ -45,7 +45,7 @@ from typing import Optional
 
 import pixelflow as pf
 
-from mozo.image import load_image as decode
+from mozo.image import encode_image, has_alpha, load_image as decode
 
 from ..node import Context, Detections, Image, Source, State
 from ..registry import node, source
@@ -203,9 +203,9 @@ def _listing(folder: Path) -> list:
                                            for part in re.split(r"(\d+)", path.name)])
 
 
-@node(category="Output")
+@node(category="Output", alpha=True)
 def save_image(image: Image, run: Context, path: str = "output",
-               format: str = ".jpg") -> None:
+               format: str = ".png") -> None:
     """Write each image to its own file.
 
     **A folder writes one file per item, named for the item.** So a folder of photographs comes
@@ -228,6 +228,12 @@ def save_image(image: Image, run: Context, path: str = "output",
         format: The suffix to write. Stated rather than carried over from the input, because the
             output is not the input file -- it has been decoded, run through the graph and encoded
             again, so the container the bytes arrived in is not a property they still have.
+
+            PNG by default, matching :func:`mozo.image.encode_image`: what reaches this node is
+            usually an annotated frame, which is thin lines and mask edges, and that is what JPEG
+            is worst at. It is also the only common format that can carry an alpha channel, so a
+            cut-out saves correctly without anyone having to know that. Ask for ``".jpg"`` where
+            the size matters more than the edges.
     """
     target = Path(path)
     if not target.suffix:
@@ -240,7 +246,14 @@ def save_image(image: Image, run: Context, path: str = "output",
         raise ValueError(
             f"{run.frames or 'unboundedly many'} images to write but one filename, {path!r}. "
             f"Give a folder and each is written under its own name.")
-    pf.save_image(str(target), image)
+    if has_alpha(image):
+        # ``pf.save_image`` takes three channels, and this is the one node that may be handed
+        # four. Encoding through mozo's own function and writing the bytes keeps the RGB-to-BGR
+        # decision in the one place that owns it rather than making a second copy of it here.
+        # A format that cannot carry alpha is refused there, by name.
+        target.write_bytes(encode_image(image, target.suffix))
+    else:
+        pf.save_image(str(target), image)
 
 
 @node(category="Output", ordered=True)
