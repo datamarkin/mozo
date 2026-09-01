@@ -1,0 +1,29 @@
+BEN2 -- Background Erase Network
+Copyright (c) 2025 Prama LLC.
+
+Maxwell Meyer, Jack Spruyt. "BEN: Using Confidence-Guided Matting for
+Dichotomous Image Segmentation", arXiv:2501.06230.
+
+This product includes a deployment-only extraction of software developed at
+https://github.com/PramaLLC/BEN2, licensed under the MIT License. See LICENSE
+for the full text and PROVENANCE.md for what was taken and what was changed.
+
+The Swin Transformer backbone under swin.py originates with Microsoft
+(https://github.com/microsoft/Swin-Transformer), also MIT, and reaches this
+package through BEN2's own copy of it.
+
+refine_foreground() in image.py is a blur-fusion foreground estimator from
+Photoroom (https://github.com/Photoroom/fast-foreground-estimation), credited
+in a comment in BEN2.py and reproduced here with the same two-pass radii.
+
+The model weights are licensed separately from this code, and identically: the
+model card at https://huggingface.co/PramaLLC/BEN2 declares "mit" and the
+repository is ungated. Prama LLC additionally offers a different, unpublished
+commercial model by arrangement. That is an offer of another artifact, not a
+restriction on this one -- the MIT grant on the published weights is
+unconditional, and MIT permits commercial use.
+
+BEN2 was trained on DIS5K together with a proprietary dataset. mozo takes the
+publisher's MIT grant on the weights as stated and does not track the terms of
+the data behind them; that obligation was the publisher's, discharged before
+publication. PROVENANCE.md records where the chain stops.
