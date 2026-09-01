@@ -199,9 +199,18 @@ Two independent reasons not to publish it, either sufficient. It is **slower**, 
 in users' hands that disagree — the one failure the whole scheme exists to prevent. mozo's bar for
 a published graph is exactness, and 4.9e-05 on the matte reaches the uint8 alpha a caller receives.
 
-The likely cause of both is the same line: MCLM and MCRM leave `need_weights=True`, so the
-attention is unfused and materialises a full 16,384 x 5,376 matrix per quadrant at the shallowest
-rung. That is what makes the graph large, the memory high, and the op ordering diverge.
+**Where the 4.9e-05 comes from, since it was chased down.** Not `onnxruntime`'s graph optimizer:
+with every fusion disabled the divergence is 4.718e-05 against 4.879e-05 with them all on. It is
+inherent to the exported graph's kernels -- their accumulation order in the convolutions and
+matmuls. For scale, Core ML running the *same* model on CPU reaches 9.27e-06, five times closer, so
+this is `onnxruntime`'s arithmetic rather than a limit of exporting the model.
+
+The slowness has a structural cause: 13,328 nodes, and MCLM and MCRM leave `need_weights=True`, so
+the attention is unfused and materialises a 16,384 x 5,376 matrix per quadrant at the shallowest
+rung. `onnxruntime` has no fusion for that shape, and giving it one would mean changing the
+attention, which is the one thing parity forbids. Threading is not the lever either: single-threaded
+it takes 27,041 ms, and fusions buy 6,187 ms against 6,864 ms without them -- neither reaches
+torch's 5,455 ms.
 
 ### CoreML: faster, and wrong in the one place a matte cannot be
 
@@ -232,10 +241,43 @@ ramp rather than a structural error — the matte is visually correct — and it
 wrong place for a matting model to differ. The soft edge *is* the product; a segmenter could
 absorb this and a matte cannot.
 
-So: not published, and the reason is parity rather than speed. This is the one artifact here worth
-revisiting, and anyone doing so should start from these numbers. The likely lever is the same
-unfused attention named above, and the first thing to try is pinning `compute_precision` per op
-rather than globally.
+**The cause is the Core ML GPU runtime, and it was isolated rather than guessed.** Four experiments,
+in the order they narrow it:
+
+1. **Not an op.** Fourteen op classes were converted alone, at the shapes this model uses, and
+   compared against torch: every `F.interpolate` mode (bilinear and nearest, by scale and by size),
+   `InstanceNorm2d`, `LayerNorm`, exact GELU, softmax, `avg_pool2d`, the `image2patches`
+   reshape/permute, sigmoid, and `nn.MultiheadAttention` on its unfused `need_weights` path. The
+   worst was **9.5e-07**. The obvious hypothesis -- a half-pixel shift in a resize, which would
+   explain edge-concentrated error exactly -- is wrong.
+2. **Not the conversion.** The converted MIL program contains zero `fp16` mentions and zero `cast`
+   ops. It is genuinely float32 end to end.
+3. **Not the deployment target.** macOS14 and macOS15 produce *bit-identical* divergence: 7.853e-01,
+   7.801% of alpha pixels, max 195 on both.
+4. **It is the compute unit.** The same `.mlpackage`, three ways:
+
+   | compute units | forward | max abs | alpha off by >1 grey level |
+   |---|---|---|---|
+   | `CPU_ONLY` | 5034 ms | **9.27e-06** | **0.000%** (max 1 level) |
+   | `CPU_AND_GPU` | 384 ms | 7.85e-01 | 7.801% (max 195) |
+   | `ALL` | 385 ms | 7.85e-01 | 7.801% |
+
+So `compute_precision=FLOAT32` is honoured on the CPU and ignored on the GPU, which computes the
+float32 program at reduced precision anyway. torch's own Metal backend keeps float32 on the same
+hardware and lands 3.13e-05 from the CPU reference, so this is Core ML's scheduling rather than a
+limit of the GPU.
+
+**Why the error lands on edges** follows from that. The head ends in a sigmoid: an interior pixel's
+logit is far from zero and saturated, so precision loss there is invisible, while an edge pixel's
+logit sits near zero where the sigmoid's slope is steepest and the same small error appears in full.
+The matte is not structurally wrong; it is the soft edge that moves, which for a matting model is
+the part that matters.
+
+**No fix is available at this level.** The trade is now exactly known: exact at 5034 ms, which is no
+faster than torch on CPU and 8x slower than torch on Metal, or 1.56x at 386 ms with the edge error.
+`compute_precision` is the documented lever and it does not reach the GPU. If Apple's runtime gains
+a way to pin float32 on Metal, this becomes publishable unchanged -- the conversion is already
+correct.
 
 **Upstream also publishes `BEN2_Base.onnx`, and mozo does not republish that either.** The graph was inspected
 rather than trusted, and two things rule it out as a parity-holding artifact:

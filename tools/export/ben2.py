@@ -38,10 +38,21 @@ shift in the alpha ramp, not a structural error. The matte is visually correct. 
 one place a matting model may not differ -- the soft edge is the entire product, which is why this
 model exists rather than a segmenter.
 
-**CoreML is the artifact worth revisiting.** 1.56x on Metal is real. The likely lever is the same
-line that dominates the forward: MCLM and MCRM leave ``need_weights=True``, so the attention is
-unfused and materialises a 16,384 x 5,376 matrix per quadrant at the shallowest rung. Try pinning
-``compute_precision`` per op before anything else.
+**Both failures were chased to their cause; neither is fixable here.**
+
+CoreML's divergence is the *GPU runtime*, not the conversion. Fourteen op classes convert alone to
+within 9.5e-07, the MIL program has zero fp16 casts, and macOS14 and macOS15 diverge identically --
+but the same .mlpackage on ``CPU_ONLY`` reaches 9.27e-06 with 0.000% of alpha pixels off, against
+7.85e-01 and 7.801% on ``CPU_AND_GPU``. ``compute_precision=FLOAT32`` is honoured on CPU and ignored
+on the GPU. The error lands on edges because the head ends in a sigmoid: interiors are saturated and
+hide it, edges sit where the slope is steepest. Exact costs 5034 ms, which is no faster than torch
+on CPU; the 386 ms needs the GPU that will not do float32.
+
+ONNX's 4.9e-05 is not ``onnxruntime``'s optimizer -- disabling every fusion gives 4.718e-05 -- so it
+is the kernels' own accumulation order. Core ML on CPU reaches 9.27e-06 on the same model, five
+times closer. The slowness is structural: 13,328 nodes and an unfused attention materialising a
+16,384 x 5,376 matrix per quadrant, which no available fusion covers and which parity forbids
+changing.
 
 ## Two changes to the vendor made an export possible at all
 
