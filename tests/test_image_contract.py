@@ -226,3 +226,72 @@ class TestEveryEntryPointAgrees:
         """Guards the guard: if RGB and BGR gave the same result, the tests above prove nothing."""
         swapped = predictors[family].predict(np.ascontiguousarray(image[..., ::-1]))
         assert not same(baseline[family], swapped)
+
+
+class TestTheAlphaChannel:
+    """``encode_image`` takes three channels or four, because a cut-out is a picture.
+
+    The one-encoder rule exists because a hand-written encoder forgets the RGB-to-BGR swap and
+    produces a plausible picture with its channels wrong -- the failure that cost Depth Anything
+    V2 0.166 m of mean error. Widening that function to four channels widens the surface the rule
+    protects, so the swap is checked on the wider path too.
+    """
+
+    def test_rgba_survives_the_round_trip_in_the_right_order(self):
+        import io
+
+        from PIL import Image as PILImage
+
+        from mozo.image import encode_image
+
+        # Three different colour values, so a swap cannot hide behind a symmetry.
+        rgba = np.zeros((4, 4, 4), dtype=np.uint8)
+        rgba[..., 0], rgba[..., 1], rgba[..., 2], rgba[..., 3] = 10, 120, 230, 200
+
+        decoded = np.array(PILImage.open(io.BytesIO(encode_image(rgba))))
+        assert decoded.shape == (4, 4, 4)
+        assert tuple(decoded[0, 0]) == (10, 120, 230, 200), "channels came back swapped"
+
+    def test_the_alpha_is_lossless(self):
+        import io
+
+        from PIL import Image as PILImage
+
+        from mozo.image import encode_image
+
+        rgba = np.zeros((8, 8, 4), dtype=np.uint8)
+        rgba[..., 3] = np.arange(64, dtype=np.uint8).reshape(8, 8)
+        decoded = np.array(PILImage.open(io.BytesIO(encode_image(rgba))))
+        # A matte that came back approximately is not a matte.
+        assert np.array_equal(decoded[..., 3], rgba[..., 3])
+
+    def test_three_channels_still_go_through_pixelflow_unchanged(self):
+        import io
+
+        from PIL import Image as PILImage
+
+        from mozo.image import encode_image
+
+        rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+        rgb[..., 0], rgb[..., 1], rgb[..., 2] = 10, 120, 230
+        decoded = np.array(PILImage.open(io.BytesIO(encode_image(rgb))))
+        assert decoded.shape == (4, 4, 3)
+        assert tuple(decoded[0, 0]) == (10, 120, 230)
+
+    def test_a_format_that_cannot_carry_alpha_is_refused_not_flattened(self):
+        """Flattening picks a background colour for the caller. That is a decision, not a
+        conversion, so it is refused by name instead."""
+        from mozo.image import encode_image
+
+        with pytest.raises(ValueError, match=r"\.jpg cannot carry an alpha channel"):
+            encode_image(np.zeros((4, 4, 4), dtype=np.uint8), ".jpg")
+
+    def test_as_rgb_drops_alpha_and_leaves_rgb_alone(self):
+        from mozo.image import as_rgb
+
+        rgba = np.zeros((4, 4, 4), dtype=np.uint8)
+        rgba[..., 3] = 200
+        assert as_rgb(rgba).shape == (4, 4, 3)
+
+        rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+        assert as_rgb(rgb) is rgb
