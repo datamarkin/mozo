@@ -93,14 +93,13 @@ COUNT_CONTEXTS = (
     r"### (\d+) computer vision models",
     r"runs all (\d+)",
     r"# all (\d+), no torch import",
-    r"Pick any of the (\d+)",
     r"a curated (\d+)",
     r"Of the (\d+) published variants",
 )
 
 
 def test_the_readme_repeats_that_count_consistently():
-    """It appears five more times after the headline. One stale copy contradicts the page."""
+    """It appears four more times after the headline. One stale copy contradicts the page."""
     readme = (ROOT / "README.md").read_text()
     variants = published_variants()
 
