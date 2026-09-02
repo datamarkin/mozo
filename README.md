@@ -166,7 +166,6 @@ Three interfaces over the same models, plus two browser pages.
 | **HTTP server** | serve models to other machines, or to a language that is not Python |
 | **Python API** | build a pipeline, a script or a notebook, in-process |
 | **Workflows** | wire models and image operations into a graph, and run it headless |
-| *Test UI* | see what a model does to your own image before writing anything |
 | *Workflow editor* | draw the graph, run it, watch each node finish |
 
 ### 1. HTTP server
@@ -455,12 +454,6 @@ things about it are yours to arrange:
 ## What mozo does not do
 
 - **No training and no fine-tuning.** Bring a checkpoint; mozo runs it.
-- **One image per HTTP request.** `/predict` takes a picture. Video goes through a workflow,
-  which reads it frame by frame — file or live source — and writes it back at the corrected rate.
-- **No tracking.** Nothing carries identity between frames yet.
-- **No batching.** One image per forward, which is what keeps results bit-identical.
-- **No model conversion.** ONNX and CoreML artifacts are published where a family exports
-  cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
 - **It is not a model hub.** The catalogue is a curated 81, chosen because each one could be
   extracted and verified. Growth is deliberate and slow.
 
