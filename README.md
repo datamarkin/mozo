@@ -36,6 +36,8 @@ version control, or one call from Python. Same models, same process, no extra in
 
 ### Object detection
 
+A box, a class and a confidence per object.
+
 | Family | Variants | Weights licence | Runtimes |
 |---|---|---|---|
 | `rfdetr` | `nano` `small` `medium` `large` | Apache-2.0 | torch, onnx, coreml |
@@ -44,12 +46,10 @@ version control, or one call from Python. Same models, same process, no extra in
 | `yolov12` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx, coreml |
 | `yolov26` | `nano` `small` `medium` `large` `xlarge` | AGPL-3.0 | torch, onnx |
 
-Returns detections.
-
 ### Instance segmentation
 
 A box and a mask per object, from one pass. Same families and same call as detection above — the
-variant is what decides whether masks come back, so nothing else about the request changes.
+variant is what decides whether masks come back.
 
 | Family | Variants | Weights licence | Runtimes |
 |---|---|---|---|
@@ -57,37 +57,20 @@ variant is what decides whether masks come back, so nothing else about the reque
 | `yolov11` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch, onnx |
 | `yolov26` | `seg-nano` `seg-small` `seg-medium` `seg-large` `seg-xlarge` | AGPL-3.0 | torch, onnx |
 
-Returns detections carrying a boolean mask each, at the source image's resolution.
-
 ### Keypoints
+
+COCO's 17 person joints per detection, as `(x, y, confidence)` in source-image pixels. RF-DETR
+finds people and joints in one pass; ViTPose is top-down and takes detections as an argument —
+[details](docs/models.md#vitpose).
 
 | Family | Variants | Weights licence | Runtimes |
 |---|---|---|---|
 | `rfdetr` | `keypoint-preview` | Apache-2.0 | torch |
 | `vitpose` | `small` `base` `large` `huge` | Apache-2.0 | torch, onnx (not `huge`) |
 
-Returns detections carrying COCO's 17 person joints each, as `(x, y, confidence)` in source-image
-pixels. A joint the model cannot see comes back with a confidence near zero and coordinates that
-mean nothing — read the confidence before the position.
-
-Every `vitpose` variant is **ViTPose++**, the mixture-of-experts revision, named by size as mozo
-names every family. The original ViTPose's checkpoints are published upstream and not carried here:
-ViTPose++ beats them at every size, and the smallest of them is larger than `small`.
-
-The two work differently. RF-DETR finds people and their joints in one pass. **ViTPose is
-top-down**: it has no detector, so it takes a frame *and the boxes of the people in it*, and gives
-those detections back with joints added — same boxes, same class ids, same tracker ids. It is the
-one family whose `predict` takes detections as an argument.
-
-```python
-found = mozo.get_model("rfdetr", "medium").predict(frame)
-posed = mozo.get_model("vitpose", "base").predict(frame, found.filter_by_class_id(1))
-```
-
-Filter first: ViTPose poses every box it is given, so an unfiltered detector's output puts
-seventeen confident joints on a car.
-
 ### Text-prompted
+
+Boxes for anything you can name, from a phrase rather than a fixed class list.
 
 | Family | Variants | Weights licence | Prompt |
 |---|---|---|---|
@@ -95,47 +78,39 @@ seventeen confident joints on a car.
 | `owlv2` | `base` `base-ensemble` `large` `large-ensemble` | Apache-2.0 | phrases, ≤16 tokens |
 | `sam3` | `sam3` | SAM License | phrases, ≤32 tokens |
 
-Returns detections.
-
 ### Zero-shot classification and embeddings
 
-Name your classes in words and each is scored against the image. The same model will also hand
-back the vectors it works from, which is what makes a corpus embedded once searchable by words
-afterwards — through a vector database of your own.
+Name your classes in words and each is scored against the image — or take the vectors instead, and
+make a corpus embedded once searchable by words afterwards. Scores are similarities, not
+probabilities — [details](docs/models.md#clip).
 
 | Family | Variants | Weights licence | Prompt | Output |
 |---|---|---|---|---|
 | `clip` | `base` `base-16` `large` `large-336` | MIT | phrases, ≤77 tokens each | a score per phrase, or 512/768-d vectors |
 | `siglip2` | `base-224` `base-256` `so400m-384` `so400m16-256` `giant-384` | Apache-2.0 | phrases, ≤64 tokens each | a probability per phrase, or 768/1152/1536-d vectors |
 
-Scores are **cosine similarities, not probabilities**: not softmaxed, they do not sum to one, and
-they may be negative. Nothing is filtered out — every phrase comes back scored, because a
-classifier that drops a class has not classified.
-
-The only family with a second route. `POST /encode/clip/base` returns the embeddings instead of an
-answer, for images or for phrases; the towers load independently, so a job that only encodes images
-never allocates the text half.
-
 ### Promptable segmentation
+
+A mask from a click or a box. Returns detections, one row per mask.
 
 | Family | Variants | Weights licence | Prompt |
 |---|---|---|---|
 | `sam2` | `tiny` `small` `base_plus` `large` | Apache-2.0 | points, box, or both |
 | `edgetam` | `edgetam` | Apache-2.0 | points, box, or both |
 
-Returns detections, one row per mask.
-
 ### Text recognition
+
+Text in the image, one detection per line. A variant is a script, not a language: `latin` alone
+covers 41 languages.
 
 | Family | Variants (scripts) | Weights licence |
 |---|---|---|
 | `easyocr` | `english` `latin` `chinese-simplified` `japanese` `korean` | Apache-2.0 |
 
-A variant is a script, not a language: `latin` alone covers 41 languages.
-
-Returns detections, one row per line.
-
 ### Depth
+
+An `HxW` float32 map. Six of the nine variants predict metres and three are relative and unitless;
+`model.unit` says which, and is `None` rather than a guess.
 
 | Family | Variants | Weights licence | Unit |
 |---|---|---|---|
@@ -143,24 +118,24 @@ Returns detections, one row per line.
 | | `base` `large` | CC-BY-NC-4.0 | relative, unitless |
 | | `indoor-` and `outdoor-`, three sizes each | Apache-2.0 | metres |
 
-Returns an `HxW` float32 map.
-
-Relative output is inverse depth on a per-image scale: larger is nearer, and no value is a
-distance. `model.unit` says which, and is `None` rather than a guess.
-
 ### Background removal
+
+A per-pixel opacity matte, not a binary mask — which is the difference between keeping a head of
+hair and cutting it off. [Details](docs/models.md#ben2).
 
 | Family | Variants | Weights licence | Output |
 |---|---|---|---|
 | `ben2` | `base` | MIT | an `HxW` uint8 alpha matte |
 
-Takes no prompt and no box: the whole answer is the picture. Returns a per-pixel **opacity**, not a
-binary mask — which is the difference between keeping a head of hair and cutting it off.
+### Object removal
 
-`predict` gives the matte, `cutout` composites it to `HxWx4` RGBA. The alpha is
-**contrast-stretched per image** by default, as upstream does, so 255 means "the most foreground
-pixel in this picture" rather than "certainly foreground"; pass `stretch=False` for the calibrated
-sigmoid. Compare a stretched matte within an image, never across two.
+Give it a frame and a mask and it repaints the hole so the thing was never there — pair the mask
+with SAM 3 or EdgeTAM. It answers with a sample rather than an estimate —
+[details](docs/models.md#moebius).
+
+| Family | Variants | Weights licence | Output |
+|---|---|---|---|
+| `moebius` | `general` `places2` | Apache-2.0 | an `HxWx3` image |
 
 How each family behaves and why — OWLv2 suppressing nothing, the encoder cache, EasyOCR's line
 ordering, prompt semantics — is in [docs/models.md](docs/models.md).
@@ -259,22 +234,12 @@ depth = model.predict("room.jpg")    # HxW float32, at the input's resolution
 model.unit                           # 'metres' — or None, and then it is not a distance
 ```
 
-### Try it in the browser
-
-```bash
-mozo start        # then open http://localhost:8000/test-ui
-```
-
-![The mozo test UI](docs/test-ui.png)
-
-Pick any of the 81, run it on your own image, and see the response two ways at once: drawn on
-the image, and as the raw PixelFlow record. Hovering a box lights its row and its JSON, so when
-something lands somewhere surprising its numbers are one click away.
-
 ### 3. Workflows
 
 A workflow is a graph of nodes in a JSON file. Draw it at `/workflow`, or write it by hand; run it
 from Python, from the command line, or over HTTP.
+
+![The mozo workflow UI](docs/workflow.png)
 
 ```python
 from mozo.workflow import Workflow
@@ -286,7 +251,7 @@ results = Workflow.load("blur_faces.json").run(source="street.jpg")
 mozo run blur_faces.json --file street.jpg
 ```
 
-38 nodes: every model family, the image transforms and annotations PixelFlow provides, and the two
+44 nodes: every model family, the image transforms and annotations PixelFlow provides, and the two
 ends that read and write files. A node is an ordinary Python function — its signature *is* its
 declaration, so what the editor offers you and what actually runs cannot disagree:
 
@@ -490,8 +455,9 @@ things about it are yours to arrange:
 ## What mozo does not do
 
 - **No training and no fine-tuning.** Bring a checkpoint; mozo runs it.
-- **No video, no tracking, no streams.** One image per request. Object tracking is deliberately
-  absent from workflows for the same reason: it is stateful across frames, and mozo has no frames.
+- **One image per HTTP request.** `/predict` takes a picture. Video goes through a workflow,
+  which reads it frame by frame — file or live source — and writes it back at the corrected rate.
+- **No tracking.** Nothing carries identity between frames yet.
 - **No batching.** One image per forward, which is what keeps results bit-identical.
 - **No model conversion.** ONNX and CoreML artifacts are published where a family exports
   cleanly, and where it does not, mozo says so rather than shipping a graph that disagrees.
@@ -502,7 +468,7 @@ things about it are yours to arrange:
 
 1. Write an adapter in `mozo/adapters/your_model.py`
 2. Register it in `mozo/registry.py`
-3. It is available over HTTP, in Python, and in the test UI
+3. It is available over HTTP, in Python, and on the test page
 4. Add a node in `mozo/workflow/nodes/model.py` — one function — and it joins the editor's palette
 
 Workflow nodes are the same idea one level up: a function with annotated arguments in
