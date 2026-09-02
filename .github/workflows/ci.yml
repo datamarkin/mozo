@@ -26,8 +26,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The ends of the supported range. requires-python claims 3.9, which nothing here has
-        # ever verified; add it once torch resolves on it.
+        # The ends of the supported range, and requires-python now claims exactly it.
+        # 3.9 was claimed until 1.1.2 and never worked: `mozo.workflow.node` reads
+        # `types.UnionType`, which is 3.10+, so importing the workflow package -- and
+        # therefore starting the server -- raised on the one version CI did not run.
         python-version: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
